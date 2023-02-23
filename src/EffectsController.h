@@ -48,7 +48,7 @@
 #define UPDATE_INTERVAL_WS2812FX_AFTERGLOW 3
 #define UPDATE_INTERVAL_WS2812FX_BRIGHTNESS 10
 
-#if PPUC_CONTROLLER == CONTROLLER_TEENSY_OUTPUT
+#if PPUC_CONTROLLER == CONTROLLER_TEENSY_OUTPUT || PPUC_CONTROLLER == CONTROLLER_TEENSY_OUTPUT_2 || PPUC_CONTROLLER == CONTROLLER_PICO_OUTPUT
     #define PPUC_MAX_WS2812FX_DEVICES 7
     #define PPUC_MAX_BRIGHTNESS_CONTROLS 4
 #else
@@ -95,7 +95,7 @@ public:
         _eventDispatcher = new EventDispatcher();
         _eventDispatcher->addListener(this);
 
-        if (controllerType == CONTROLLER_TEENSY_OUTPUT) {
+        if (controllerType == CONTROLLER_TEENSY_OUTPUT || controllerType == CONTROLLER_TEENSY_OUTPUT_2 || controllerType == CONTROLLER_PICO_OUTPUT) {
             _ledBuiltInDevice = new LedBuiltInDevice();
             _ledBuiltInDevice->on();
             _nullDevice = new NullDevice();

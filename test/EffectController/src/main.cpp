@@ -1,6 +1,6 @@
 // Markus Kalkbrenner 2022
-// Note to self: Play more pinball!
 
+#include <PPUC.h>
 #include <EffectDevices/Definitions.h>
 
 #define PPUC_NUM_LEDS_1 60
@@ -20,7 +20,7 @@
 
 #include <EffectsController.h>
 
-EffectsController effectsController("0.1.0", PLATFORM_SYS11);
+EffectsController effectsController(CONTROLLER_TEENSY_OUTPUT, PLATFORM_SYS11);
 
 void setup() {
     // Debug

@@ -1,11 +1,10 @@
 // Markus Kalkbrenner 2022
-// Note to self: Play more pinball!
 
-#include <Arduino.h>
+#include <PPUC.h>
 #include <InputController.h>
 #include <EventDispatcher/CrossLinkDebugger.h>
 
-InputController inputController("0.1.0", PLATFORM_WPC);
+InputController inputController(CONTROLLER_MEGA_ALL_INPUT, PLATFORM_WPC);
 
 void setup() {
     inputController.pupComLink()->setSerial(Serial);
