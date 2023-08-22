@@ -16,10 +16,12 @@
 #define MAX_PWM_OUTPUTS 16
 #endif
 
-class PwmDevices : public EventListener {
+class PwmDevices : public EventListener
+{
 public:
-    //Constructor
-    PwmDevices(EventDispatcher* eD) {
+    // Constructor
+    PwmDevices(EventDispatcher *eD)
+    {
         _eventDispatcher = eD;
         _eventDispatcher->addListener(this, EVENT_SOURCE_LIGHT);
         _eventDispatcher->addListener(this, EVENT_SOURCE_SOLENOID);
@@ -32,9 +34,9 @@ public:
 
     void update();
 
-    void handleEvent(Event* event);
+    void handleEvent(Event *event);
 
-    void handleEvent(ConfigEvent* event) {}
+    void handleEvent(ConfigEvent *event) {}
 
 private:
     unsigned long _ms;
@@ -52,7 +54,9 @@ private:
     bool scheduled[MAX_PWM_OUTPUTS] = {0};
     byte last = 0;
 
-    EventDispatcher* _eventDispatcher;
+    EventDispatcher *_eventDispatcher;
+
+    void updateSolenoidOrFlasher(bool targetState, byte i);
 };
 
 #endif

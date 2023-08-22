@@ -27,6 +27,7 @@ public:
     }
 
     bool pushEventNonBlocking(Event* event) {
+        // Clone the event so that Eventdispatcher::callListeners() can delete the event.
         return queue_try_add(&_eventQueue[get_core_num() ^ 1], new Event(event));
     }
 
@@ -52,6 +53,7 @@ public:
 
     bool pushConfigEventNonBlocking(ConfigEvent* event) {
         if (get_core_num() == 0) {
+            // Clone the event so that Eventdispatcher::callListeners() can delete the event.
             return queue_try_add(&_configEventQueue, new ConfigEvent(event));
         }
 

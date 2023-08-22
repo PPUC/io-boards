@@ -35,6 +35,8 @@ public:
 
     void setMultiCoreCrossLink(MultiCoreCrossLink* mccl);
 
+    MultiCoreCrossLink* getMultiCoreCrossLink();
+
     void setCrossLinkSerial(HardwareSerial &reference);
 
     void addCrossLinkSerial(HardwareSerial &reference);

@@ -18,6 +18,7 @@
 
 #include "EventDispatcher/Event.h"
 #include "EventDispatcher/EventDispatcher.h"
+#include "EventDispatcher/MultiCoreCrossLink.h"
 #include "IODevices/PwmDevices.h"
 #include "IODevices/Switches.h"
 
@@ -52,6 +53,9 @@ private:
     byte fastSwitch = 0;
 
     EventDispatcher* _eventDispatcher;
+#if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
+    MultiCoreCrossLink* _multiCoreCrossLink;
+#endif
 };
 
 #endif

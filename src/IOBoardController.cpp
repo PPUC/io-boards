@@ -5,16 +5,22 @@ IOBoardController::IOBoardController(int controllerType) {
     _eventDispatcher->addListener(this, EVENT_CONFIGURATION);
 
     if (controllerType == CONTROLLER_16_8_1) {
-        // Read bordID.
-        // @todo draft!
-        boardId = (analogRead(28) - 100) / 16 ;
+        // Turn on the LED
+        pinMode(25, OUTPUT);
+        digitalWrite(25, HIGH);
+
+        // Read bordID. The read value is between 60 and 940.
+        boardId = 16 - ((int) ((analogRead(28) + 20) / 60));
 
         #if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
-        Serial1.setTX(16);
-        Serial1.setRX(17);
-        _eventDispatcher->setRS485ModePin(18);
+        Serial1.setTX(0);
+        Serial1.setRX(1);
         Serial1.setFIFOSize(128); // @todo find the right size.
-        _eventDispatcher->addCrossLinkSerial(Serial1);
+        Serial1.begin(115200);
+        _eventDispatcher->setRS485ModePin(2);
+        _eventDispatcher->setCrossLinkSerial(Serial1);
+        _multiCoreCrossLink = new MultiCoreCrossLink();
+        _eventDispatcher->setMultiCoreCrossLink(_multiCoreCrossLink);
         #endif
 
         _pwmDevices = new PwmDevices(_eventDispatcher);
@@ -80,13 +86,13 @@ void IOBoardController::handleEvent(ConfigEvent* event) {
                         break;
                     case CONFIG_TOPIC_TYPE:
                         switch (event->value) {
-                            case 1: // Coil
+                            case PWM_TYPE_SOLENOID: // Coil
                                 _pwmDevices->registerSolenoid((byte) port, number, power, minPulseTime, maxPulseTime, holdPower, holdPowerActivationTime, fastSwitch);
                                 break;
-                            case 2: // Flasher
+                            case PWM_TYPE_FLASHER: // Flasher
                                 _pwmDevices->registerFlasher((byte) port, number, power);
                                 break;
-                            case 3: // Lamp
+                            case PWM_TYPE_LAMP: // Lamp
                                 _pwmDevices->registerLamp((byte) port, number, power);
                                 break;
                         }

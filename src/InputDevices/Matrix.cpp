@@ -7,8 +7,8 @@ Matrix::Matrix(EventDispatcher* eD, byte pf) {
     setLastColToRead(8);
 
     for (int i = 0; i < lastColToRead; i++) {
-        rows[i] = B00000000;
-        previousRows[i] = B00000000;
+        rows[i] = 0b00000000;
+        previousRows[i] = 0b00000000;
     }
 }
 

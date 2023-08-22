@@ -23,6 +23,7 @@
 #define EVENT_SOURCE_SOLENOID 83 // "S" VPX/DOF/PUP includes flashers
 #define EVENT_SOURCE_SWITCH   87 // "W" VPX/DOF/PUP
 
+#define CONFIG_TOPIC_PLATFORM   102 // "f"
 #define CONFIG_TOPIC_LED_STRING 103 // "g"
 #define CONFIG_TOPIC_LAMPS      108 // "l"
 #define CONFIG_TOPIC_MECHS      109 // "m"
@@ -30,9 +31,12 @@
 #define CONFIG_TOPIC_SWITCHES   115 // "s"
 
 #define CONFIG_TOPIC_HOLD_POWER_ACTIVATION_TIME 65 // "A"
+#define CONFIG_TOPIC_BRIGHTNESS                 66 // "B"
+#define CONFIG_TOPIC_COLOR                      67 // "C"
 #define CONFIG_TOPIC_FAST_SWITCH                70 // "F"
 #define CONFIG_TOPIC_AFTER_GLOW                 71 // "G"
 #define CONFIG_TOPIC_HOLD_POWER                 72 // "H"
+#define CONFIG_TOPIC_LED_NUMBER                 76 // "L"
 #define CONFIG_TOPIC_MAX_PULSE_TIME             77 // "M"
 #define CONFIG_TOPIC_NUMBER                     78 // "N"
 #define CONFIG_TOPIC_AMOUNT_LEDS                79 // "O"
@@ -41,6 +45,14 @@
 #define CONFIG_TOPIC_LIGHT_UP                   85 // "U"
 #define CONFIG_TOPIC_POWER                      87 // "W"
 #define CONFIG_TOPIC_TYPE                       89 // "Y"
+
+#define PWM_TYPE_SOLENOID 1 // Coil
+#define PWM_TYPE_FLASHER  2 // Flasher
+#define PWM_TYPE_LAMP     3 // Lamp
+
+#define LED_TYPE_GI       1 // GI
+#define LED_TYPE_FLASHER  2 // Flasher
+#define LED_TYPE_LAMP     3 // Lamp
 
 typedef unsigned char UINT8;
 typedef unsigned short UINT16;

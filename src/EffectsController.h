@@ -289,9 +289,8 @@ public:
             #endif
         }
         else if (controllerType == CONTROLLER_16_8_1) {
-            // Read bordID.
-            // @todo draft!
-            boardId = (analogRead(28) - 100) / 16 ;
+            // Read bordID. The read value is between 60 and 940.
+            boardId = 16 - ((int) ((analogRead(28) + 20) / 60));
         } else {
             Serial.print("Unsupported Effects Controller: ");
             Serial.println(controllerType);
@@ -395,6 +394,10 @@ private:
     byte config_amount = 0;
     byte config_afterGlow = 0;
     byte config_heatUp = 0;
+    byte config_number = 0;
+    byte config_ledNumber = 0;
+    byte config_brightness = 0;
+    UINT32 config_color = 0;
 
     unsigned long ws2812UpdateInterval = 0;
     unsigned long ws2812AfterGlowUpdateInterval = 0;

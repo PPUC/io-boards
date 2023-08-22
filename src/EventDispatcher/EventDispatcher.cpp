@@ -23,10 +23,13 @@ void EventDispatcher::setMultiCoreCrossLink(MultiCoreCrossLink* mccl) {
 #endif
 }
 
-// Backward Compatibility, use addCrossLinkSerial().
+MultiCoreCrossLink* EventDispatcher::getMultiCoreCrossLink() {
+    return multiCoreCrossLink;
+}
+
 void EventDispatcher::setCrossLinkSerial(HardwareSerial &reference) {
-    crossLink = -1;
-    addCrossLinkSerial(reference);
+    hwSerial[0] = (HardwareSerial*) &reference;
+    crossLink = 0;
 }
 
 void EventDispatcher::addCrossLinkSerial(HardwareSerial &reference) {
@@ -151,7 +154,9 @@ void EventDispatcher::update() {
     }
 
     for (int i = 0; i <= crossLink; i++) {
+        //Serial.println(hwSerial[i]->available());
         if (hwSerial[i]->available() >= 6) {
+            //digitalWrite(25, LOW); // Write.
             byte startByte = hwSerial[i]->read();
             if (startByte == 255) {
                 byte sourceId = hwSerial[i]->read();
