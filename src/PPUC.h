@@ -20,10 +20,6 @@
 #define PLATFORM_SYS11      3
 #define PLATFORM_LIBPINMAME 100
 
-typedef unsigned char  UINT8;
-typedef unsigned short UINT16;
-typedef unsigned int   UINT32;
-
 #include <EffectDevices/Definitions.h>
 
 #endif

@@ -54,10 +54,6 @@
 #define LED_TYPE_FLASHER  2 // Flasher
 #define LED_TYPE_LAMP     3 // Lamp
 
-typedef unsigned char UINT8;
-typedef unsigned short UINT16;
-typedef unsigned int UINT32;
-
 struct Event {
     byte sourceId;
     word eventId;
@@ -85,6 +81,7 @@ struct Event {
         localFast = lf;
     }
 
+    // Clone the event.
     Event(const Event* other) {
         sourceId = other->sourceId;
         eventId = other->eventId;
@@ -120,6 +117,7 @@ struct ConfigEvent {
         value = v;
     }
 
+    // Clone the event.
     ConfigEvent(const ConfigEvent* other) {
         sourceId = other->sourceId;
         boardId = other->boardId;

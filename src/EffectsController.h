@@ -397,7 +397,7 @@ private:
     byte config_number = 0;
     byte config_ledNumber = 0;
     byte config_brightness = 0;
-    UINT32 config_color = 0;
+    uint32_t config_color = 0;
 
     unsigned long ws2812UpdateInterval = 0;
     unsigned long ws2812AfterGlowUpdateInterval = 0;
