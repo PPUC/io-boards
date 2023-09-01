@@ -32,7 +32,7 @@ public:
 
     EventDispatcher* eventDispatcher();
 
-    void handleEvent(Event* event) {}
+    void handleEvent(Event* event);
 
     void handleEvent(ConfigEvent* event);
 

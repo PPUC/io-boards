@@ -32,7 +32,7 @@ void Switches::update() {
 }
 
 void Switches::handleEvent(Event* event) {
-    switch (event->eventId) {
+    switch (event->sourceId) {
         case EVENT_POLL_EVENTS:
             if (boardId == (byte) event->value) {
                 // This I/O board has been polled for events, so all current switch states are transmitted. Reset switch

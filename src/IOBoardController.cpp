@@ -37,6 +37,14 @@ void IOBoardController::update() {
     eventDispatcher()->update();
 }
 
+void IOBoardController::handleEvent(Event* event) {
+    switch (event->sourceId) {
+        case EVENT_PING:
+            _eventDispatcher->dispatch(new Event(EVENT_PONG, 0, boardId));
+            break;
+    }
+}
+
 void IOBoardController::handleEvent(ConfigEvent* event) {
     if (event->boardId == boardId) {
         switch (event->topic) {
