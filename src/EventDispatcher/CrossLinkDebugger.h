@@ -15,7 +15,7 @@
 
 class CrossLinkDebugger : public EventListener {
 public:
-    CrossLinkDebugger() {}
+    CrossLinkDebugger();
 
     void handleEvent(Event* event);
     void handleEvent(ConfigEvent* event);

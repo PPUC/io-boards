@@ -1,7 +1,11 @@
 #include "CrossLinkDebugger.h"
 
+CrossLinkDebugger::CrossLinkDebugger() {
+    Serial.println("PPUC CrossLinkDebugger");
+    Serial.println("----------------------");
+}
+
 void CrossLinkDebugger::handleEvent(Event* event) {
-    // On Teensy Serial is the USB Serial.
     Serial.print("handleEvent: sourceId ");
     Serial.print(event->sourceId);
     Serial.print(", eventId ");
@@ -11,8 +15,7 @@ void CrossLinkDebugger::handleEvent(Event* event) {
 }
 
 void CrossLinkDebugger::handleEvent(ConfigEvent* event) {
-    // On Teensy Serial is the USB Serial.
-    Serial.print("handleEvent: ConfigEvent, boardId ");
+    Serial.print("handleConfigEvent: boardId ");
     Serial.print(event->boardId, DEC);
     Serial.print(", topic ");
     Serial.print(event->topic, DEC);
@@ -20,6 +23,6 @@ void CrossLinkDebugger::handleEvent(ConfigEvent* event) {
     Serial.print(event->index, DEC);
     Serial.print(", key ");
     Serial.print(event->key, DEC);
-    Serial.print(", value ");
+    Serial.print(", value(HEX) ");
     Serial.println(event->value, HEX);
 }

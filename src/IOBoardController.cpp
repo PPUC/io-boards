@@ -3,6 +3,8 @@
 IOBoardController::IOBoardController(int controllerType) {
     _eventDispatcher = new EventDispatcher();
     _eventDispatcher->addListener(this, EVENT_CONFIGURATION);
+    _eventDispatcher->addListener(this, EVENT_PING);
+    _eventDispatcher->addListener(this, EVENT_RESET);
 
     if (controllerType == CONTROLLER_16_8_1) {
         // Turn on the LED
@@ -12,22 +14,13 @@ IOBoardController::IOBoardController(int controllerType) {
         // Read bordID. The read value is between 60 and 940.
         boardId = 16 - ((int) ((analogRead(28) + 20) / 60));
 
-        #if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
-        Serial1.setTX(0);
-        Serial1.setRX(1);
-        Serial1.setFIFOSize(128); // @todo find the right size.
-        Serial1.begin(115200);
         _eventDispatcher->setRS485ModePin(2);
         _eventDispatcher->setCrossLinkSerial(Serial1);
         _multiCoreCrossLink = new MultiCoreCrossLink();
         _eventDispatcher->setMultiCoreCrossLink(_multiCoreCrossLink);
-        #endif
 
         _pwmDevices = new PwmDevices(_eventDispatcher);
         _switches = new Switches(boardId, _eventDispatcher);
-    } else {
-        Serial.print("Unsupported Input Controller: ");
-        Serial.println(controllerType);
     }
 }
 
@@ -40,7 +33,11 @@ void IOBoardController::update() {
 void IOBoardController::handleEvent(Event* event) {
     switch (event->sourceId) {
         case EVENT_PING:
-            _eventDispatcher->dispatch(new Event(EVENT_PONG, 0, boardId));
+            _eventDispatcher->dispatch(new Event(EVENT_PONG, 1, boardId));
+            break;
+
+        case EVENT_RESET:
+            // @todo clear all configurations or reboot the device.
             break;
     }
 }

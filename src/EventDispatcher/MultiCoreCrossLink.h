@@ -8,7 +8,7 @@
 #include "Event.h"
 
 #ifndef EVENT_STACK_SIZE
-#define EVENT_STACK_SIZE 100
+#define EVENT_STACK_SIZE 128
 #endif
 
 class MultiCoreCrossLink {

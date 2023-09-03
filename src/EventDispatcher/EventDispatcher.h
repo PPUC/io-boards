@@ -16,7 +16,7 @@
 #include "EventListener.h"
 
 #ifndef MAX_EVENT_LISTENERS
-#define MAX_EVENT_LISTENERS 5
+#define MAX_EVENT_LISTENERS 16
 #endif
 
 #ifndef MAX_CROSS_LINKS
@@ -32,6 +32,8 @@ public:
     EventDispatcher();
 
     void setRS485ModePin(int pin);
+
+    void setBoard(byte b);
 
     void setMultiCoreCrossLink(MultiCoreCrossLink* mccl);
 
@@ -66,6 +68,8 @@ private:
 
     bool rs485 = false;
     int rs485Pin = 0;
+    byte board = 255;
+
     bool multiCore = false;
     int crossLink = -1;
     HardwareSerial* hwSerial[MAX_CROSS_LINKS];
