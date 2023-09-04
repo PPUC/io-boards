@@ -238,6 +238,7 @@ void EventDispatcher::update()
                                         if (rs485)
                                         {
                                             digitalWrite(rs485Pin, HIGH); // Write.
+                                            delayMicroseconds(500);
                                         }
                                         while (stackCounter >= 0)
                                         {
@@ -249,6 +250,7 @@ void EventDispatcher::update()
                                         callListeners(new Event(EVENT_NULL), MAX_CROSS_LINKS, true);
                                         if (rs485)
                                         {
+                                            delayMicroseconds(500);
                                             digitalWrite(rs485Pin, LOW); // Read.
                                         }
                                     }
