@@ -51,6 +51,7 @@
 #define CONFIG_TOPIC_ACTIVE_LOW 86                 // "V"
 #define CONFIG_TOPIC_POWER 87                      // "W"
 #define CONFIG_TOPIC_TYPE 89                       // "Y"
+#define CONFIG_TOPIC_NULL 99                       // NULL
 
 #define PWM_TYPE_SOLENOID 1 // Coil
 #define PWM_TYPE_FLASHER 2  // Flasher
@@ -84,14 +85,14 @@ struct Event {
         localFast = false;
     }
 
-    Event(char sId, word eId, byte v) {
+    Event(byte sId, word eId, byte v) {
         sourceId = sId;
         eventId = eId;
         value = v;
         localFast = false;
     }
 
-    Event(char sId, word eId, byte v, bool lf) {
+    Event(byte sId, word eId, byte v, bool lf) {
         sourceId = sId;
         eventId = eId;
         value = v;

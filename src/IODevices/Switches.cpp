@@ -1,12 +1,12 @@
 #include "Switches.h"
 
 void Switches::registerSwitch(byte p, byte n) {
-    if (last < MAX_SWITCHES) {
-        port[last] = p;
-        number[last] = n;
-
+    if (last < (MAX_SWITCHES - 1)) {
         pinMode(p, INPUT);
-        state[last++] = digitalRead(p);
+        port[++last] = p;
+        number[last] = n;
+        toggled[last] = false;
+        state[last] = digitalRead(p);
     }
 }
 

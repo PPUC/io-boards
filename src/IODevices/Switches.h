@@ -25,7 +25,7 @@ class Switches : public EventListener {
 public:
     Switches(byte bId, EventDispatcher* eD) {
         boardId = bId;
-
+        _ms = millis();
         _eventDispatcher = eD;
         _eventDispatcher->addListener(this, EVENT_POLL_EVENTS);
         _eventDispatcher->addListener(this, EVENT_READ_SWITCHES);
@@ -47,7 +47,7 @@ private:
     byte number[MAX_SWITCHES] = {0};
     bool state[MAX_SWITCHES] = {0};
     bool toggled[MAX_SWITCHES] = {0};
-    byte last = 0;
+    int last = -1;
 
     EventDispatcher* _eventDispatcher;
 };

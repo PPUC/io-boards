@@ -63,8 +63,7 @@ private:
     char eventListenerFilters[MAX_EVENT_LISTENERS];
     int numListeners = -1;
 
-    byte msg[6] = {0};
-    byte cmsg[11] = {0};
+    byte msg[12];
 
     bool rs485 = false;
     int rs485Pin = 0;

@@ -40,6 +40,9 @@ void EventDispatcher::addCrossLinkSerial(HardwareSerial &reference)
 {
     hwSerial[++crossLink] = (HardwareSerial *)&reference;
     hwSerial[crossLink]->begin(115200);
+    while (!hwSerial[crossLink])
+    {
+    }
 }
 
 void EventDispatcher::addListener(EventListener *eventListener)
@@ -101,18 +104,19 @@ void EventDispatcher::callListeners(Event *event, int sender, bool flush)
 
         if (crossLink != -1 /* && hwSerial->availableForWrite() >= 6 */)
         {
-            msg[0] = (byte) 255;
+            msg[0] = 0b11111111;
             msg[1] = event->sourceId;
             msg[2] = highByte(event->eventId);
             msg[3] = lowByte(event->eventId);
             msg[4] = event->value;
-            msg[5] = (byte) 255;
+            msg[5] = 0b10101010;
+            msg[6] = 0b01010101;
 
             for (int i = 0; i <= crossLink; i++)
             {
                 if (i != sender)
                 {
-                    hwSerial[i]->write(msg, 6);
+                    hwSerial[i]->write(msg, 7);
                 }
             }
         }
@@ -143,23 +147,24 @@ void EventDispatcher::callListeners(ConfigEvent *event, int sender)
     {
         if (crossLink != -1 /* && hwSerial->availableForWrite() >= 6 */)
         {
-            cmsg[0] = (byte) 255;
-            cmsg[1] = event->sourceId;
-            cmsg[2] = event->boardId;
-            cmsg[3] = event->topic;
-            cmsg[4] = event->index;
-            cmsg[5] = event->key;
-            cmsg[6] = event->value >> 24;
-            cmsg[7] = (event->value >> 16) & 0xff;
-            cmsg[8] = (event->value >> 8) & 0xff;
-            cmsg[9] = event->value & 0xff;
-            cmsg[10] = (byte) 255;
+            msg[0] = 0b11111111;
+            msg[1] = event->sourceId;
+            msg[2] = event->boardId;
+            msg[3] = event->topic;
+            msg[4] = event->index;
+            msg[5] = event->key;
+            msg[6] = event->value >> 24;
+            msg[7] = (event->value >> 16) & 0xff;
+            msg[8] = (event->value >> 8) & 0xff;
+            msg[9] = event->value & 0xff;
+            msg[10] = 0b10101010;
+            msg[11] = 0b01010101;
 
             for (int i = 0; i <= crossLink; i++)
             {
                 if (i != sender)
                 {
-                    hwSerial[i]->write(cmsg, 11);
+                    hwSerial[i]->write(msg, 12);
                 }
             }
         }
@@ -182,6 +187,7 @@ void EventDispatcher::update()
     {
         while (stackCounter >= 0)
         {
+            // stackCounter will reach -1 here, which means empty stack.
             Event *event = stackEvents[stackCounter--];
             // Integer MAX_CROSS_LINKS is always higher than crossLinks, so this parameters means "no sender, send to all".
             callListeners(event, MAX_CROSS_LINKS, false);
@@ -190,9 +196,10 @@ void EventDispatcher::update()
 
     for (int i = 0; i <= crossLink; i++)
     {
-        if (hwSerial[i]->available() >= 6)
+        if (hwSerial[i]->available() >= 7)
         {
-            // digitalWrite(25, LOW); // Write.
+            bool success = false;
+
             byte startByte = hwSerial[i]->read();
             if (startByte == 255)
             {
@@ -201,8 +208,8 @@ void EventDispatcher::update()
                 {
                     if (sourceId == EVENT_CONFIGURATION)
                     {
-                        // Config Event has 11 bytes, 2 bytes are already parsed above.
-                        while (hwSerial[i]->available() < 9)
+                        // Config Event has 12 bytes, 2 bytes are already parsed above.
+                        while (hwSerial[i]->available() < 10)
                         {
                         }
 
@@ -217,9 +224,14 @@ void EventDispatcher::update()
                             (hwSerial[i]->read() << 8) +
                             hwSerial[i]->read();
                         byte stopByte = hwSerial[i]->read();
-                        if (stopByte == 255)
+                        if (stopByte == 0b10101010)
                         {
-                            callListeners(new ConfigEvent(boardId, topic, index, key, value), i);
+                            stopByte = hwSerial[i]->read();
+                            if (stopByte == 0b01010101)
+                            {
+                                success = true;
+                                callListeners(new ConfigEvent(boardId, topic, index, key, value), i);
+                            }
                         }
                     }
                     else
@@ -229,19 +241,25 @@ void EventDispatcher::update()
                         {
                             byte value = hwSerial[i]->read();
                             byte stopByte = hwSerial[i]->read();
-                            if (stopByte == 255)
+                            if (stopByte == 0b10101010)
                             {
-                                if (sourceId == EVENT_POLL_EVENTS)
+                                stopByte = hwSerial[i]->read();
+                                if (stopByte == 0b01010101)
                                 {
-                                    if (board == value)
+                                    success = true;
+                                    callListeners(new Event((char)sourceId, eventId, value), i, false);
+
+                                    if (sourceId == EVENT_POLL_EVENTS && board == value)
                                     {
                                         if (rs485)
                                         {
                                             digitalWrite(rs485Pin, HIGH); // Write.
+                                            // Wait until the RS485 converter switched to write mode.
                                             delayMicroseconds(500);
                                         }
                                         while (stackCounter >= 0)
                                         {
+                                            // stackCounter will reach -1 here, which means empty stack.
                                             Event *event = stackEvents[stackCounter--];
                                             // Integer MAX_CROSS_LINKS is always higher than crossLinks, so this parameters means "no sender, send to all".
                                             callListeners(event, MAX_CROSS_LINKS, true);
@@ -250,16 +268,34 @@ void EventDispatcher::update()
                                         callListeners(new Event(EVENT_NULL), MAX_CROSS_LINKS, true);
                                         if (rs485)
                                         {
-                                            delayMicroseconds(500);
+                                            // Wait until the RS485 converter switched back to read mode.
+                                            delayMicroseconds(1000);
                                             digitalWrite(rs485Pin, LOW); // Read.
                                         }
                                     }
                                 }
-                                else
-                                {
-                                    callListeners(new Event((char)sourceId, eventId, value), i, false);
-                                }
                             }
+                        }
+                    }
+                }
+                else {
+                    // We didn't receive a start byte. Fake "success" to start over with the next byte.
+                    success = true;
+                }
+            }
+
+            if (!success)
+            {
+                while (hwSerial[i]->available())
+                {
+                    byte bits = hwSerial[i]->read();
+                    if (bits == 0b10101010 && hwSerial[i]->available())
+                    {
+                        bits = hwSerial[i]->read();
+                        if (bits == 0b01010101)
+                        {
+                            // Now we should be back in sync.
+                            break;
                         }
                     }
                 }
