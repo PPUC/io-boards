@@ -1,10 +1,12 @@
 #include "IOBoardController.h"
 
-IOBoardController::IOBoardController(int controllerType) {
+IOBoardController::IOBoardController(int cT) {
     _eventDispatcher = new EventDispatcher();
     _eventDispatcher->addListener(this, EVENT_CONFIGURATION);
     _eventDispatcher->addListener(this, EVENT_PING);
     _eventDispatcher->addListener(this, EVENT_RESET);
+
+    controllerType = cT;
 
     if (controllerType == CONTROLLER_16_8_1) {
         // Turn on the LED
@@ -26,6 +28,12 @@ IOBoardController::IOBoardController(int controllerType) {
 }
 
 void IOBoardController::update() {
+    if (controllerType == CONTROLLER_16_8_1 && (millis() - ledMillis > 500)) {
+        ledState = !ledState;
+        digitalWrite(25, ledState);
+        ledMillis = millis();
+    }
+
     switches()->update();
     pwmDevices()->update();
     eventDispatcher()->update();
