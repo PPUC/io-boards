@@ -25,7 +25,7 @@ void setup()
     {
     }
     Serial.print("PPUC IO_16_8_1 board #");
-    Serial.println(16 - ((int) ((analogRead(28) + 20) / 60)));
+    Serial.println(16 - ((int) ((analogRead(28) + 30) / 60)));
     ioBoardController.eventDispatcher()->addListener(new CrossLinkDebugger());
 
     Serial1.setTX(0);

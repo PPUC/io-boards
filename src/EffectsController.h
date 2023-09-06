@@ -290,7 +290,7 @@ public:
         }
         else if (controllerType == CONTROLLER_16_8_1) {
             // Read bordID. The read value is between 60 and 940.
-            boardId = 16 - ((int) ((analogRead(28) + 20) / 60));
+            boardId = 16 - ((int) ((analogRead(28) + 30) / 60));
         } else {
             Serial.print("Unsupported Effects Controller: ");
             Serial.println(controllerType);

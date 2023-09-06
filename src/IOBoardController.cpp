@@ -12,7 +12,7 @@ IOBoardController::IOBoardController(int controllerType) {
         digitalWrite(25, HIGH);
 
         // Read bordID. The read value is between 60 and 940.
-        boardId = 16 - ((int) ((analogRead(28) + 20) / 60));
+        boardId = 16 - ((int) ((analogRead(28) + 30) / 60));
 
         _eventDispatcher->setRS485ModePin(2);
         _eventDispatcher->setBoard(boardId);

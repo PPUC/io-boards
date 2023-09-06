@@ -17,7 +17,7 @@ void setup1() {
 
 void loop() {
     ioBoardController.update();
-    //Serial.println(16 - ((int) (analogRead(28) + 20) / 60));
+    //Serial.println(16 - ((int) (analogRead(28) + 30) / 60));
 }
 
 void loop1() {
