@@ -53,9 +53,6 @@ private:
     byte holdPowerActivationTime = 0;
     byte fastSwitch = 0;
 
-    long ledMillis = 0;
-    bool ledState = HIGH;
-
     EventDispatcher* _eventDispatcher;
 #if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
     MultiCoreCrossLink* _multiCoreCrossLink;

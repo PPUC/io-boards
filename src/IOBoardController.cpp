@@ -9,10 +9,6 @@ IOBoardController::IOBoardController(int cT) {
     controllerType = cT;
 
     if (controllerType == CONTROLLER_16_8_1) {
-        // Turn on the LED
-        pinMode(25, OUTPUT);
-        digitalWrite(25, HIGH);
-
         // Read bordID. The read value is between 60 and 940.
         boardId = 16 - ((int) ((analogRead(28) + 30) / 60));
 
@@ -28,12 +24,6 @@ IOBoardController::IOBoardController(int cT) {
 }
 
 void IOBoardController::update() {
-    if (controllerType == CONTROLLER_16_8_1 && (millis() - ledMillis > 500)) {
-        ledState = !ledState;
-        digitalWrite(25, ledState);
-        ledMillis = millis();
-    }
-
     switches()->update();
     pwmDevices()->update();
     eventDispatcher()->update();

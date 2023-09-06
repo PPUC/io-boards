@@ -31,6 +31,7 @@
 #include "EffectDevices/CombinedGiAndLightMatrixWS2812FXDevice.h"
 #include "EffectDevices/RgbStripDevice.h"
 #include "Effects/LedBlinkEffect.h"
+#include "Effects/LedOnEffect.h"
 #include "Effects/NullEffect.h"
 #include "Effects/RGBColorCycleEffect.h"
 #include "Effects/WS2812FXEffect.h"
@@ -291,6 +292,9 @@ public:
         else if (controllerType == CONTROLLER_16_8_1) {
             // Read bordID. The read value is between 60 and 940.
             boardId = 16 - ((int) ((analogRead(28) + 30) / 60));
+
+            _ledBuiltInDevice = new LedBuiltInDevice();
+            _ledBuiltInDevice->on();
         } else {
             Serial.print("Unsupported Effects Controller: ");
             Serial.println(controllerType);

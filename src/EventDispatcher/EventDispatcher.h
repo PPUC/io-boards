@@ -16,7 +16,7 @@
 #include "EventListener.h"
 
 #ifndef MAX_EVENT_LISTENERS
-#define MAX_EVENT_LISTENERS 16
+#define MAX_EVENT_LISTENERS 32
 #endif
 
 #ifndef MAX_CROSS_LINKS
@@ -68,6 +68,7 @@ private:
     bool rs485 = false;
     int rs485Pin = 0;
     byte board = 255;
+    bool error = false;
 
     bool multiCore = false;
     int crossLink = -1;

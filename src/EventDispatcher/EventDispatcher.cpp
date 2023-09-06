@@ -185,13 +185,14 @@ void EventDispatcher::update()
 {
     if (!rs485)
     {
-        while (stackCounter >= 0)
+        for (int i = 0; i <= stackCounter; i++)
         {
-            // stackCounter will reach -1 here, which means empty stack.
-            Event *event = stackEvents[stackCounter--];
+            Event *event = stackEvents[i];
             // Integer MAX_CROSS_LINKS is always higher than crossLinks, so this parameters means "no sender, send to all".
             callListeners(event, MAX_CROSS_LINKS, false);
         }
+        // -1 means empty.
+        stackCounter = -1;
     }
 
     for (int i = 0; i <= crossLink; i++)
@@ -257,13 +258,16 @@ void EventDispatcher::update()
                                             // Wait until the RS485 converter switched to write mode.
                                             delayMicroseconds(500);
                                         }
-                                        while (stackCounter >= 0)
+
+                                        for (int k = 0; k <= stackCounter; k++)
                                         {
-                                            // stackCounter will reach -1 here, which means empty stack.
-                                            Event *event = stackEvents[stackCounter--];
+                                            Event *event = stackEvents[k];
                                             // Integer MAX_CROSS_LINKS is always higher than crossLinks, so this parameters means "no sender, send to all".
                                             callListeners(event, MAX_CROSS_LINKS, true);
                                         }
+                                        // -1 means empty.
+                                        stackCounter = -1;
+
                                         // Send NULL event to indicate that transmission is complete.
                                         callListeners(new Event(EVENT_NULL), MAX_CROSS_LINKS, true);
                                         if (rs485)
@@ -278,14 +282,26 @@ void EventDispatcher::update()
                         }
                     }
                 }
-                else {
-                    // We didn't receive a start byte. Fake "success" to start over with the next byte.
-                    success = true;
-                }
+            }
+            else
+            {
+                // We didn't receive a start byte. Fake "success" to start over with the next byte.
+                success = true;
             }
 
-            if (!success)
+            if (success)
             {
+                if (error)
+                {
+                    error = false;
+                    dispatch(new Event(EVENT_NO_ERROR, 1, board));
+                }
+            }
+            else
+            {
+                error = true;
+                dispatch(new Event(EVENT_ERROR, 1, board));
+
                 while (hwSerial[i]->available())
                 {
                     byte bits = hwSerial[i]->read();
