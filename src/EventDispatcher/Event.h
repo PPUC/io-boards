@@ -121,7 +121,7 @@ struct Event {
 };
 
 struct ConfigEvent {
-    byte sourceId; // EVENT_CONFIGURATION
+    byte sourceId = EVENT_CONFIGURATION;
     byte boardId;  //
     byte topic;    // lamps
     byte index;    // 0, index of assignment
@@ -129,7 +129,6 @@ struct ConfigEvent {
     int value;     // FFFF00FF
 
     ConfigEvent(char b, char t, char i, char k, int v) {
-        sourceId = EVENT_CONFIGURATION;
         boardId = b;
         topic = t;
         index = i;
@@ -139,7 +138,6 @@ struct ConfigEvent {
 
     // Clone the event.
     ConfigEvent(const ConfigEvent* other) {
-        sourceId = other->sourceId;
         boardId = other->boardId;
         topic = other->topic;
         index = other->index;

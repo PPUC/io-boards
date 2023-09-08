@@ -13,13 +13,16 @@
 #include "Event.h"
 #include "EventListener.h"
 
-class CrossLinkDebugger : public EventListener {
+class CrossLinkDebugger : public EventListener
+{
 public:
-    CrossLinkDebugger();
+  CrossLinkDebugger();
 
-    void handleEvent(Event* event);
-    void handleEvent(ConfigEvent* event);
+  void handleEvent(Event *event);
+  void handleEvent(ConfigEvent *event);
 
+private:
+  static bool lock;
 };
 
 #endif

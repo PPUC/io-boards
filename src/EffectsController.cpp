@@ -376,7 +376,7 @@ void EffectsController::start()
     {
         if (ws2812FXbrightness[i] == 0)
         {
-            setBrightness(i + 1, WS2812FX_BRIGHTNESS);
+            //setBrightness(i + 1, WS2812FX_BRIGHTNESS);
         }
     }
 

@@ -120,14 +120,14 @@ void EventDispatcher::callListeners(Event *event, int sender, bool flush)
                 }
             }
         }
+    }
 
 #if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
-        if (multiCore && sender != -1 && event->sourceId != EVENT_NULL)
-        {
-            multiCoreCrossLink->pushEventNonBlocking(event);
-        }
-#endif
+    if (multiCore && sender != -1 && event->sourceId != EVENT_NULL)
+    {
+        multiCoreCrossLink->pushEvent(event);
     }
+#endif
 
     // delete the event and free the memory
     delete event;
@@ -170,7 +170,7 @@ void EventDispatcher::callListeners(ConfigEvent *event, int sender)
         }
 
 #if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
-        if (multiCoreCrossLink)
+        if (multiCoreCrossLink && event->boardId == board)
         {
             multiCoreCrossLink->pushConfigEvent(event);
         }
@@ -324,20 +324,14 @@ void EventDispatcher::update()
     {
         if (multiCoreCrossLink->eventAvailable())
         {
-            Event *event;
-            if (multiCoreCrossLink->popEventNonBlocking(event))
-            {
-                callListeners(event, -1, false);
-            }
+            Event *event = multiCoreCrossLink->popEvent();
+            callListeners(event, -1, false);
         }
 
         if (multiCoreCrossLink->configEventAvailable())
         {
-            ConfigEvent *configEvent;
-            if (multiCoreCrossLink->popConfigEventNonBlocking(configEvent))
-            {
-                callListeners(configEvent, -1);
-            }
+            ConfigEvent *configEvent = multiCoreCrossLink->popConfigEvent();
+            callListeners(configEvent, -1);
         }
     }
 #endif

@@ -5,72 +5,95 @@
 #include <pico/util/queue.h>
 #endif
 
+#include <Arduino.h>
 #include "Event.h"
 
 #ifndef EVENT_STACK_SIZE
 #define EVENT_STACK_SIZE 128
 #endif
 
-class MultiCoreCrossLink {
+typedef struct QueuedEvent
+{
+    byte sourceId;
+    word eventId;
+    byte value;
+    bool localFast;
+} EventItem;
+
+typedef struct QueuedConfigEvent
+{
+    byte boardId;
+    byte topic;
+    byte index;
+    byte key;
+    int value;
+} ConfigEventItem;
+
+class MultiCoreCrossLink
+{
 #if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
 public:
-    MultiCoreCrossLink() {
-        queue_init(&_eventQueue[0], sizeof(Event), EVENT_STACK_SIZE);
-        queue_init(&_eventQueue[1], sizeof(Event), EVENT_STACK_SIZE);
-        queue_init(&_configEventQueue, sizeof(ConfigEvent), EVENT_STACK_SIZE);
+    MultiCoreCrossLink()
+    {
+        if (get_core_num() == 0)
+        {
+            queue_init(&_eventQueue[0], sizeof(EventItem), EVENT_STACK_SIZE);
+            queue_init(&_eventQueue[1], sizeof(EventItem), EVENT_STACK_SIZE);
+            queue_init(&_configEventQueue, sizeof(ConfigEventItem), EVENT_STACK_SIZE);
+        }
     }
 
-    ~MultiCoreCrossLink() { /* noop */ };
+    ~MultiCoreCrossLink(){};
 
-    void pushEvent(Event* event) {
-        while (!pushEventNonBlocking(event)) { /* noop */ }
+    void pushEvent(Event *event)
+    {
+        QueuedEvent queuedEvent;
+        queuedEvent.sourceId = event->sourceId;
+        queuedEvent.eventId = event->eventId;
+        queuedEvent.value = event->value;
+        queuedEvent.localFast = event->localFast;
+
+        queue_add_blocking(&_eventQueue[get_core_num() ^ 1], &queuedEvent);
     }
 
-    bool pushEventNonBlocking(Event* event) {
-        // Clone the event so that Eventdispatcher::callListeners() can delete the event.
-        return queue_try_add(&_eventQueue[get_core_num() ^ 1], new Event(event));
+    Event *popEvent()
+    {
+        QueuedEvent queuedEvent;
+        queue_remove_blocking(&_eventQueue[get_core_num()], &queuedEvent);
+
+        return new Event(queuedEvent.sourceId, queuedEvent.eventId, queuedEvent.value, queuedEvent.localFast);
     }
 
-    Event* popEvent() {
-        Event* event;
-        while (!popEventNonBlocking(event)) { /* noop */ }
-        return event;
-    }
-
-    bool popEventNonBlocking(Event* event) {
-        return queue_try_remove(&_eventQueue[get_core_num()], event);
-    }
-
-    int eventAvailable() {
+    int eventAvailable()
+    {
         return queue_get_level(&_eventQueue[get_core_num()]);
     }
 
-    void pushConfigEvent(ConfigEvent* event) {
-        if (get_core_num() == 0) {
-            while (!pushConfigEventNonBlocking(event)) { /* noop */ }
+    void pushConfigEvent(ConfigEvent *event)
+    {
+        if (get_core_num() == 0)
+        {
+            QueuedConfigEvent queuedConfigEvent;
+            queuedConfigEvent.boardId = event->boardId;
+            queuedConfigEvent.topic = event->topic;
+            queuedConfigEvent.index = event->index;
+            queuedConfigEvent.key = event->key;
+            queuedConfigEvent.value = event->value;
+
+            queue_add_blocking(&_configEventQueue, &queuedConfigEvent);
         }
     }
 
-    bool pushConfigEventNonBlocking(ConfigEvent* event) {
-        if (get_core_num() == 0) {
-            // Clone the event so that Eventdispatcher::callListeners() can delete the event.
-            return queue_try_add(&_configEventQueue, new ConfigEvent(event));
-        }
+    ConfigEvent *popConfigEvent()
+    {
+        QueuedConfigEvent queuedConfigEvent;
+        queue_remove_blocking(&_configEventQueue, &queuedConfigEvent);
 
-        return false;
+        return new ConfigEvent(queuedConfigEvent.boardId, queuedConfigEvent.topic, queuedConfigEvent.index, queuedConfigEvent.key, queuedConfigEvent.value);
     }
 
-    ConfigEvent* popConfigEvent() {
-        ConfigEvent* event;
-        while (!popConfigEventNonBlocking(event)) { /* noop */ }
-        return event;
-    }
-
-    bool popConfigEventNonBlocking(ConfigEvent* event) {
-        return get_core_num() == 1 && queue_try_remove(&_configEventQueue, event);
-    }
-
-    int configEventAvailable() {
+    int configEventAvailable()
+    {
         return get_core_num() == 1 && queue_get_level(&_configEventQueue);
     }
 
