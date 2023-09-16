@@ -21,26 +21,35 @@
 #include "EventDispatcher/MultiCoreCrossLink.h"
 #include "IODevices/PwmDevices.h"
 #include "IODevices/Switches.h"
+#include "IODevices/SwitchMatrix.h"
 
-class IOBoardController : public EventListener {
+class IOBoardController : public EventListener
+{
 public:
     IOBoardController(int controllerType);
 
-    PwmDevices* pwmDevices();
+    PwmDevices *pwmDevices();
 
-    Switches* switches();
+    Switches *switches();
 
-    EventDispatcher* eventDispatcher();
+    SwitchMatrix *switchMatrix();
 
-    void handleEvent(Event* event);
+    EventDispatcher *eventDispatcher();
 
-    void handleEvent(ConfigEvent* event);
+    void handleEvent(Event *event);
+
+    void handleEvent(ConfigEvent *event);
 
     void update();
 
 private:
-    PwmDevices* _pwmDevices;
-    Switches* _switches;
+    PwmDevices *_pwmDevices;
+    Switches *_switches;
+    SwitchMatrix *_switchMatrix;
+
+    bool activePwmDevices = false;
+    bool activeSwitches = false;
+    bool activeSwitchMatrix = false;
 
     int controllerType;
     byte boardId;
@@ -52,10 +61,11 @@ private:
     byte holdPower = 0;
     byte holdPowerActivationTime = 0;
     byte fastSwitch = 0;
+    byte type = 0;
 
-    EventDispatcher* _eventDispatcher;
+    EventDispatcher *_eventDispatcher;
 #if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
-    MultiCoreCrossLink* _multiCoreCrossLink;
+    MultiCoreCrossLink *_multiCoreCrossLink;
 #endif
 };
 

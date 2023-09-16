@@ -59,7 +59,7 @@ void setup1()
     effectsController.addEffect(
         new LedOnEffect(),
         effectsController.ledBuiltInDevice(),
-        new Event(EVENT_SOURCE_LIGHT, 88, 1),
+        new Event(EVENT_SOURCE_LIGHT, 21, 1),
         1, // priority
         0, // repeat, -1 means endless
         0  // mode
@@ -68,30 +68,30 @@ void setup1()
     effectsController.addEffect(
         new NullEffect(),
         effectsController.ledBuiltInDevice(),
-        new Event(EVENT_SOURCE_LIGHT, 88, 0),
+        new Event(EVENT_SOURCE_LIGHT, 21, 0),
         1, // priority
         0, // repeat, -1 means endless
         0  // mode
     );
 
-    effectsController.addEffect(
-        new LedBlinkEffect(),
-        effectsController.ledBuiltInDevice(),
-        new Event(EVENT_ERROR, 1, /* board ID */ 0),
-        2,  // priority
-        -1, // repeat, -1 means endless
-        0   // mode
-    );
+    // effectsController.addEffect(
+    //     new LedBlinkEffect(),
+    //     effectsController.ledBuiltInDevice(),
+    //     new Event(EVENT_ERROR, 1, /* board ID */ 0),
+    //     2,  // priority
+    //     -1, // repeat, -1 means endless
+    //     0   // mode
+    // );
 
-    // Controller start
-    effectsController.addEffect(
-        new NullEffect(),
-        effectsController.ledBuiltInDevice(),
-        new Event(EVENT_NO_ERROR, 1, /* board ID */ 0),
-        3, // priority
-        0, // repeat
-        0  // mode
-    );
+    // // Controller start
+    // effectsController.addEffect(
+    //     new NullEffect(),
+    //     effectsController.ledBuiltInDevice(),
+    //     new Event(EVENT_NO_ERROR, 1, /* board ID */ 0),
+    //     3, // priority
+    //     0, // repeat
+    //     0  // mode
+    // );
 
     effectsController.start();
 }
