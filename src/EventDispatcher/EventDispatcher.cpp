@@ -269,7 +269,7 @@ void EventDispatcher::update()
                                         stackCounter = -1;
 
                                         // Send NULL event to indicate that transmission is complete.
-                                        callListeners(new Event(EVENT_NULL), MAX_CROSS_LINKS, true);
+                                        callListeners(new Event(EVENT_NULL, 1, board), MAX_CROSS_LINKS, true);
                                         if (rs485)
                                         {
                                             // Wait until the RS485 converter switched back to read mode.
