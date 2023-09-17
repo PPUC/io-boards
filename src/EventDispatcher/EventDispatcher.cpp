@@ -272,9 +272,11 @@ void EventDispatcher::update()
                                         callListeners(new Event(EVENT_NULL, 1, board), MAX_CROSS_LINKS, true);
                                         if (rs485)
                                         {
-                                            // Wait until the RS485 converter switched back to read mode.
-                                            delayMicroseconds(1000);
+                                            // Flush the serial buffer and wait until done.
+                                            hwSerial[i]->flush();
                                             digitalWrite(rs485Pin, LOW); // Read.
+                                            // Wait until the RS485 converter switched back to read mode.
+                                            delayMicroseconds(500);
                                         }
                                     }
                                 }
