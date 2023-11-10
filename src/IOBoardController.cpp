@@ -11,9 +11,8 @@ IOBoardController::IOBoardController(int cT)
 
     if (controllerType == CONTROLLER_16_8_1)
     {
-        // Read bordID. The read value is between 60 and 940.
-        boardId = 16 - ((int)((analogRead(28) + 30) / 60));
-
+        // Read bordID. Ideal value at 10bit resolution: (DIP+1)*1023*2/35 -> 58.46 to 935.3
+        boardId = 16 - ((int)((analogRead(28) + 29.32) / 58.46));
         _eventDispatcher->setRS485ModePin(2);
         _eventDispatcher->setBoard(boardId);
         _eventDispatcher->setCrossLinkSerial(Serial1);
