@@ -27,6 +27,15 @@ public:
         pauseTime = 2;
         activeLow = false;
         active = false;
+        
+        for (int col = 0; col < MAX_COLUMNS; col++)
+        {
+            columns[col] = -1;
+        } 
+        for (int row = 0; row < MAX_ROWS; row++)
+        {
+            rows[row] = -1;
+        }
 
         _ms = millis();
         _eventDispatcher = eD;
@@ -56,8 +65,8 @@ private:
 
     unsigned long _ms;
 
-    int columns[MAX_COLUMNS] = {-1};
-    int rows[MAX_ROWS] = {-1};
+    int columns[MAX_COLUMNS];
+    int rows[MAX_ROWS];
     bool state[MAX_COLUMNS][MAX_ROWS] = {0};
     bool toggled[MAX_COLUMNS][MAX_ROWS] = {0};
     byte column = 0;

@@ -119,6 +119,17 @@ void EventDispatcher::callListeners(Event *event, int sender, bool flush)
                     hwSerial[i]->write(msg, 7);
                 }
             }
+
+#if defined(USB_DEBUG) && (defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040))
+            rp2040.idleOtherCore();
+            Serial.print("Sent event: sourceId ");
+            Serial.print(event->sourceId);
+            Serial.print(", eventId ");
+            Serial.print(event->eventId, DEC);
+            Serial.print(", value ");
+            Serial.println(event->value, DEC);
+            rp2040.resumeOtherCore();
+#endif
         }
     }
 

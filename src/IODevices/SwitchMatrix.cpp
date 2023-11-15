@@ -10,13 +10,21 @@ void SwitchMatrix::setPulseTime(byte pT)
     pulseTime = pT;
 }
 
-
 void SwitchMatrix::registerColumn(byte p, byte n)
 {
     if (n > 0 && n < MAX_COLUMNS)
     {
         columns[n - 1] = p;
         pinMode(p, OUTPUT);
+
+#if defined(USB_DEBUG) && (defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040))
+        rp2040.idleOtherCore();
+        Serial.print("Register Switch Matrix Column ");
+        Serial.print(n, DEC);
+        Serial.print(" on port ");
+        Serial.println(p, DEC);
+        rp2040.resumeOtherCore();
+#endif
     }
 }
 
@@ -26,6 +34,15 @@ void SwitchMatrix::registerRow(byte p, byte n)
     {
         rows[n - 1] = p;
         pinMode(p, INPUT);
+
+#if defined(USB_DEBUG) && (defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040))
+        rp2040.idleOtherCore();
+        Serial.print("Register Switch Matrix Row ");
+        Serial.print(n, DEC);
+        Serial.print(" on port ");
+        Serial.println(p, DEC);
+        rp2040.resumeOtherCore();
+#endif
     }
 }
 

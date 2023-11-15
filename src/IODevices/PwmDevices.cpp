@@ -16,6 +16,15 @@ void PwmDevices::registerSolenoid(byte p, byte n, byte pow, byte minPT, byte max
         pinMode(p, OUTPUT);
         analogWrite(p, 0);
         type[last++] = PWM_TYPE_SOLENOID;
+
+#if defined(USB_DEBUG) && (defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040))
+        rp2040.idleOtherCore();
+        Serial.print("Register PWM Device ");
+        Serial.print(n, DEC);
+        Serial.print(" on port ");
+        Serial.println(p, DEC);
+        rp2040.resumeOtherCore();
+#endif
     }
 }
 
