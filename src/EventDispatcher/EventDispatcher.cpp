@@ -281,23 +281,66 @@ void EventDispatcher::update()
 
                                         // Send NULL event to indicate that transmission is complete.
                                         callListeners(new Event(EVENT_NULL, 1, board), MAX_CROSS_LINKS, true);
+
                                         if (rs485)
                                         {
                                             // Flush the serial buffer and wait until done.
                                             hwSerial[i]->flush();
                                             digitalWrite(rs485Pin, LOW); // Read.
                                             // Wait until the RS485 converter switched back to read mode.
-                                            delayMicroseconds(500);
+                                            delayMicroseconds(200);
                                         }
                                     }
                                 }
+                                else
+                                {
+#if defined(USB_DEBUG) && (defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040))
+                                    rp2040.idleOtherCore();
+                                    Serial.print("Received wrong second stop byte ");
+                                    Serial.println(stopByte, DEC);
+                                    rp2040.resumeOtherCore();
+#endif
+                                }
+                            }
+                            else
+                            {
+#if defined(USB_DEBUG) && (defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040))
+                                rp2040.idleOtherCore();
+                                Serial.print("Received wrong first stop byte ");
+                                Serial.println(stopByte, DEC);
+                                rp2040.resumeOtherCore();
+#endif
                             }
                         }
+                        else
+                        {
+#if defined(USB_DEBUG) && (defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040))
+                            rp2040.idleOtherCore();
+                            Serial.print("Received invalid event id ");
+                            Serial.println(eventId, DEC);
+                            rp2040.resumeOtherCore();
+#endif
+                        }
                     }
+                }
+                else
+                {
+#if defined(USB_DEBUG) && (defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040))
+                    rp2040.idleOtherCore();
+                    Serial.print("Received invalid source id ");
+                    Serial.println(sourceId, DEC);
+                    rp2040.resumeOtherCore();
+#endif
                 }
             }
             else
             {
+#if defined(USB_DEBUG) && (defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040))
+                rp2040.idleOtherCore();
+                Serial.print("Received wrong start byte ");
+                Serial.println(startByte, DEC);
+                rp2040.resumeOtherCore();
+#endif
                 // We didn't receive a start byte. Fake "success" to start over with the next byte.
                 success = true;
             }
