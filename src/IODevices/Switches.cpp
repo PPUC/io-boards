@@ -4,6 +4,14 @@ void Switches::registerSwitch(byte p, byte n)
 {
     if (last < (MAX_SWITCHES - 1))
     {
+        if (p >= 15 && p <= 18) { 
+            // Set mid power output as input.
+            pinMode(p, OUTPUT);
+            digitalWrite(HIGH);
+            delayMicroseconds(100);
+            digitalWrite(LOW);
+        }  
+        
         pinMode(p, INPUT);
         port[++last] = p;
         number[last] = n;
