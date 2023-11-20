@@ -204,6 +204,14 @@ void EffectsController::handleEvent(ConfigEvent *event)
                     // ws2812FXDevices[0][0]->setBrightness(WS2812FX_BRIGHTNESS);
                     // "off" means no effects, standard operation mode.
                     ws2812FXDevices[0][0]->off();
+                    if (config_heatUp > 0)
+                    {
+                        ((CombinedGiAndLightMatrixWS2812FXDevice*)ws2812FXDevices[0][0])->setHeatUp(config_heatUp);
+                    }
+                    if (config_afterGlow > 0)
+                    {
+                        ((CombinedGiAndLightMatrixWS2812FXDevice*)ws2812FXDevices[0][0])->setAfterGlow(config_afterGlow);
+                    }
                     ws2812FXstates[0] = true;
                 }
 
@@ -374,7 +382,7 @@ void EffectsController::start()
     {
         if (ws2812FXbrightness[i] == 0)
         {
-            //setBrightness(i + 1, WS2812FX_BRIGHTNESS);
+            // setBrightness(i + 1, WS2812FX_BRIGHTNESS);
         }
     }
 
