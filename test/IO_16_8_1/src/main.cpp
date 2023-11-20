@@ -4,13 +4,13 @@
 
 #include "IOBoardController.h"
 #include "EffectsController.h"
-#ifdef USB_DEBUG
 #include "EventDispatcher/CrossLinkDebugger.h"
-#endif
 
 IOBoardController ioBoardController(CONTROLLER_16_8_1);
 // Platform will be adjusted by ConfigEvent.
 EffectsController effectsController(CONTROLLER_16_8_1, PLATFORM_LIBPINMAME);
+
+bool usb_debugging = false;
 
 // Each controller will be bound to its own core and has it's own
 // EventDispatcher. Only the EventDispatcher of IOBoardController
@@ -20,15 +20,22 @@ EffectsController effectsController(CONTROLLER_16_8_1, PLATFORM_LIBPINMAME);
 
 void setup()
 {
-#ifdef USB_DEBUG
+    uint32_t timeout = millis() + 2000;
+
     Serial.begin(115200);
     // The Pico implements USB itself so special care must be taken. Use while(!Serial){} in the setup() code before printing anything so that it waits for the USB connection to be established.
     // https://community.platformio.org/t/serial-monitor-not-working/1512/25
-    while (!Serial)
+    while (!Serial && millis() < timeout)
     {
     }
-    ioBoardController.eventDispatcher()->addListener(new CrossLinkDebugger());
-#endif
+
+    if (Serial)
+    {
+        usb_debugging = true;
+        delay(10);
+        ioBoardController.eventDispatcher()->addListener(new CrossLinkDebugger());
+        rp2040.restartCore1();
+    }
 
     Serial1.setTX(0);
     Serial1.setRX(1);
@@ -43,13 +50,11 @@ void setup()
 
 void setup1()
 {
-#ifdef USB_DEBUG
-    while (!Serial)
+    if (usb_debugging)
     {
+        delay(10);
+        effectsController.eventDispatcher()->addListener(new CrossLinkDebugger());
     }
-
-    effectsController.eventDispatcher()->addListener(new CrossLinkDebugger());
-#endif
 
     effectsController.eventDispatcher()->setMultiCoreCrossLink(
         ioBoardController.eventDispatcher()->getMultiCoreCrossLink());

@@ -7,9 +7,9 @@ void Switches::registerSwitch(byte p, byte n)
         if (p >= 15 && p <= 18) { 
             // Set mid power output as input.
             pinMode(p, OUTPUT);
-            digitalWrite(HIGH);
+            digitalWrite(p, HIGH);
             delayMicroseconds(100);
-            digitalWrite(LOW);
+            digitalWrite(p, LOW);
         }  
         
         pinMode(p, INPUT);
@@ -17,14 +17,6 @@ void Switches::registerSwitch(byte p, byte n)
         number[last] = n;
         toggled[last] = false;
         state[last] = !digitalRead(p);
-#if defined(USB_DEBUG) && (defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040))
-        rp2040.idleOtherCore();
-        Serial.print("Register Switch ");
-        Serial.print(n, DEC);
-        Serial.print(" on port ");
-        Serial.println(p, DEC);
-        rp2040.resumeOtherCore();
-#endif
     }
 }
 

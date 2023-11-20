@@ -8,7 +8,9 @@ CrossLinkDebugger::CrossLinkDebugger()
         rp2040.idleOtherCore();
         Serial.println("PPUC IO_16_8_1");
         Serial.print("PPUC board #");
-        Serial.println(16 - ((int)((analogRead(28) + 30) / 60)));
+        // Read bordID. Ideal value at 10bit resolution: (DIP+1)*1023*2/35 -> 58.46 to 935.3
+        Serial.println(16 - ((int)((analogRead(28) + 29.23) / 58.46)));
+        Serial.println("PPUC core #0 started");
 #endif
         Serial.println("PPUC CrossLinkDebugger");
         Serial.println("----------------------");
@@ -17,6 +19,7 @@ CrossLinkDebugger::CrossLinkDebugger()
     }
     else
     {
+        Serial.println("PPUC core #1 started");
         delayMicroseconds(500);
     }
 #endif
