@@ -228,9 +228,6 @@ void CombinedGiAndLightMatrixWS2812FXDevice::handleEvent(Event *event)
         }
         else if (event->sourceId == EVENT_SOURCE_LIGHT || event->sourceId == EVENT_SOURCE_SOLENOID)
         {
-            // char system = (event->eventId & 0xFF00) >> 8;
-            // uint8_t number = event->eventId & 0x00FF;
-
             uint8_t number = event->eventId;
 
             if (event->sourceId == EVENT_SOURCE_LIGHT)

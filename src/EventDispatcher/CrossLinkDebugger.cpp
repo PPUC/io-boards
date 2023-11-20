@@ -19,8 +19,9 @@ CrossLinkDebugger::CrossLinkDebugger()
     }
     else
     {
+        rp2040.idleOtherCore();
         Serial.println("PPUC core #1 started");
-        delayMicroseconds(500);
+        rp2040.resumeOtherCore();
     }
 #endif
 }

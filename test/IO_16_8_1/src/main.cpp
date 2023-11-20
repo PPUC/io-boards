@@ -11,6 +11,7 @@ IOBoardController ioBoardController(CONTROLLER_16_8_1);
 EffectsController effectsController(CONTROLLER_16_8_1, PLATFORM_LIBPINMAME);
 
 bool usb_debugging = false;
+bool core_0_initilized = false;
 
 // Each controller will be bound to its own core and has it's own
 // EventDispatcher. Only the EventDispatcher of IOBoardController
@@ -34,8 +35,10 @@ void setup()
         usb_debugging = true;
         delay(10);
         ioBoardController.eventDispatcher()->addListener(new CrossLinkDebugger());
-        rp2040.restartCore1();
     }
+
+    core_0_initilized = true;
+    rp2040.restartCore1();
 
     Serial1.setTX(0);
     Serial1.setRX(1);
@@ -50,6 +53,10 @@ void setup()
 
 void setup1()
 {
+    while (!core_0_initilized)
+    {
+    }
+
     if (usb_debugging)
     {
         delay(10);
@@ -64,7 +71,7 @@ void setup1()
     effectsController.addEffect(
         new LedOnEffect(),
         effectsController.ledBuiltInDevice(),
-        new Event(EVENT_SOURCE_LIGHT, 21, 1),
+        new Event(EVENT_SOURCE_LIGHT, 11, 1),
         1, // priority
         0, // repeat, -1 means endless
         0  // mode
@@ -73,7 +80,7 @@ void setup1()
     effectsController.addEffect(
         new NullEffect(),
         effectsController.ledBuiltInDevice(),
-        new Event(EVENT_SOURCE_LIGHT, 21, 0),
+        new Event(EVENT_SOURCE_LIGHT, 11, 0),
         1, // priority
         0, // repeat, -1 means endless
         0  // mode

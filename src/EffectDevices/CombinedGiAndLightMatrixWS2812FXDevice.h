@@ -51,6 +51,7 @@
 
 #include "WS2812FXDevice.h"
 #include "../EventDispatcher/Event.h"
+#include "../EventDispatcher/EventDispatcher.h"
 #include "../EventDispatcher/EventListener.h"
 #include "../InputDevices/GeneralIlluminationWPC.h"
 
@@ -62,7 +63,7 @@
 class CombinedGiAndLightMatrixWS2812FXDevice : public WS2812FXDevice, public EventListener
 {
 public:
-    CombinedGiAndLightMatrixWS2812FXDevice(WS2812FX *ws2812FX, int firstLED, int lastLED, int firstSegment, int lastSegment) : WS2812FXDevice(ws2812FX, firstLED, lastLED, firstSegment, lastSegment)
+    CombinedGiAndLightMatrixWS2812FXDevice(WS2812FX *ws2812FX, int firstLED, int lastLED, int firstSegment, int lastSegment, EventDispatcher * eventDispatcher) : WS2812FXDevice(ws2812FX, firstLED, lastLED, firstSegment, lastSegment)
     {
         wavePWMHeatUp = new WavePWM();
         wavePWMAfterGlow = new WavePWM();
@@ -81,6 +82,10 @@ public:
                 ledLightMatrixPositions[number][i] = -1;
             }
         }
+
+        eventDispatcher->addListener(this, EVENT_SOURCE_GI);
+        eventDispatcher->addListener(this, EVENT_SOURCE_SOLENOID); // Flasher
+        eventDispatcher->addListener(this, EVENT_SOURCE_LIGHT);
     }
 
     void on();

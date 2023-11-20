@@ -52,7 +52,8 @@ CombinedGiAndLightMatrixWS2812FXDevice *EffectsController::createCombinedGiAndLi
         ws2812FXDevice->getFirstLED(),
         ws2812FXDevice->getlastLED(),
         ws2812FXDevice->getFirstSegment(),
-        ws2812FXDevice->getLastSegment());
+        ws2812FXDevice->getLastSegment(),
+        _eventDispatcher);
 
     giAndLightMatrix->off();
 
@@ -187,7 +188,6 @@ void EffectsController::handleEvent(ConfigEvent *event)
                 break;
             case CONFIG_TOPIC_LIGHT_UP:
                 config_heatUp = event->value;
-
                 if (!ws2812FXDevices[0][0])
                 {
                     ws2812FXDevices[0][0] = new CombinedGiAndLightMatrixWS2812FXDevice(
@@ -195,18 +195,16 @@ void EffectsController::handleEvent(ConfigEvent *event)
                         0,
                         config_amount - 1,
                         0,
-                        0);
+                        0,
+                        _eventDispatcher);
                     ws2812FXDevices[0][0]->getWS2812FX()->init();
                     ws2812FXDeviceCounters[0] = 1;
 
                     // Brightness might be overwritten later.
                     // ws2812FXDevices[0][0]->setBrightness(WS2812FX_BRIGHTNESS);
+                    // "off" means no effects, standard operation mode.
                     ws2812FXDevices[0][0]->off();
                     ws2812FXstates[0] = true;
-
-                    _eventDispatcher->addListener((EventListener *)ws2812FXDevices[0][0], EVENT_SOURCE_GI);
-                    _eventDispatcher->addListener((EventListener *)ws2812FXDevices[0][0], EVENT_SOURCE_SOLENOID);
-                    _eventDispatcher->addListener((EventListener *)ws2812FXDevices[0][0], EVENT_SOURCE_LIGHT);
                 }
 
                 break;

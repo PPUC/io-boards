@@ -20,12 +20,11 @@ class PwmDevices : public EventListener
 {
 public:
     // Constructor
-    PwmDevices(EventDispatcher *eD)
+    PwmDevices(EventDispatcher *eventDispatcher)
     {
-        _eventDispatcher = eD;
-        _eventDispatcher->addListener(this, EVENT_SOURCE_LIGHT);
-        _eventDispatcher->addListener(this, EVENT_SOURCE_SOLENOID);
-        _eventDispatcher->addListener(this, EVENT_SOURCE_SWITCH);
+        eventDispatcher->addListener(this, EVENT_SOURCE_LIGHT);
+        eventDispatcher->addListener(this, EVENT_SOURCE_SOLENOID);
+        eventDispatcher->addListener(this, EVENT_SOURCE_SWITCH);
     }
 
     void registerSolenoid(byte p, byte n, byte pow, byte minPT, byte maxPT, byte hP, byte hPAT, byte fS);
@@ -53,8 +52,6 @@ private:
     unsigned long activated[MAX_PWM_OUTPUTS] = {0};
     bool scheduled[MAX_PWM_OUTPUTS] = {0};
     byte last = 0;
-
-    EventDispatcher *_eventDispatcher;
 
     void updateSolenoidOrFlasher(bool targetState, byte i);
 };

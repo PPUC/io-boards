@@ -18,20 +18,22 @@
 #define MAX_ROWS 8
 #endif
 
-class SwitchMatrix : public EventListener {
+class SwitchMatrix : public EventListener
+{
 public:
-    SwitchMatrix(byte bId, EventDispatcher* eD) {
+    SwitchMatrix(byte bId, EventDispatcher *eD)
+    {
         boardId = bId;
         platform = PLATFORM_LIBPINMAME;
         pulseTime = 2;
         pauseTime = 2;
         activeLow = false;
         active = false;
-        
+
         for (int col = 0; col < MAX_COLUMNS; col++)
         {
             columns[col] = -1;
-        } 
+        }
         for (int row = 0; row < MAX_ROWS; row++)
         {
             rows[row] = -1;
@@ -51,9 +53,9 @@ public:
 
     void update();
 
-    void handleEvent(Event* event);
+    void handleEvent(Event *event);
 
-    void handleEvent(ConfigEvent* event) {}
+    void handleEvent(ConfigEvent *event) {}
 
 private:
     byte boardId;
@@ -71,7 +73,7 @@ private:
     bool toggled[MAX_COLUMNS][MAX_ROWS] = {0};
     byte column = 0;
 
-    EventDispatcher* _eventDispatcher;
+    EventDispatcher *_eventDispatcher;
 };
 
 #endif

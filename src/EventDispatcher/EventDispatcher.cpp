@@ -69,6 +69,7 @@ void EventDispatcher::dispatch(Event *event)
         {
             for (byte i = 0; i <= numListeners; i++)
             {
+
                 if (event->sourceId == eventListenerFilters[i] || EVENT_SOURCE_ANY == eventListenerFilters[i])
                 {
                     eventListeners[i]->handleEvent(event);
@@ -120,7 +121,7 @@ void EventDispatcher::callListeners(Event *event, int sender, bool flush)
                 }
             }
 
-#if defined(USB_DEBUG) && (defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040))
+#if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
             rp2040.idleOtherCore();
             Serial.print("Sent event: sourceId ");
             Serial.print(event->sourceId);
