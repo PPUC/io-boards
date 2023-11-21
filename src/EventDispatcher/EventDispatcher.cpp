@@ -295,7 +295,7 @@ void EventDispatcher::update()
                                 }
                                 else
                                 {
-#if defined(USB_DEBUG) && (defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040))
+#if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
                                     rp2040.idleOtherCore();
                                     Serial.print("Received wrong second stop byte ");
                                     Serial.println(stopByte, DEC);
@@ -305,7 +305,7 @@ void EventDispatcher::update()
                             }
                             else
                             {
-#if defined(USB_DEBUG) && (defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040))
+#if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
                                 rp2040.idleOtherCore();
                                 Serial.print("Received wrong first stop byte ");
                                 Serial.println(stopByte, DEC);
@@ -315,7 +315,7 @@ void EventDispatcher::update()
                         }
                         else
                         {
-#if defined(USB_DEBUG) && (defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040))
+#if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
                             rp2040.idleOtherCore();
                             Serial.print("Received invalid event id ");
                             Serial.println(eventId, DEC);
@@ -326,7 +326,7 @@ void EventDispatcher::update()
                 }
                 else
                 {
-#if defined(USB_DEBUG) && (defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040))
+#if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
                     rp2040.idleOtherCore();
                     Serial.print("Received invalid source id ");
                     Serial.println(sourceId, DEC);
@@ -336,7 +336,7 @@ void EventDispatcher::update()
             }
             else
             {
-#if defined(USB_DEBUG) && (defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040))
+#if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
                 rp2040.idleOtherCore();
                 Serial.print("Received wrong start byte ");
                 Serial.println(startByte, DEC);
