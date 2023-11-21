@@ -4,15 +4,17 @@ void Switches::registerSwitch(byte p, byte n)
 {
     if (last < (MAX_SWITCHES - 1))
     {
-        if (p >= 15 && p <= 18) { 
+        if (p >= 15 && p <= 18)
+        {
             // Set mid power output as input.
             pinMode(p, OUTPUT);
             digitalWrite(p, HIGH);
-            delayMicroseconds(100);
+            delayMicroseconds(10);
             digitalWrite(p, LOW);
-        }  
-        
+        }
+
         pinMode(p, INPUT);
+        delayMicroseconds(10);
         port[++last] = p;
         number[last] = n;
         toggled[last] = false;
@@ -67,13 +69,17 @@ void Switches::handleEvent(Event *event)
         // The CPU requested all current states.
         for (int i = 0; i <= last; i++)
         {
-            // Send all states of switches that haven't been toggled since last poll.
+            // Send all states of switches that haven't been toggled since last poll (and dispatched their event already).
             if (!toggled[i])
             {
-                toggled[i] = true;
                 _eventDispatcher->dispatch(new Event(EVENT_SOURCE_SWITCH, word(0, number[i]), state[i]));
             }
+            else
+            {
+                toggled[i] = false;
+            }
         }
+        _ms = millis();
         break;
     }
 }

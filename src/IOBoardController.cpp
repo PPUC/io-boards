@@ -5,6 +5,7 @@ IOBoardController::IOBoardController(int cT)
     _eventDispatcher = new EventDispatcher();
     _eventDispatcher->addListener(this, EVENT_CONFIGURATION);
     _eventDispatcher->addListener(this, EVENT_PING);
+    _eventDispatcher->addListener(this, EVENT_RUN);
     _eventDispatcher->addListener(this, EVENT_RESET);
 
     controllerType = cT;
@@ -28,17 +29,20 @@ IOBoardController::IOBoardController(int cT)
 
 void IOBoardController::update()
 {
-    if (activeSwitches)
+    if (running)
     {
-        switches()->update();
-    }
-    if (activeSwitchMatrix)
-    {
-        switchMatrix()->update();
-    }
-    if (activePwmDevices)
-    {
-        pwmDevices()->update();
+        if (activeSwitches)
+        {
+            switches()->update();
+        }
+        if (activeSwitchMatrix)
+        {
+            switchMatrix()->update();
+        }
+        if (activePwmDevices)
+        {
+            pwmDevices()->update();
+        }
     }
 
     eventDispatcher()->update();
@@ -50,6 +54,10 @@ void IOBoardController::handleEvent(Event *event)
     {
     case EVENT_PING:
         _eventDispatcher->dispatch(new Event(EVENT_PONG, 1, boardId));
+        break;
+
+    case EVENT_RUN:
+        running = (bool)event->value;
         break;
 
     case EVENT_RESET:

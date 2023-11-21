@@ -47,6 +47,7 @@ private:
     Switches *_switches;
     SwitchMatrix *_switchMatrix;
 
+    bool running = false;
     bool activePwmDevices = false;
     bool activeSwitches = false;
     bool activeSwitchMatrix = false;
