@@ -7,6 +7,7 @@
 #define PPUC_h
 
 #include <Arduino.h>
+#include "PPUCPlatforms.h"
 
 #define CONTROLLER_MEGA_ALL_INPUT 1
 #define CONTROLLER_TEENSY_OUTPUT 10
@@ -14,11 +15,6 @@
 #define CONTROLLER_PICO_OUTPUT 20
 #define CONTROLLER_NANO_PIN2DMD_OUTPUT 30
 #define CONTROLLER_16_8_1 40
-
-#define PLATFORM_WPC 1
-#define PLATFORM_DATA_EAST 2
-#define PLATFORM_SYS11 3
-#define PLATFORM_LIBPINMAME 100
 
 #include <EffectDevices/Definitions.h>
 

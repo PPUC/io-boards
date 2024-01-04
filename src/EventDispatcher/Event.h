@@ -1,8 +1,6 @@
 /*
   Event.h
   Created by Markus Kalkbrenner, 2021-2023.
-
-  Play more pinball!
 */
 
 #ifndef EVENT_h
@@ -67,13 +65,13 @@
 #define MATRIX_TYPE_COLUMN 1 // Column
 #define MATRIX_TYPE_ROW 2    // Row
 
-struct Event {
-    byte sourceId;
-    word eventId;
-    byte value;
+struct Event
+{
+    uint8_t sourceId;
+    uint16_t eventId;
+    uint8_t value;
     bool localFast;
-
-    Event(byte sId)
+    Event(uint8_t sId)
     {
         sourceId = sId;
         eventId = 1;
@@ -81,21 +79,23 @@ struct Event {
         localFast = false;
     }
 
-    Event(byte sId, word eId) {
+    Event(uint8_t sId, uint16_t eId)
+    {
         sourceId = sId;
         eventId = eId;
         value = 1;
         localFast = false;
     }
 
-    Event(byte sId, word eId, byte v) {
+    Event(uint8_t sId, uint16_t eId, uint8_t v)
+    {
         sourceId = sId;
         eventId = eId;
         value = v;
         localFast = false;
     }
 
-    Event(byte sId, word eId, byte v, bool lf) {
+    Event(uint8_t sId, uint16_t eId, uint8_t v, bool lf) {
         sourceId = sId;
         eventId = eId;
         value = v;
@@ -110,26 +110,39 @@ struct Event {
         localFast = other->localFast;
     }
 
-    bool operator==(const Event &other) const {
-        return this->sourceId == other.sourceId
-            && this->eventId == other.eventId
-            && this->value == other.value;
+    bool operator==(const Event &other) const
+    {
+        return this->sourceId == other.sourceId && this->eventId == other.eventId && this->value == other.value;
     }
 
-    bool operator!=(const Event &other) const {
+    bool operator!=(const Event &other) const
+    {
         return !(*this == other);
     }
 };
 
-struct ConfigEvent {
-    byte sourceId = EVENT_CONFIGURATION;
-    byte boardId;  //
-    byte topic;    // lamps
-    byte index;    // 0, index of assignment
-    byte key;      // ledType, assignment/brightness
-    int value;     // FFFF00FF
+struct ConfigEvent
+{
+    uint8_t sourceId; // EVENT_CONFIGURATION
+    uint8_t boardId;  //
+    uint8_t topic;    // lamps
+    uint8_t index;    // 0, index of assignment
+    uint8_t key;      // ledType, assignment/brightness
+    uint32_t value;   // FFFF00FF
 
-    ConfigEvent(char b, char t, char i, char k, int v) {
+    ConfigEvent(uint8_t b)
+    {
+        sourceId = EVENT_CONFIGURATION;
+        boardId = b;
+        topic = CONFIG_TOPIC_NULL;
+        index = 1;
+        key = 1;
+        value = 1;
+    }
+
+    ConfigEvent(uint8_t b, uint8_t t, uint8_t i, uint8_t k, uint32_t v)
+    {
+        sourceId = EVENT_CONFIGURATION;
         boardId = b;
         topic = t;
         index = i;
