@@ -13,15 +13,12 @@
 #include "EffectDevice.h"
 
 class LedBuiltInDevice : public EffectDevice {
-public:
-    LedBuiltInDevice() {
-        pinMode(LED_BUILTIN, OUTPUT);
-    }
+ public:
+  LedBuiltInDevice() { pinMode(LED_BUILTIN, OUTPUT); }
 
-    void on();
+  void on();
 
-    void reset();
-
+  void reset();
 };
 
 #endif

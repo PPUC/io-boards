@@ -14,59 +14,57 @@
 #ifndef IOBOARDCONTROLLER_h
 #define IOBOARDCONTROLLER_h
 
-#include "PPUC.h"
-
 #include "EventDispatcher/Event.h"
 #include "EventDispatcher/EventDispatcher.h"
 #include "EventDispatcher/MultiCoreCrossLink.h"
 #include "IODevices/PwmDevices.h"
-#include "IODevices/Switches.h"
 #include "IODevices/SwitchMatrix.h"
+#include "IODevices/Switches.h"
+#include "PPUC.h"
 
-class IOBoardController : public EventListener
-{
-public:
-    IOBoardController(int controllerType);
+class IOBoardController : public EventListener {
+ public:
+  IOBoardController(int controllerType);
 
-    PwmDevices *pwmDevices();
+  PwmDevices *pwmDevices();
 
-    Switches *switches();
+  Switches *switches();
 
-    SwitchMatrix *switchMatrix();
+  SwitchMatrix *switchMatrix();
 
-    EventDispatcher *eventDispatcher();
+  EventDispatcher *eventDispatcher();
 
-    void handleEvent(Event *event);
+  void handleEvent(Event *event);
 
-    void handleEvent(ConfigEvent *event);
+  void handleEvent(ConfigEvent *event);
 
-    void update();
+  void update();
 
-private:
-    PwmDevices *_pwmDevices;
-    Switches *_switches;
-    SwitchMatrix *_switchMatrix;
+ private:
+  PwmDevices *_pwmDevices;
+  Switches *_switches;
+  SwitchMatrix *_switchMatrix;
 
-    bool running = false;
-    bool activePwmDevices = false;
-    bool activeSwitches = false;
-    bool activeSwitchMatrix = false;
+  bool running = false;
+  bool activePwmDevices = false;
+  bool activeSwitches = false;
+  bool activeSwitchMatrix = false;
 
-    int controllerType;
-    byte boardId;
-    byte port = 0;
-    byte number = 0;
-    byte power = 0;
-    byte minPulseTime = 0;
-    byte maxPulseTime = 0;
-    byte holdPower = 0;
-    byte holdPowerActivationTime = 0;
-    byte fastSwitch = 0;
-    byte type = 0;
+  int controllerType;
+  byte boardId;
+  byte port = 0;
+  byte number = 0;
+  byte power = 0;
+  byte minPulseTime = 0;
+  byte maxPulseTime = 0;
+  byte holdPower = 0;
+  byte holdPowerActivationTime = 0;
+  byte fastSwitch = 0;
+  byte type = 0;
 
-    EventDispatcher *_eventDispatcher;
+  EventDispatcher *_eventDispatcher;
 #if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
-    MultiCoreCrossLink *_multiCoreCrossLink;
+  MultiCoreCrossLink *_multiCoreCrossLink;
 #endif
 };
 

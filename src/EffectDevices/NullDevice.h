@@ -13,12 +13,10 @@
 #include "EffectDevice.h"
 
 class NullDevice : public EffectDevice {
-public:
+ public:
+  void on();
 
-    void on();
-
-    void reset();
-
+  void reset();
 };
 
 #endif

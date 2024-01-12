@@ -6,9 +6,9 @@
 #ifndef SwitchMatrix_h
 #define SwitchMatrix_h
 
-#include "../PPUC.h"
 #include "../EventDispatcher/Event.h"
 #include "../EventDispatcher/EventDispatcher.h"
+#include "../PPUC.h"
 
 #ifndef MAX_COLUMNS
 #define MAX_COLUMNS 10
@@ -18,62 +18,58 @@
 #define MAX_ROWS 8
 #endif
 
-class SwitchMatrix : public EventListener
-{
-public:
-    SwitchMatrix(byte bId, EventDispatcher *eD)
-    {
-        boardId = bId;
-        platform = PLATFORM_LIBPINMAME;
-        pulseTime = 2;
-        pauseTime = 2;
-        activeLow = false;
-        active = false;
+class SwitchMatrix : public EventListener {
+ public:
+  SwitchMatrix(byte bId, EventDispatcher *eD) {
+    boardId = bId;
+    platform = PLATFORM_LIBPINMAME;
+    pulseTime = 2;
+    pauseTime = 2;
+    activeLow = false;
+    active = false;
 
-        for (int col = 0; col < MAX_COLUMNS; col++)
-        {
-            columns[col] = -1;
-        }
-        for (int row = 0; row < MAX_ROWS; row++)
-        {
-            rows[row] = -1;
-        }
-
-        _ms = millis();
-        _eventDispatcher = eD;
-        _eventDispatcher->addListener(this, EVENT_POLL_EVENTS);
-        _eventDispatcher->addListener(this, EVENT_READ_SWITCHES);
+    for (int col = 0; col < MAX_COLUMNS; col++) {
+      columns[col] = -1;
+    }
+    for (int row = 0; row < MAX_ROWS; row++) {
+      rows[row] = -1;
     }
 
-    void registerColumn(byte p, byte n);
-    void registerRow(byte p, byte n);
+    _ms = millis();
+    _eventDispatcher = eD;
+    _eventDispatcher->addListener(this, EVENT_POLL_EVENTS);
+    _eventDispatcher->addListener(this, EVENT_READ_SWITCHES);
+  }
 
-    void setActiveLow();
-    void setPulseTime(byte pT);
+  void registerColumn(byte p, byte n);
+  void registerRow(byte p, byte n);
 
-    void update();
+  void setActiveLow();
+  void setPulseTime(byte pT);
 
-    void handleEvent(Event *event);
+  void update();
 
-    void handleEvent(ConfigEvent *event) {}
+  void handleEvent(Event *event);
 
-private:
-    byte boardId;
-    byte platform;
-    byte pulseTime;
-    byte pauseTime;
-    bool activeLow;
-    bool active;
+  void handleEvent(ConfigEvent *event) {}
 
-    unsigned long _ms;
+ private:
+  byte boardId;
+  byte platform;
+  byte pulseTime;
+  byte pauseTime;
+  bool activeLow;
+  bool active;
 
-    int columns[MAX_COLUMNS];
-    int rows[MAX_ROWS];
-    bool state[MAX_COLUMNS][MAX_ROWS] = {0};
-    bool toggled[MAX_COLUMNS][MAX_ROWS] = {0};
-    byte column = 0;
+  unsigned long _ms;
 
-    EventDispatcher *_eventDispatcher;
+  int columns[MAX_COLUMNS];
+  int rows[MAX_ROWS];
+  bool state[MAX_COLUMNS][MAX_ROWS] = {0};
+  bool toggled[MAX_COLUMNS][MAX_ROWS] = {0};
+  byte column = 0;
+
+  EventDispatcher *_eventDispatcher;
 };
 
 #endif

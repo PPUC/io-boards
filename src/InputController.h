@@ -6,47 +6,47 @@
 #ifndef INPUTCONTROLLER_h
 #define INPUTCONTROLLER_h
 
-#include "PPUC.h"
-
 #include "EventDispatcher/Event.h"
 #include "EventDispatcher/EventDispatcher.h"
-#include "InputDevices/Solenoids.h"
-#include "InputDevices/SwitchMatrix.h"
+#include "InputDevices/InputControllerTestButtons.h"
 #include "InputDevices/LightMatrix.h"
 #include "InputDevices/PIN2DMD.h"
-#include "InputDevices/InputControllerTestButtons.h"
+#include "InputDevices/Solenoids.h"
+#include "InputDevices/SwitchMatrix.h"
+#include "PPUC.h"
 #include "VisualPinball/PUPComLink.h"
 
 class InputController {
-public:
-    InputController(int controllerType, byte platform);
+ public:
+  InputController(int controllerType, byte platform);
 
-    InputController(int controllerType, byte platform, EventDispatcher* eventDispatcher);
+  InputController(int controllerType, byte platform,
+                  EventDispatcher* eventDispatcher);
 
-    Solenoids* solenoids();
+  Solenoids* solenoids();
 
-    SwitchMatrix* switchMatrix();
+  SwitchMatrix* switchMatrix();
 
-    LightMatrix* lightMatrix();
+  LightMatrix* lightMatrix();
 
-    PIN2DMD* pin2Dmd();
+  PIN2DMD* pin2Dmd();
 
-    PUPComLink* pupComLink();
+  PUPComLink* pupComLink();
 
-    InputControllerTestButtons* testButtons();
+  InputControllerTestButtons* testButtons();
 
-    EventDispatcher* eventDispatcher();
+  EventDispatcher* eventDispatcher();
 
-    byte platform;
+  byte platform;
 
-private:
-    Solenoids* _solenoids;
-    SwitchMatrix* _switchMatrix;
-    LightMatrix* _lightMatrix;
-    PIN2DMD* _pin2Dmd;
-    PUPComLink* _pupComLink;
-    InputControllerTestButtons* _testButtons;
-    EventDispatcher* _eventDispatcher;
+ private:
+  Solenoids* _solenoids;
+  SwitchMatrix* _switchMatrix;
+  LightMatrix* _lightMatrix;
+  PIN2DMD* _pin2Dmd;
+  PUPComLink* _pupComLink;
+  InputControllerTestButtons* _testButtons;
+  EventDispatcher* _eventDispatcher;
 };
 
 #endif

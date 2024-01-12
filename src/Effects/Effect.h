@@ -11,42 +11,43 @@
 #include <Arduino.h>
 
 #include "../EffectDevices/EffectDevice.h"
-#include "../EventDispatcher/EventDispatcher.h"
 #include "../EventDispatcher/Event.h"
+#include "../EventDispatcher/EventDispatcher.h"
 
 class Effect {
-public:
-    Effect();
+ public:
+  Effect();
 
-    bool isRunning();
+  bool isRunning();
 
-    virtual void start(int repeat = 0);
+  virtual void start(int repeat = 0);
 
-    virtual void stop();
+  virtual void stop();
 
-    virtual void terminate();
+  virtual void terminate();
 
-    virtual void update() = 0;
+  virtual void update() = 0;
 
-    virtual void updateMillis();
+  virtual void updateMillis();
 
-    virtual void resetMillis();
+  virtual void resetMillis();
 
-    void setEventDispatcher(EventDispatcher* eD);
+  void setEventDispatcher(EventDispatcher* eD);
 
-    virtual void setDevice(EffectDevice* effectDevice);
+  virtual void setDevice(EffectDevice* effectDevice);
 
-protected:
-    void dispatch(Event* event);
+ protected:
+  void dispatch(Event* event);
 
-    EventDispatcher* eventDispatcher;
-    EffectDevice* device;
+  EventDispatcher* eventDispatcher;
+  EffectDevice* device;
 
-    bool running = false;
-    int repeat = 0; // -1 is endless, 0 means play once, 3 means repeat three times, ...
-    unsigned int ms;
-    unsigned long _ms;
-    int stage = 0;
+  bool running = false;
+  int repeat =
+      0;  // -1 is endless, 0 means play once, 3 means repeat three times, ...
+  unsigned int ms;
+  unsigned long _ms;
+  int stage = 0;
 };
 
 #endif

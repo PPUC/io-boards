@@ -15,23 +15,22 @@
 #include "../EventDispatcher/EventListener.h"
 
 class VPXComLink : public EventListener {
-public:
-    VPXComLink(EventDispatcher* eD, byte pf) {
-        eventDispatcher = eD;
-        platform = pf;
-    }
+ public:
+  VPXComLink(EventDispatcher* eD, byte pf) {
+    eventDispatcher = eD;
+    platform = pf;
+  }
 
-    void update();
+  void update();
 
-    void handleEvent(Event* event);
+  void handleEvent(Event* event);
 
-    void handleEvent(ConfigEvent* event) {}
+  void handleEvent(ConfigEvent* event) {}
 
-private:
-    EventDispatcher* eventDispatcher;
+ private:
+  EventDispatcher* eventDispatcher;
 
-    byte platform;
-
+  byte platform;
 };
 
 #endif

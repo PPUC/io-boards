@@ -49,108 +49,111 @@
 #include <Arduino.h>
 #include <WavePWM.h>
 
-#include "WS2812FXDevice.h"
 #include "../EventDispatcher/Event.h"
 #include "../EventDispatcher/EventDispatcher.h"
 #include "../EventDispatcher/EventListener.h"
 #include "../InputDevices/GeneralIlluminationWPC.h"
+#include "WS2812FXDevice.h"
 
 #define _MAX_LEDS_GI_STRING 50
 #define _LIGHT_MATRIX_SIZE 64
 #define _MAX_LEDS_PER_LIGHT 3
 #define _MAX_FLASHERS 12
 
-class CombinedGiAndLightMatrixWS2812FXDevice : public WS2812FXDevice, public EventListener
-{
-public:
-    CombinedGiAndLightMatrixWS2812FXDevice(WS2812FX *ws2812FX, int firstLED, int lastLED, int firstSegment, int lastSegment, EventDispatcher * eventDispatcher) : WS2812FXDevice(ws2812FX, firstLED, lastLED, firstSegment, lastSegment)
-    {
-        wavePWMHeatUp = new WavePWM();
-        wavePWMAfterGlow = new WavePWM();
-        afterGlowSupport = true;
-        for (int number = 0; number < NUM_GI_STRINGS; number++)
-        {
-            for (int i = 0; i < _MAX_LEDS_GI_STRING; i++)
-            {
-                ledGIPositions[number][i] = -1;
-            }
-        }
-        for (int number = 0; number < _LIGHT_MATRIX_SIZE + _MAX_FLASHERS; number++)
-        {
-            for (int i = 0; i < _MAX_LEDS_PER_LIGHT; i++)
-            {
-                ledLightMatrixPositions[number][i] = -1;
-            }
-        }
-
-        eventDispatcher->addListener(this, EVENT_SOURCE_GI);
-        eventDispatcher->addListener(this, EVENT_SOURCE_SOLENOID); // Flasher
-        eventDispatcher->addListener(this, EVENT_SOURCE_LIGHT);
+class CombinedGiAndLightMatrixWS2812FXDevice : public WS2812FXDevice,
+                                               public EventListener {
+ public:
+  CombinedGiAndLightMatrixWS2812FXDevice(WS2812FX *ws2812FX, int firstLED,
+                                         int lastLED, int firstSegment,
+                                         int lastSegment,
+                                         EventDispatcher *eventDispatcher)
+      : WS2812FXDevice(ws2812FX, firstLED, lastLED, firstSegment, lastSegment) {
+    wavePWMHeatUp = new WavePWM();
+    wavePWMAfterGlow = new WavePWM();
+    afterGlowSupport = true;
+    for (int number = 0; number < NUM_GI_STRINGS; number++) {
+      for (int i = 0; i < _MAX_LEDS_GI_STRING; i++) {
+        ledGIPositions[number][i] = -1;
+      }
+    }
+    for (int number = 0; number < _LIGHT_MATRIX_SIZE + _MAX_FLASHERS;
+         number++) {
+      for (int i = 0; i < _MAX_LEDS_PER_LIGHT; i++) {
+        ledLightMatrixPositions[number][i] = -1;
+      }
     }
 
-    void on();
-    void off();
+    eventDispatcher->addListener(this, EVENT_SOURCE_GI);
+    eventDispatcher->addListener(this, EVENT_SOURCE_SOLENOID);  // Flasher
+    eventDispatcher->addListener(this, EVENT_SOURCE_LIGHT);
+  }
 
-    void assignLedToGiString(uint8_t giString, int16_t led);
-    void assignLedToGiString(uint8_t giString, int16_t led, uint32_t color);
+  void on();
+  void off();
 
-    void assignLedRangeToGiString(uint8_t giString, int16_t first, int16_t last);
+  void assignLedToGiString(uint8_t giString, int16_t led);
+  void assignLedToGiString(uint8_t giString, int16_t led, uint32_t color);
 
-    void assignLedToLightMatrix(uint8_t column, uint8_t row, int16_t led);
-    void assignLedToLightMatrix(uint8_t column, uint8_t row, int16_t led, uint32_t color);
+  void assignLedRangeToGiString(uint8_t giString, int16_t first, int16_t last);
 
-    void assignLedToLightMatrixWPC(uint8_t number, int16_t led);
-    void assignLedToLightMatrixWPC(uint8_t number, int16_t led, uint32_t color);
+  void assignLedToLightMatrix(uint8_t column, uint8_t row, int16_t led);
+  void assignLedToLightMatrix(uint8_t column, uint8_t row, int16_t led,
+                              uint32_t color);
 
-    void assignLedToLightMatrixDE(uint8_t number, int16_t led);
-    void assignLedToLightMatrixDE(uint8_t number, int16_t led, uint32_t color);
+  void assignLedToLightMatrixWPC(uint8_t number, int16_t led);
+  void assignLedToLightMatrixWPC(uint8_t number, int16_t led, uint32_t color);
 
-    void assignLedToLightMatrixSYS11(uint8_t number, int16_t led);
-    void assignLedToLightMatrixSYS11(uint8_t number, int16_t led, uint32_t color);
+  void assignLedToLightMatrixDE(uint8_t number, int16_t led);
+  void assignLedToLightMatrixDE(uint8_t number, int16_t led, uint32_t color);
 
-    void assignLedToFlasher(uint8_t number, int16_t led, uint32_t color);
+  void assignLedToLightMatrixSYS11(uint8_t number, int16_t led);
+  void assignLedToLightMatrixSYS11(uint8_t number, int16_t led, uint32_t color);
 
-    void setDimmedPixelColor(int16_t led, uint32_t color, uint8_t brightness);
+  void assignLedToFlasher(uint8_t number, int16_t led, uint32_t color);
 
-    void setHeatUp();
-    void setAfterGlow();
+  void setDimmedPixelColor(int16_t led, uint32_t color, uint8_t brightness);
 
-    void setHeatUp(int ms);
-    void setAfterGlow(int ms);
+  void setHeatUp();
+  void setAfterGlow();
 
-    void handleEvent(Event *event);
-    void handleEvent(ConfigEvent *event) {}
-    void updateAfterGlow();
+  void setHeatUp(int ms);
+  void setAfterGlow(int ms);
 
-protected:
-    int16_t numLEDsGI[NUM_GI_STRINGS] = {0};
+  void handleEvent(Event *event);
+  void handleEvent(ConfigEvent *event) {}
+  void updateAfterGlow();
 
-    int16_t ledGIPositions[NUM_GI_STRINGS][_MAX_LEDS_GI_STRING] = {{0}};
-    uint32_t ledGIColors[NUM_GI_STRINGS][_MAX_LEDS_GI_STRING] = {{0}};
-    uint8_t sourceGIBrightness[NUM_GI_STRINGS] = {0};
-    uint8_t targetGIBrightness[NUM_GI_STRINGS] = {0};
+ protected:
+  int16_t numLEDsGI[NUM_GI_STRINGS] = {0};
 
-    // Internally we store the positions in Data East numbering from 1 to 64.
-    // The WPC-specific functions convert the WPC-specific numbering.
-    int16_t ledLightMatrixPositions[_LIGHT_MATRIX_SIZE + _MAX_FLASHERS][_MAX_LEDS_PER_LIGHT] = {{0}};
-    uint32_t ledLightMatrixColors[_LIGHT_MATRIX_SIZE + _MAX_FLASHERS][_MAX_LEDS_PER_LIGHT] = {{0}};
+  int16_t ledGIPositions[NUM_GI_STRINGS][_MAX_LEDS_GI_STRING] = {{0}};
+  uint32_t ledGIColors[NUM_GI_STRINGS][_MAX_LEDS_GI_STRING] = {{0}};
+  uint8_t sourceGIBrightness[NUM_GI_STRINGS] = {0};
+  uint8_t targetGIBrightness[NUM_GI_STRINGS] = {0};
 
-    uint8_t flasherNumber[_MAX_FLASHERS] = {0};
+  // Internally we store the positions in Data East numbering from 1 to 64.
+  // The WPC-specific functions convert the WPC-specific numbering.
+  int16_t ledLightMatrixPositions[_LIGHT_MATRIX_SIZE + _MAX_FLASHERS]
+                                 [_MAX_LEDS_PER_LIGHT] = {{0}};
+  uint32_t ledLightMatrixColors[_LIGHT_MATRIX_SIZE + _MAX_FLASHERS]
+                               [_MAX_LEDS_PER_LIGHT] = {{0}};
 
-    WavePWM *wavePWMHeatUp;
-    WavePWM *wavePWMAfterGlow;
+  uint8_t flasherNumber[_MAX_FLASHERS] = {0};
 
-    // When no effects are running, we're in normal GI and Light Matrix mode.
-    bool stopped = false; // Never stop the updates.
-    bool effectRunning = false;
-    bool wpc = false;
+  WavePWM *wavePWMHeatUp;
+  WavePWM *wavePWMAfterGlow;
 
-    int16_t msHeatUp = 0;
-    int16_t msAfterGlow = 0;
-    uint32_t heatUpGI[NUM_GI_STRINGS] = {0};
-    uint32_t afterGlowGI[NUM_GI_STRINGS] = {0};
-    uint32_t heatUp[_LIGHT_MATRIX_SIZE + _MAX_FLASHERS] = {0};
-    uint32_t afterGlow[_LIGHT_MATRIX_SIZE + _MAX_FLASHERS] = {0};
+  // When no effects are running, we're in normal GI and Light Matrix mode.
+  bool stopped = false;  // Never stop the updates.
+  bool effectRunning = false;
+  bool wpc = false;
+
+  int16_t msHeatUp = 0;
+  int16_t msAfterGlow = 0;
+  uint32_t heatUpGI[NUM_GI_STRINGS] = {0};
+  uint32_t afterGlowGI[NUM_GI_STRINGS] = {0};
+  uint32_t heatUp[_LIGHT_MATRIX_SIZE + _MAX_FLASHERS] = {0};
+  uint32_t afterGlow[_LIGHT_MATRIX_SIZE + _MAX_FLASHERS] = {0};
 };
 
 #endif

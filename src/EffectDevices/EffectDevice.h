@@ -9,14 +9,14 @@
 #define EFFECTDEVICE_h
 
 class EffectDevice {
-public:
-    virtual void reset() = 0;
+ public:
+  virtual void reset() = 0;
 
-    virtual void on() = 0;
+  virtual void on() = 0;
 
-    virtual void off();
+  virtual void off();
 
-    virtual ~EffectDevice() {}
+  virtual ~EffectDevice() {}
 };
 
 #endif

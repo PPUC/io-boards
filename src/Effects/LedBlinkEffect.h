@@ -13,9 +13,8 @@
 #include "Effect.h"
 
 class LedBlinkEffect : public Effect {
-public:
-    void update();
-
+ public:
+  void update();
 };
 
 #endif

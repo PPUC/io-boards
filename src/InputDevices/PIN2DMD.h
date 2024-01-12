@@ -14,24 +14,21 @@
 #include "../EventDispatcher/EventDispatcher.h"
 
 class PIN2DMD {
-public:
-    PIN2DMD(EventDispatcher* eD) {
-        eventDispatcher = eD;
-    }
+ public:
+  PIN2DMD(EventDispatcher* eD) { eventDispatcher = eD; }
 
-    void setSerial(HardwareSerial &reference);
+  void setSerial(HardwareSerial& reference);
 
-    void update();
+  void update();
 
-    void setDebug(bool value);
+  void setDebug(bool value);
 
-private:
-    EventDispatcher* eventDispatcher;
+ private:
+  EventDispatcher* eventDispatcher;
 
-    HardwareSerial* hwSerial;
+  HardwareSerial* hwSerial;
 
-    bool debug = false;
-
+  bool debug = false;
 };
 
 #endif

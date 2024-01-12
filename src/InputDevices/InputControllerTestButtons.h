@@ -15,14 +15,14 @@
 #include "../EventDispatcher/EventDispatcher.h"
 
 class InputControllerTestButtons {
-public:
-    InputControllerTestButtons(EventDispatcher* eD);
+ public:
+  InputControllerTestButtons(EventDispatcher* eD);
 
-    void update();
+  void update();
 
-protected:
-    EventDispatcher* eventDispatcher;
-    Bounce2::Button* button[2];
+ protected:
+  EventDispatcher* eventDispatcher;
+  Bounce2::Button* button[2];
 };
 
 #endif

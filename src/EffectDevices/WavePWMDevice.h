@@ -14,28 +14,28 @@
 #include "EffectDevice.h"
 
 class WavePWMDevice : public EffectDevice {
-public:
-    WavePWMDevice(int pin) {
-        this->wavePWM = new WavePWM();
-        this->pin = pin;
-        pinMode(pin, OUTPUT);
-    }
+ public:
+  WavePWMDevice(int pin) {
+    this->wavePWM = new WavePWM();
+    this->pin = pin;
+    pinMode(pin, OUTPUT);
+  }
 
-    void on();
+  void on();
 
-    void reset();
+  void reset();
 
-    virtual void setPWM(uint8_t pwm);
+  virtual void setPWM(uint8_t pwm);
 
-    uint8_t getPWM();
+  uint8_t getPWM();
 
-    WavePWM* getWavePWM();
+  WavePWM* getWavePWM();
 
-protected:
-    WavePWM* wavePWM;
+ protected:
+  WavePWM* wavePWM;
 
-    int pin;
-    uint8_t currentPWM = 0;
+  int pin;
+  uint8_t currentPWM = 0;
 };
 
 #endif

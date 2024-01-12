@@ -16,44 +16,43 @@
 #define MAX_PWM_OUTPUTS 16
 #endif
 
-class PwmDevices : public EventListener
-{
-public:
-    // Constructor
-    PwmDevices(EventDispatcher *eventDispatcher)
-    {
-        eventDispatcher->addListener(this, EVENT_SOURCE_LIGHT);
-        eventDispatcher->addListener(this, EVENT_SOURCE_SOLENOID);
-        eventDispatcher->addListener(this, EVENT_SOURCE_SWITCH);
-    }
+class PwmDevices : public EventListener {
+ public:
+  // Constructor
+  PwmDevices(EventDispatcher *eventDispatcher) {
+    eventDispatcher->addListener(this, EVENT_SOURCE_LIGHT);
+    eventDispatcher->addListener(this, EVENT_SOURCE_SOLENOID);
+    eventDispatcher->addListener(this, EVENT_SOURCE_SWITCH);
+  }
 
-    void registerSolenoid(byte p, byte n, byte pow, byte minPT, byte maxPT, byte hP, byte hPAT, byte fS);
-    void registerFlasher(byte p, byte n, byte pow);
-    void registerLamp(byte p, byte n, byte pow);
+  void registerSolenoid(byte p, byte n, byte pow, byte minPT, byte maxPT,
+                        byte hP, byte hPAT, byte fS);
+  void registerFlasher(byte p, byte n, byte pow);
+  void registerLamp(byte p, byte n, byte pow);
 
-    void update();
+  void update();
 
-    void handleEvent(Event *event);
+  void handleEvent(Event *event);
 
-    void handleEvent(ConfigEvent *event) {}
+  void handleEvent(ConfigEvent *event) {}
 
-private:
-    unsigned long _ms;
+ private:
+  unsigned long _ms;
 
-    byte port[MAX_PWM_OUTPUTS] = {0};
-    byte number[MAX_PWM_OUTPUTS] = {0};
-    byte power[MAX_PWM_OUTPUTS] = {0};
-    byte minPulseTime[MAX_PWM_OUTPUTS] = {0};
-    byte maxPulseTime[MAX_PWM_OUTPUTS] = {0};
-    byte holdPower[MAX_PWM_OUTPUTS] = {0};
-    byte holdPowerActivationTime[MAX_PWM_OUTPUTS] = {0};
-    byte fastSwitch[MAX_PWM_OUTPUTS] = {0};
-    byte type[MAX_PWM_OUTPUTS] = {0};
-    unsigned long activated[MAX_PWM_OUTPUTS] = {0};
-    bool scheduled[MAX_PWM_OUTPUTS] = {0};
-    byte last = 0;
+  byte port[MAX_PWM_OUTPUTS] = {0};
+  byte number[MAX_PWM_OUTPUTS] = {0};
+  byte power[MAX_PWM_OUTPUTS] = {0};
+  byte minPulseTime[MAX_PWM_OUTPUTS] = {0};
+  byte maxPulseTime[MAX_PWM_OUTPUTS] = {0};
+  byte holdPower[MAX_PWM_OUTPUTS] = {0};
+  byte holdPowerActivationTime[MAX_PWM_OUTPUTS] = {0};
+  byte fastSwitch[MAX_PWM_OUTPUTS] = {0};
+  byte type[MAX_PWM_OUTPUTS] = {0};
+  unsigned long activated[MAX_PWM_OUTPUTS] = {0};
+  bool scheduled[MAX_PWM_OUTPUTS] = {0};
+  byte last = 0;
 
-    void updateSolenoidOrFlasher(bool targetState, byte i);
+  void updateSolenoidOrFlasher(bool targetState, byte i);
 };
 
 #endif

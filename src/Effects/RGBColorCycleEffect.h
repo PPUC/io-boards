@@ -10,20 +10,18 @@
 
 #include <Arduino.h>
 
-#include "Effect.h"
 #include "../EffectDevices/WS2812FXDevice.h"
+#include "Effect.h"
 
 class RGBColorCycleEffect : public Effect {
-public:
-    RGBColorCycleEffect(unsigned int delayMs) {
-        delay = delayMs;
-    }
+ public:
+  RGBColorCycleEffect(unsigned int delayMs) { delay = delayMs; }
 
-    void update();
+  void update();
 
-protected:
-    unsigned int delay;
-    uint32_t color;
+ protected:
+  unsigned int delay;
+  uint32_t color;
 };
 
 #endif

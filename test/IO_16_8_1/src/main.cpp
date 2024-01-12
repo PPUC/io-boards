@@ -2,9 +2,9 @@
 
 #include <PPUC.h>
 
-#include "IOBoardController.h"
 #include "EffectsController.h"
 #include "EventDispatcher/CrossLinkDebugger.h"
+#include "IOBoardController.h"
 
 IOBoardController ioBoardController(CONTROLLER_16_8_1);
 // Platform will be adjusted by ConfigEvent.
@@ -19,100 +19,87 @@ bool core_0_initilized = false;
 // same MultiCoreCrosslink to send and receive events between
 // both cores.
 
-void setup()
-{
-    uint32_t timeout = millis() + 2000;
+void setup() {
+  uint32_t timeout = millis() + 2000;
 
-    Serial.begin(115200);
-    // The Pico implements USB itself so special care must be taken. Use while(!Serial){} in the setup() code before printing anything so that it waits for the USB connection to be established.
-    // https://community.platformio.org/t/serial-monitor-not-working/1512/25
-    while (!Serial && millis() < timeout)
-    {
-    }
+  Serial.begin(115200);
+  // The Pico implements USB itself so special care must be taken. Use
+  // while(!Serial){} in the setup() code before printing anything so that it
+  // waits for the USB connection to be established.
+  // https://community.platformio.org/t/serial-monitor-not-working/1512/25
+  while (!Serial && millis() < timeout) {
+  }
 
-    if (Serial)
-    {
-        usb_debugging = true;
-        delay(10);
-        ioBoardController.eventDispatcher()->addListener(new CrossLinkDebugger());
-    }
+  if (Serial) {
+    usb_debugging = true;
+    delay(10);
+    ioBoardController.eventDispatcher()->addListener(new CrossLinkDebugger());
+  }
 
-    core_0_initilized = true;
-    rp2040.restartCore1();
+  core_0_initilized = true;
+  rp2040.restartCore1();
 
-    Serial1.setTX(0);
-    Serial1.setRX(1);
-    Serial1.setFIFOSize(128); // @todo find the right size.
-    Serial1.begin(115200);
-    // The Pico implements USB itself so special care must be taken. Use while(!Serial){} in the setup() code before printing anything so that it waits for the USB connection to be established.
-    // https://community.platformio.org/t/serial-monitor-not-working/1512/25
-    while (!Serial1)
-    {
-    }
+  Serial1.setTX(0);
+  Serial1.setRX(1);
+  Serial1.setFIFOSize(128);  // @todo find the right size.
+  Serial1.begin(115200);
+  // The Pico implements USB itself so special care must be taken. Use
+  // while(!Serial){} in the setup() code before printing anything so that it
+  // waits for the USB connection to be established.
+  // https://community.platformio.org/t/serial-monitor-not-working/1512/25
+  while (!Serial1) {
+  }
 }
 
-void setup1()
-{
-    while (!core_0_initilized)
-    {
-    }
+void setup1() {
+  while (!core_0_initilized) {
+  }
 
-    if (usb_debugging)
-    {
-        delay(10);
-        effectsController.eventDispatcher()->addListener(new CrossLinkDebugger());
-    }
+  if (usb_debugging) {
+    delay(10);
+    effectsController.eventDispatcher()->addListener(new CrossLinkDebugger());
+  }
 
-    effectsController.eventDispatcher()->setMultiCoreCrossLink(
-        ioBoardController.eventDispatcher()->getMultiCoreCrossLink());
+  effectsController.eventDispatcher()->setMultiCoreCrossLink(
+      ioBoardController.eventDispatcher()->getMultiCoreCrossLink());
 
-    effectsController.ledBuiltInDevice()->off();
+  effectsController.ledBuiltInDevice()->off();
 
-    effectsController.addEffect(
-        new LedOnEffect(),
-        effectsController.ledBuiltInDevice(),
-        new Event(EVENT_SOURCE_LIGHT, 11, 1),
-        1, // priority
-        0, // repeat, -1 means endless
-        0  // mode
-    );
+  effectsController.addEffect(new LedOnEffect(),
+                              effectsController.ledBuiltInDevice(),
+                              new Event(EVENT_SOURCE_LIGHT, 11, 1),
+                              1,  // priority
+                              0,  // repeat, -1 means endless
+                              0   // mode
+  );
 
-    effectsController.addEffect(
-        new NullEffect(),
-        effectsController.ledBuiltInDevice(),
-        new Event(EVENT_SOURCE_LIGHT, 11, 0),
-        1, // priority
-        0, // repeat, -1 means endless
-        0  // mode
-    );
+  effectsController.addEffect(new NullEffect(),
+                              effectsController.ledBuiltInDevice(),
+                              new Event(EVENT_SOURCE_LIGHT, 11, 0),
+                              1,  // priority
+                              0,  // repeat, -1 means endless
+                              0   // mode
+  );
 
-    effectsController.addEffect(
-        new LedBlinkEffect(),
-        effectsController.ledBuiltInDevice(),
-        new Event(EVENT_ERROR, 1, /* board ID */ 0),
-        2,  // priority
-        -1, // repeat, -1 means endless
-        0   // mode
-    );
+  effectsController.addEffect(new LedBlinkEffect(),
+                              effectsController.ledBuiltInDevice(),
+                              new Event(EVENT_ERROR, 1, /* board ID */ 0),
+                              2,   // priority
+                              -1,  // repeat, -1 means endless
+                              0    // mode
+  );
 
-    effectsController.addEffect(
-        new NullEffect(),
-        effectsController.ledBuiltInDevice(),
-        new Event(EVENT_NO_ERROR, 1, /* board ID */ 0),
-        3, // priority
-        0, // repeat
-        0  // mode
-    );
+  effectsController.addEffect(new NullEffect(),
+                              effectsController.ledBuiltInDevice(),
+                              new Event(EVENT_NO_ERROR, 1, /* board ID */ 0),
+                              3,  // priority
+                              0,  // repeat
+                              0   // mode
+  );
 
-    effectsController.start();
+  effectsController.start();
 }
 
-void loop()
-{
-    ioBoardController.update();
-}
+void loop() { ioBoardController.update(); }
 
-void loop1()
-{
-    effectsController.update();
-}
+void loop1() { effectsController.update(); }

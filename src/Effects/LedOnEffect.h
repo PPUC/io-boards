@@ -13,9 +13,8 @@
 #include "Effect.h"
 
 class LedOnEffect : public Effect {
-public:
-    void update();
-
+ public:
+  void update();
 };
 
 #endif

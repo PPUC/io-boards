@@ -1,5 +1,3 @@
 #include "EffectDevice.h"
 
-void EffectDevice::off() {
-    reset();
-}
+void EffectDevice::off() { reset(); }

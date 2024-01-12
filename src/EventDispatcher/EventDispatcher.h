@@ -10,10 +10,9 @@
 
 #include <Arduino.h>
 
-#include "MultiCoreCrossLink.h"
-
 #include "Event.h"
 #include "EventListener.h"
+#include "MultiCoreCrossLink.h"
 
 #ifndef MAX_EVENT_LISTENERS
 #define MAX_EVENT_LISTENERS 32
@@ -28,52 +27,52 @@
 #endif
 
 class EventDispatcher {
-public:
-    EventDispatcher();
+ public:
+  EventDispatcher();
 
-    void setRS485ModePin(int pin);
+  void setRS485ModePin(int pin);
 
-    void setBoard(byte b);
+  void setBoard(byte b);
 
-    void setMultiCoreCrossLink(MultiCoreCrossLink* mccl);
+  void setMultiCoreCrossLink(MultiCoreCrossLink* mccl);
 
-    MultiCoreCrossLink* getMultiCoreCrossLink();
+  MultiCoreCrossLink* getMultiCoreCrossLink();
 
-    void setCrossLinkSerial(HardwareSerial &reference);
+  void setCrossLinkSerial(HardwareSerial& reference);
 
-    void addCrossLinkSerial(HardwareSerial &reference);
+  void addCrossLinkSerial(HardwareSerial& reference);
 
-    void addListener(EventListener* eventListener, char sourceId);
+  void addListener(EventListener* eventListener, char sourceId);
 
-    void addListener(EventListener* eventListener);
+  void addListener(EventListener* eventListener);
 
-    void dispatch(Event* event);
+  void dispatch(Event* event);
 
-    void update();
+  void update();
 
-private:
-    void callListeners(Event* event, int sender, bool flush);
+ private:
+  void callListeners(Event* event, int sender, bool flush);
 
-    void callListeners(ConfigEvent* event, int sender);
+  void callListeners(ConfigEvent* event, int sender);
 
-    Event* stackEvents[EVENT_STACK_SIZE];
-    int stackCounter = -1;
+  Event* stackEvents[EVENT_STACK_SIZE];
+  int stackCounter = -1;
 
-    EventListener* eventListeners[MAX_EVENT_LISTENERS];
-    char eventListenerFilters[MAX_EVENT_LISTENERS];
-    int numListeners = -1;
+  EventListener* eventListeners[MAX_EVENT_LISTENERS];
+  char eventListenerFilters[MAX_EVENT_LISTENERS];
+  int numListeners = -1;
 
-    byte msg[12];
+  byte msg[12];
 
-    bool rs485 = false;
-    int rs485Pin = 0;
-    byte board = 255;
-    bool error = false;
+  bool rs485 = false;
+  int rs485Pin = 0;
+  byte board = 255;
+  bool error = false;
 
-    bool multiCore = false;
-    int crossLink = -1;
-    HardwareSerial* hwSerial[MAX_CROSS_LINKS];
-    MultiCoreCrossLink* multiCoreCrossLink;
+  bool multiCore = false;
+  int crossLink = -1;
+  HardwareSerial* hwSerial[MAX_CROSS_LINKS];
+  MultiCoreCrossLink* multiCoreCrossLink;
 };
 
 #endif

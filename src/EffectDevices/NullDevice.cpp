@@ -1,7 +1,5 @@
 #include "NullDevice.h"
 
-void NullDevice::on() {
-}
+void NullDevice::on() {}
 
-void NullDevice::reset() {
-}
+void NullDevice::reset() {}

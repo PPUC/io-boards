@@ -13,48 +13,48 @@
 #include "../EventDispatcher/Event.h"
 #include "../EventDispatcher/EventDispatcher.h"
 
-#define PUP_POST_EVENT_COMMAND 80 // "P"
-#define PUP_CUSTOM_COMMAND 67 // "C"
+#define PUP_POST_EVENT_COMMAND 80  // "P"
+#define PUP_CUSTOM_COMMAND 67      // "C"
 #define PUP_EOF 13
 #define PUP_VALUE_ON 1
-#define PUP_CUSTOM_VOLUME 86 // "V"
-#define PUP_CUSTOM_BATCH 66 // "B"
-#define PUP_CUSTOM_RESTART 82 // "R"
-#define PUP_CUSTOM_SHUTDOWN 83 // "S"
+#define PUP_CUSTOM_VOLUME 86    // "V"
+#define PUP_CUSTOM_BATCH 66     // "B"
+#define PUP_CUSTOM_RESTART 82   // "R"
+#define PUP_CUSTOM_SHUTDOWN 83  // "S"
 
 class PUPComLink : public EventListener {
-public:
-    PUPComLink() {}
+ public:
+  PUPComLink() {}
 
-    void setSerial(HardwareSerial &reference);
+  void setSerial(HardwareSerial& reference);
 
-    void handleEvent(Event* event);
+  void handleEvent(Event* event);
 
-    void handleEvent(ConfigEvent* event) {}
+  void handleEvent(ConfigEvent* event) {}
 
-    void postEvent(char msgtype, int msgindex, int msgvalue);
+  void postEvent(char msgtype, int msgindex, int msgvalue);
 
-    void customCommand(char msgtype, int msgindex, int msgvalue);
+  void customCommand(char msgtype, int msgindex, int msgvalue);
 
-    void setVolume(int volume);
+  void setVolume(int volume);
 
-    /**
-     * Starts "id".bat in the "pinupsystem\launch" folder
-     */
-    void startBatch(int id);
+  /**
+   * Starts "id".bat in the "pinupsystem\launch" folder
+   */
+  void startBatch(int id);
 
-    void restart();
+  void restart();
 
-    void shutdown();
+  void shutdown();
 
-    int available();
+  int available();
 
-    byte read();
+  byte read();
 
-protected:
-    void write(byte command, char msgtype, word msgindex, word msgvalue);
+ protected:
+  void write(byte command, char msgtype, word msgindex, word msgvalue);
 
-    HardwareSerial* hwSerial;
+  HardwareSerial* hwSerial;
 };
 
 #endif

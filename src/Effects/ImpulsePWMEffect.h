@@ -11,18 +11,18 @@
 #include <Arduino.h>
 #include <WavePWM.h>
 
-#include "WavePWMEffect.h"
 #include "../EffectDevices/EffectDevice.h"
 #include "../EffectDevices/WavePWMDevice.h"
+#include "WavePWMEffect.h"
 
 class ImpulsePWMEffect : public WavePWMEffect {
-public:
+ public:
+  ImpulsePWMEffect(unsigned int frequency, uint8_t maxIntensity = 255)
+      : WavePWMEffect(frequency, maxIntensity) {
+    // nop
+  }
 
-    ImpulsePWMEffect(unsigned int frequency, uint8_t maxIntensity = 255) : WavePWMEffect(frequency, maxIntensity) {
-        // nop
-    }
-
-    virtual void update();
+  virtual void update();
 };
 
 #endif

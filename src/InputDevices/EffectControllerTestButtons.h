@@ -15,14 +15,14 @@
 #include "../EventDispatcher/EventDispatcher.h"
 
 class EffectControllerTestButtons {
-public:
-    EffectControllerTestButtons(EventDispatcher* eD);
+ public:
+  EffectControllerTestButtons(EventDispatcher* eD);
 
-    void update();
+  void update();
 
-protected:
-    EventDispatcher* eventDispatcher;
-    Bounce2::Button* button[2];
+ protected:
+  EventDispatcher* eventDispatcher;
+  Bounce2::Button* button[2];
 };
 
 #endif

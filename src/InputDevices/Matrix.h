@@ -70,10 +70,9 @@
 #ifndef Matrix_h
 #define Matrix_h
 
-#include "../PPUC.h"
-
 #include "../EventDispatcher/Event.h"
 #include "../EventDispatcher/EventDispatcher.h"
+#include "../PPUC.h"
 
 #ifndef NUM_COLS
 #define NUM_COLS 9
@@ -84,43 +83,43 @@
 #endif
 
 class Matrix {
-public:
-    Matrix(EventDispatcher* eD, byte pf);
+ public:
+  Matrix(EventDispatcher* eD, byte pf);
 
-    virtual void start() = 0;
+  virtual void start() = 0;
 
-    virtual void stop() = 0;
+  virtual void stop() = 0;
 
-    void update();
+  void update();
 
-    void print();
+  void print();
 
-    void setLastColToRead(byte lastColToRead);
+  void setLastColToRead(byte lastColToRead);
 
-    void registerFieldAsEvent(byte row, byte column, byte number);
+  void registerFieldAsEvent(byte row, byte column, byte number);
 
-    void registerAllFieldsAsEvent();
+  void registerAllFieldsAsEvent();
 
-    static void _readRow() {}
+  static void _readRow() {}
 
-    volatile byte lastColToRead;
-    volatile byte rows[NUM_COLS];
+  volatile byte lastColToRead;
+  volatile byte rows[NUM_COLS];
 
-protected:
-    EventDispatcher* eventDispatcher;
+ protected:
+  EventDispatcher* eventDispatcher;
 
-    char eventSource;
-    byte maxChangesPerRead = 6;
-    byte previousRows[NUM_COLS];
+  char eventSource;
+  byte maxChangesPerRead = 6;
+  byte previousRows[NUM_COLS];
 
-    int registeredFieldsCounter = -1;
-    word registeredFieldRowCol[MAX_FIELDS_REGISTERED];
-    byte registeredFieldNum[MAX_FIELDS_REGISTERED];
+  int registeredFieldsCounter = -1;
+  word registeredFieldRowCol[MAX_FIELDS_REGISTERED];
+  byte registeredFieldNum[MAX_FIELDS_REGISTERED];
 
-    byte platform;
+  byte platform;
 
-    byte updateDelay = 0;
-    uint32_t nextUpdate = 0;
+  byte updateDelay = 0;
+  uint32_t nextUpdate = 0;
 };
 
 #endif

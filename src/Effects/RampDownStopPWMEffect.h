@@ -11,20 +11,19 @@
 #include <Arduino.h>
 #include <WavePWM.h>
 
-#include "WavePWMEffect.h"
 #include "../EffectDevices/EffectDevice.h"
 #include "../EffectDevices/WavePWMDevice.h"
+#include "WavePWMEffect.h"
 
 class RampDownStopPWMEffect : public WavePWMEffect {
-public:
+ public:
+  RampDownStopPWMEffect(unsigned int frequency) : WavePWMEffect(frequency) {
+    // nop
+  }
 
-    RampDownStopPWMEffect(unsigned int frequency) : WavePWMEffect(frequency) {
-        // nop
-    }
+  virtual void updateMillis();
 
-    virtual void updateMillis();
-
-    virtual void update();
+  virtual void update();
 };
 
 #endif

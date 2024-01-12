@@ -1,6 +1,6 @@
 #include "LedOnEffect.h"
 
 void LedOnEffect::update() {
-    device->on();
-    stop();
+  device->on();
+  stop();
 }

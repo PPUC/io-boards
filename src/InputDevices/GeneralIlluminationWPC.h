@@ -22,7 +22,7 @@
  *  | STR5_IN  | D4 Data Bus   | D6   |
  *  | ZC       | Zero Crossing | D12  |
  *  +----------+---------------+------+
-*/
+ */
 
 // The WPC CPU issues a short signal to turn on the triac controlling the
 // AC voltage. The Triac will stay on until the next zero crossing of the
@@ -43,7 +43,6 @@
 // |  |B7 B6 B5 B4 B3 B2 B1      |  |
 // +-----------------------------+------
 // 0ms                           10ms
-
 
 #include "../EventDispatcher/EventDispatcher.h"
 
@@ -66,48 +65,49 @@
 #define BRIGHTNESS_UNCERTAIN 255
 
 class GeneralIlluminationWPC {
-public:
-    GeneralIlluminationWPC(EventDispatcher *eD) {
-        giInstance = this;
-        eventDispatcher = eD;
+ public:
+  GeneralIlluminationWPC(EventDispatcher *eD) {
+    giInstance = this;
+    eventDispatcher = eD;
 
-        pinMode(2, INPUT);
-        pinMode(3, INPUT);
-        pinMode(4, INPUT);
-        pinMode(5, INPUT);
-        pinMode(6, INPUT);
-        pinMode(12, INPUT_PULLUP); // Inverted on  Adapter.
-    }
+    pinMode(2, INPUT);
+    pinMode(3, INPUT);
+    pinMode(4, INPUT);
+    pinMode(5, INPUT);
+    pinMode(6, INPUT);
+    pinMode(12, INPUT_PULLUP);  // Inverted on  Adapter.
+  }
 
-    void start();
-    void stop();
-    void update();
+  void start();
+  void stop();
+  void update();
 
-    void handlePinChange(uint8_t giString);
-    void newBrightness(uint8_t string, uint8_t b);
+  void handlePinChange(uint8_t giString);
+  void newBrightness(uint8_t string, uint8_t b);
 
-    static void _changeD0();
-    static void _changeD1();
-    static void _changeD2();
-    static void _changeD3();
-    static void _changeD4();
-    static void _changeZC();
+  static void _changeD0();
+  static void _changeD1();
+  static void _changeD2();
+  static void _changeD3();
+  static void _changeD4();
+  static void _changeZC();
 
-    volatile uint32_t sZCIntTime = 0;
-    volatile uint8_t sInterruptsSeen = 0;
-    volatile uint32_t sDataIntLast[NUM_GI_STRINGS] = {0};
+  volatile uint32_t sZCIntTime = 0;
+  volatile uint8_t sInterruptsSeen = 0;
+  volatile uint32_t sDataIntLast[NUM_GI_STRINGS] = {0};
 
-protected:
-    uint8_t dtToBrightness(uint32_t dt);
+ protected:
+  uint8_t dtToBrightness(uint32_t dt);
 
-    EventDispatcher* eventDispatcher;
+  EventDispatcher *eventDispatcher;
 
-    uint8_t sBrightness[NUM_GI_STRINGS] = {0};
-    uint8_t sBrightnessTarget[NUM_GI_STRINGS] = {0};
-    uint8_t sBrightnessHist[NUM_GI_STRINGS][NUM_BRIGHTNESS + 1]; // including 0 for 'off'
+  uint8_t sBrightness[NUM_GI_STRINGS] = {0};
+  uint8_t sBrightnessTarget[NUM_GI_STRINGS] = {0};
+  uint8_t sBrightnessHist[NUM_GI_STRINGS]
+                         [NUM_BRIGHTNESS + 1];  // including 0 for 'off'
 
-private:
-    static GeneralIlluminationWPC *giInstance;
+ private:
+  static GeneralIlluminationWPC *giInstance;
 };
 
-#endif //_GENERALILLUMINATIONWPC_H
+#endif  //_GENERALILLUMINATIONWPC_H
