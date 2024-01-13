@@ -13,7 +13,7 @@ void PwmDevices::registerSolenoid(byte p, byte n, byte pow, byte minPT,
     fastSwitch[last] = fS;
 
     pinMode(p, OUTPUT);
-    analogWrite(p, 0);
+    digitalWrite(p, 0);
     type[last++] = PWM_TYPE_SOLENOID;
   }
 }
@@ -70,22 +70,22 @@ void PwmDevices::update() {
 void PwmDevices::updateSolenoidOrFlasher(bool targetState, byte i) {
   _ms = millis();
 
-  if (targetState && !activated[i]) {
+  if (targetState && activated[i] == 0) {
     // Event received to activate the output and output isn't activated already.
     // Activate it!
     analogWrite(port[i], power[i]);
     // Rememebr whin it got activated.
     activated[i] = _ms;
-  } else if (!targetState && activated[i]) {
+  } else if (!targetState && activated[i] > 0) {
     // Event received to deactivate the output.
     // Check if a minimum pulse time is configured for this output.
-    if (minPulseTime[i] > 0 && (_ms - activated[i]) < minPulseTime[i]) {
+    if (_ms > activated[i] && minPulseTime[i] > 0 && (_ms - activated[i]) < minPulseTime[i]) {
       // A minimum pulse time is configured for this output.
       // Don't deactivate it immediately but schedule its later deactivation.
       scheduled[i] = true;
     } else {
       // Deactivate the output.
-      analogWrite(port[i], 0);
+      digitalWrite(port[i], 0);
       // Mark the output as deactivated.
       activated[i] = 0;
     }
@@ -95,7 +95,7 @@ void PwmDevices::updateSolenoidOrFlasher(bool targetState, byte i) {
 void PwmDevices::handleEvent(Event *event) {
   _ms = millis();
 
-  switch (event->eventId) {
+  switch (event->sourceId) {
     case EVENT_SOURCE_SOLENOID:
       for (byte i = 0; i < last; i++) {
         if ((type[i] == PWM_TYPE_SOLENOID || type[i] == PWM_TYPE_FLASHER) &&

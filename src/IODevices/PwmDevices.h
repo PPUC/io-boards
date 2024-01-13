@@ -23,6 +23,11 @@ class PwmDevices : public EventListener {
     eventDispatcher->addListener(this, EVENT_SOURCE_LIGHT);
     eventDispatcher->addListener(this, EVENT_SOURCE_SOLENOID);
     eventDispatcher->addListener(this, EVENT_SOURCE_SWITCH);
+
+    // Adjust PWM properties if needed.
+    //analogWriteFreq(5000);
+    //analogWriteRange(65535);
+    //analogWriteResolution(16);
   }
 
   void registerSolenoid(byte p, byte n, byte pow, byte minPT, byte maxPT,

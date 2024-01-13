@@ -32,16 +32,18 @@ void setup() {
 
   if (Serial) {
     usb_debugging = true;
+    ioBoardController.debug();
     delay(10);
-    ioBoardController.eventDispatcher()->addListener(new CrossLinkDebugger());
+    //ioBoardController.eventDispatcher()->addListener(new CrossLinkDebugger());
   }
 
   core_0_initilized = true;
   rp2040.restartCore1();
 
+  // RS485 connection.
   Serial1.setTX(0);
   Serial1.setRX(1);
-  Serial1.setFIFOSize(128);  // @todo find the right size.
+  Serial1.setFIFOSize(1024);  // @todo find the right size.
   Serial1.begin(115200);
   // The Pico implements USB itself so special care must be taken. Use
   // while(!Serial){} in the setup() code before printing anything so that it
@@ -57,7 +59,7 @@ void setup1() {
 
   if (usb_debugging) {
     delay(10);
-    effectsController.eventDispatcher()->addListener(new CrossLinkDebugger());
+    //effectsController.eventDispatcher()->addListener(new CrossLinkDebugger());
   }
 
   effectsController.eventDispatcher()->setMultiCoreCrossLink(

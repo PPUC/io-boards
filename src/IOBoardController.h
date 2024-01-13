@@ -40,6 +40,8 @@ class IOBoardController : public EventListener {
 
   void update();
 
+  void debug() { m_debug = true; }
+
  private:
   PwmDevices *_pwmDevices;
   Switches *_switches;
@@ -49,6 +51,7 @@ class IOBoardController : public EventListener {
   bool activePwmDevices = false;
   bool activeSwitches = false;
   bool activeSwitchMatrix = false;
+  bool m_debug = false;
 
   int controllerType;
   byte boardId;

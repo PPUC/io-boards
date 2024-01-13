@@ -96,14 +96,16 @@ void EventDispatcher::callListeners(Event *event, int sender, bool flush) {
       }
 
 #if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
-      rp2040.idleOtherCore();
-      Serial.print("Sent event: sourceId ");
-      Serial.print(event->sourceId);
-      Serial.print(", eventId ");
-      Serial.print(event->eventId, DEC);
-      Serial.print(", value ");
-      Serial.println(event->value, DEC);
-      rp2040.resumeOtherCore();
+      if (false && Serial) {
+        rp2040.idleOtherCore();
+        Serial.print("Sent event: sourceId ");
+        Serial.print(event->sourceId);
+        Serial.print(", eventId ");
+        Serial.print(event->eventId, DEC);
+        Serial.print(", value ");
+        Serial.println(event->value, DEC);
+        rp2040.resumeOtherCore();
+      }
 #endif
     }
   }
@@ -246,43 +248,53 @@ void EventDispatcher::update() {
                   }
                 } else {
 #if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
-                  rp2040.idleOtherCore();
-                  Serial.print("Received wrong second stop byte ");
-                  Serial.println(stopByte, DEC);
-                  rp2040.resumeOtherCore();
+                  if (Serial) {
+                    rp2040.idleOtherCore();
+                    Serial.print("Received wrong second stop byte ");
+                    Serial.println(stopByte, DEC);
+                    rp2040.resumeOtherCore();
+                  }
 #endif
                 }
               } else {
 #if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
-                rp2040.idleOtherCore();
-                Serial.print("Received wrong first stop byte ");
-                Serial.println(stopByte, DEC);
-                rp2040.resumeOtherCore();
+                if (Serial) {
+                  rp2040.idleOtherCore();
+                  Serial.print("Received wrong first stop byte ");
+                  Serial.println(stopByte, DEC);
+                  rp2040.resumeOtherCore();
+                }
 #endif
               }
             } else {
 #if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
-              rp2040.idleOtherCore();
-              Serial.print("Received invalid event id ");
-              Serial.println(eventId, DEC);
-              rp2040.resumeOtherCore();
+              if (Serial) {
+                rp2040.idleOtherCore();
+                Serial.print("Received invalid event id ");
+                Serial.println(eventId, DEC);
+                rp2040.resumeOtherCore();
+              }
 #endif
             }
           }
         } else {
 #if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
-          rp2040.idleOtherCore();
-          Serial.print("Received invalid source id ");
-          Serial.println(sourceId, DEC);
-          rp2040.resumeOtherCore();
+          if (Serial) {
+            rp2040.idleOtherCore();
+            Serial.print("Received invalid source id ");
+            Serial.println(sourceId, DEC);
+            rp2040.resumeOtherCore();
+          }
 #endif
         }
       } else {
 #if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
-        rp2040.idleOtherCore();
-        Serial.print("Received wrong start byte ");
-        Serial.println(startByte, DEC);
-        rp2040.resumeOtherCore();
+        if (Serial) {
+          rp2040.idleOtherCore();
+          Serial.print("Received wrong start byte ");
+          Serial.println(startByte, DEC);
+          rp2040.resumeOtherCore();
+        }
 #endif
         // We didn't receive a start byte. Fake "success" to start over with the
         // next byte.

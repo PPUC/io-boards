@@ -6,6 +6,8 @@
 #ifndef EVENT_h
 #define EVENT_h
 
+#include <inttypes.h>
+
 #define EVENT_SOURCE_ANY 42     // "*"
 #define EVENT_SOURCE_DEBUG 66   // "B" Debug
 #define EVENT_CONFIGURATION 67  // "C" Configure I/O

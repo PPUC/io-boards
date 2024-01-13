@@ -45,7 +45,7 @@ void IOBoardController::update() {
 void IOBoardController::handleEvent(Event *event) {
   switch (event->sourceId) {
     case EVENT_PING:
-      _eventDispatcher->dispatch(new Event(EVENT_PONG, 1, boardId));
+      _eventDispatcher->dispatch(new Event(EVENT_PONG, m_debug ? 99 : 1, boardId));
       break;
 
     case EVENT_RUN:
