@@ -45,6 +45,7 @@ void IOBoardController::update() {
 void IOBoardController::handleEvent(Event *event) {
   switch (event->sourceId) {
     case EVENT_PING:
+      // In case that serial debugging is active, send 99 as PING response, otherwise 1.
       _eventDispatcher->dispatch(new Event(EVENT_PONG, m_debug ? 99 : 1, boardId));
       break;
 
@@ -53,7 +54,13 @@ void IOBoardController::handleEvent(Event *event) {
       break;
 
     case EVENT_RESET:
-      // @todo clear all configurations or reboot the device.
+      // Clear all configurations or reboot the device.
+      _pwmDevices->reset();
+      _switches->reset();
+      _switchMatrix->reset();
+      activePwmDevices = false;
+      activeSwitches = false;
+      activeSwitchMatrix = false;
       break;
   }
 }

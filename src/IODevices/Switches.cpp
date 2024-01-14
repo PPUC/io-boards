@@ -19,6 +19,17 @@ void Switches::registerSwitch(byte p, byte n) {
   }
 }
 
+void Switches::reset() {
+  for (uint8_t i = 0; i < MAX_SWITCHES; i++) {
+    port[i] = 0;
+    number[i] = 0;
+    state[i] = 0;
+    toggled[i] = 0;
+  }
+
+  last = -1;
+}
+
 void Switches::update() {
   // Wait for SWITCH_DEBOUNCE milliseconds to debounce the switches. That covers
   // the edge case that a switch was hit right before the last polling of

@@ -34,6 +34,7 @@ class Switches : public EventListener {
   void registerSwitch(byte p, byte n);
 
   void update();
+  void reset();
 
   void handleEvent(Event* event);
 

@@ -42,6 +42,28 @@ void PwmDevices::registerLamp(byte p, byte n, byte pow) {
   }
 }
 
+void PwmDevices::reset() {
+  for (uint8_t i = 0; i < MAX_PWM_OUTPUTS; i++) {
+    if (i < last) {
+      // Turn off PWM output.
+      digitalWrite(port[i], 0);
+    }
+    port[i] = 0;
+    number[i] = 0;
+    power[i] = 0;
+    minPulseTime[i] = 0;
+    maxPulseTime[i] = 0;
+    holdPower[i] = 0;
+    holdPowerActivationTime[i] = 0;
+    fastSwitch[i] = 0;
+    type[i] = 0;
+    activated[i] = 0;
+    scheduled[i] = 0;
+  }
+
+  last = 0;
+}
+
 void PwmDevices::update() {
   _ms = millis();
 
@@ -54,7 +76,7 @@ void PwmDevices::update() {
         // Deactivate the output if it is scheduled for delayed deactivation and
         // the minimum pulse time is reached. Deactivate the output if the
         // maximum pulse time is reached.
-        analogWrite(port[i], 0);
+        digitalWrite(port[i], 0);
         activated[i] = 0;
         scheduled[i] = false;
       } else if ((holdPowerActivationTime[i] > 0) &&
@@ -74,12 +96,13 @@ void PwmDevices::updateSolenoidOrFlasher(bool targetState, byte i) {
     // Event received to activate the output and output isn't activated already.
     // Activate it!
     analogWrite(port[i], power[i]);
-    // Rememebr whin it got activated.
+    // Rememebr when it got activated.
     activated[i] = _ms;
   } else if (!targetState && activated[i] > 0) {
     // Event received to deactivate the output.
     // Check if a minimum pulse time is configured for this output.
-    if (_ms > activated[i] && minPulseTime[i] > 0 && (_ms - activated[i]) < minPulseTime[i]) {
+    if (_ms > activated[i] && minPulseTime[i] > 0 &&
+        (_ms - activated[i]) < minPulseTime[i]) {
       // A minimum pulse time is configured for this output.
       // Don't deactivate it immediately but schedule its later deactivation.
       scheduled[i] = true;

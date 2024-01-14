@@ -23,17 +23,8 @@ class SwitchMatrix : public EventListener {
   SwitchMatrix(byte bId, EventDispatcher *eD) {
     boardId = bId;
     platform = PLATFORM_LIBPINMAME;
-    pulseTime = 2;
-    pauseTime = 2;
-    activeLow = false;
-    active = false;
 
-    for (int col = 0; col < MAX_COLUMNS; col++) {
-      columns[col] = -1;
-    }
-    for (int row = 0; row < MAX_ROWS; row++) {
-      rows[row] = -1;
-    }
+    reset();
 
     _ms = millis();
     _eventDispatcher = eD;
@@ -48,6 +39,7 @@ class SwitchMatrix : public EventListener {
   void setPulseTime(byte pT);
 
   void update();
+  void reset();
 
   void handleEvent(Event *event);
 
@@ -63,8 +55,8 @@ class SwitchMatrix : public EventListener {
 
   unsigned long _ms;
 
-  int columns[MAX_COLUMNS];
-  int rows[MAX_ROWS];
+  int8_t columns[MAX_COLUMNS];
+  int8_t rows[MAX_ROWS];
   bool state[MAX_COLUMNS][MAX_ROWS] = {0};
   bool toggled[MAX_COLUMNS][MAX_ROWS] = {0};
   byte column = 0;

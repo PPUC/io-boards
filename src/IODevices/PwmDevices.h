@@ -36,6 +36,7 @@ class PwmDevices : public EventListener {
   void registerLamp(byte p, byte n, byte pow);
 
   void update();
+  void reset();
 
   void handleEvent(Event *event);
 

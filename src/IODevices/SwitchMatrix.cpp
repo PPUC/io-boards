@@ -18,6 +18,23 @@ void SwitchMatrix::registerRow(byte p, byte n) {
   }
 }
 
+void SwitchMatrix::reset() {
+  pulseTime = 2;
+  pauseTime = 2;
+  activeLow = false;
+  active = false;
+  column = 0;
+
+  for (uint8_t col = 0; col < MAX_COLUMNS; col++) {
+    columns[col] = -1;
+    for (uint8_t row = 0; row < MAX_ROWS; row++) {
+      rows[row] = -1;
+      state[col][row] = 0;
+      toggled[col][row] = 0;
+    }
+  }
+}
+
 void SwitchMatrix::update() {
   unsigned long ms = millis();
   if (active) {
