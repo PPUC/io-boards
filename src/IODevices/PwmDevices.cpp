@@ -1,7 +1,8 @@
 #include "PwmDevices.h"
 
-void PwmDevices::registerSolenoid(byte p, byte n, byte pow, byte minPT,
-                                  byte maxPT, byte hP, byte hPAT, byte fS) {
+void PwmDevices::registerSolenoid(byte p, byte n, byte pow, uint16_t minPT,
+                                  uint16_t maxPT, byte hP, uint16_t hPAT,
+                                  byte fS) {
   if (last < MAX_PWM_OUTPUTS) {
     port[last] = p;
     number[last] = n;
@@ -71,7 +72,8 @@ void PwmDevices::update() {
   for (byte i = 0; i < last; i++) {
     if (activated[i] > 0) {
       // The output is active.
-      if ((scheduled[i] && ((_ms - activated[i]) > minPulseTime[i])) ||
+      if ((scheduled[i] && (minPulseTime[i] > 0) &&
+           ((_ms - activated[i]) > minPulseTime[i])) ||
           ((maxPulseTime[i] > 0) && ((_ms - activated[i]) > maxPulseTime[i]))) {
         // Deactivate the output if it is scheduled for delayed deactivation and
         // the minimum pulse time is reached. Deactivate the output if the
@@ -101,7 +103,7 @@ void PwmDevices::updateSolenoidOrFlasher(bool targetState, byte i) {
   } else if (!targetState && activated[i] > 0) {
     // Event received to deactivate the output.
     // Check if a minimum pulse time is configured for this output.
-    if (_ms > activated[i] && minPulseTime[i] > 0 &&
+    if ((_ms >= activated[i]) && (minPulseTime[i] > 0) &&
         (_ms - activated[i]) < minPulseTime[i]) {
       // A minimum pulse time is configured for this output.
       // Don't deactivate it immediately but schedule its later deactivation.

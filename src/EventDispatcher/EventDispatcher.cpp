@@ -191,9 +191,9 @@ void EventDispatcher::update() {
             byte topic = hwSerial[i]->read();
             byte index = hwSerial[i]->read();
             byte key = hwSerial[i]->read();
-            int value = (hwSerial[i]->read() << 24) +
-                        (hwSerial[i]->read() << 16) +
-                        (hwSerial[i]->read() << 8) + hwSerial[i]->read();
+            uint32_t value = (((uint32_t)hwSerial[i]->read()) << 24) +
+                             (((uint32_t)hwSerial[i]->read()) << 16) +
+                             (((uint32_t)hwSerial[i]->read()) << 8) + hwSerial[i]->read();
             byte stopByte = hwSerial[i]->read();
             if (stopByte == 0b10101010) {
               stopByte = hwSerial[i]->read();
