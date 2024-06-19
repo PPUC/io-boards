@@ -1,6 +1,6 @@
 {
-  "name": "PPUC",
-  "description": "Pinball Power-Up Controller",
+  "name": "PPUC/io-boards",
+  "description": "Pinball Power-Up Controller IO Boards Library",
   "keywords": "pinball",
   "authors": {
     "name": "Markus Kalkbrenner",
