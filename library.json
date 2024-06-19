@@ -4,7 +4,7 @@
   "keywords": "pinball",
   "authors": {
     "name": "Markus Kalkbrenner",
-    "url": "https://github.com/mkalkbrenner/PPUC"
+    "url": "https://github.com/PPUC"
   },
   "version": "0.3.0",
   "downloadUrl": "https://github.com/mkalkbrenner/PPUC/archive/main.zip",
@@ -12,7 +12,7 @@
   "platforms": ["atmelavr", "teensy"],
   "repository": {
     "type": "git",
-    "url": "https://github.com/mkalkbrenner/PPUC.git"
+    "url": "https://github.com/PPUC/io-boards.git"
   },
   "license": "GPL-3.0-or-later",
   "export": {
