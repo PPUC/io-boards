@@ -6,7 +6,7 @@
     "name": "Markus Kalkbrenner",
     "url": "https://github.com/mkalkbrenner/PPUC"
   },
-  "version": "0.2.2",
+  "version": "0.3.0",
   "downloadUrl": "https://github.com/mkalkbrenner/PPUC/archive/main.zip",
   "frameworks": "arduino",
   "platforms": ["atmelavr", "teensy"],
