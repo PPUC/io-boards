@@ -15,7 +15,9 @@ void Switches::registerSwitch(byte p, byte n) {
     port[++last] = p;
     number[last] = n;
     toggled[last] = false;
-    state[last] = !digitalRead(p);
+    // Set the inverted value as initial state to let update() send the initial state on game start.
+    // Note, we have active LOW!
+    state[last] = digitalRead(p);
   }
 }
 
@@ -24,7 +26,7 @@ void Switches::reset() {
     port[i] = 0;
     number[i] = 0;
     state[i] = 0;
-    toggled[i] = 0;
+    toggled[i] = false;
   }
 
   last = -1;
@@ -38,6 +40,7 @@ void Switches::update() {
   if (millis() - _ms >= SWITCH_DEBOUNCE) {
     for (int i = 0; i <= last; i++) {
       if (!toggled[i]) {
+        // Note, we have active LOW!
         bool new_state = !digitalRead(port[i]);
         if (new_state != state[i]) {
           state[i] = new_state;
