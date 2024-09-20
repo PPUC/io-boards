@@ -31,7 +31,7 @@ class Switches : public EventListener {
     _eventDispatcher->addListener(this, EVENT_READ_SWITCHES);
   }
 
-  void registerSwitch(byte p, byte n);
+  void registerSwitch(byte p, byte n, bool stateful = false);
 
   void update();
   void reset();
@@ -41,6 +41,8 @@ class Switches : public EventListener {
   void handleEvent(ConfigEvent* event) {}
 
  private:
+  void resetStatefulPort(byte p);
+
   byte boardId;
   unsigned long _ms;
 
@@ -48,6 +50,7 @@ class Switches : public EventListener {
   byte number[MAX_SWITCHES] = {0};
   bool state[MAX_SWITCHES] = {0};
   bool toggled[MAX_SWITCHES] = {0};
+  bool stateful[MAX_SWITCHES] = {0};
   int last = -1;
 
   EventDispatcher* _eventDispatcher;

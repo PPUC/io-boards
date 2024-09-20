@@ -1,13 +1,9 @@
 #include "Switches.h"
 
-void Switches::registerSwitch(byte p, byte n) {
+void Switches::registerSwitch(byte p, byte n, bool stateful) {
   if (last < (MAX_SWITCHES - 1)) {
-    if (p >= 15 && p <= 18) {
-      // Set mid power output as input.
-      pinMode(p, OUTPUT);
-      digitalWrite(p, HIGH);
-      delayMicroseconds(10);
-      digitalWrite(p, LOW);
+    if (stateful) {
+      resetStatefulPort(p);
     }
 
     pinMode(p, INPUT);
@@ -19,6 +15,16 @@ void Switches::registerSwitch(byte p, byte n) {
     // Note, we have active LOW!
     state[last] = digitalRead(p);
   }
+}
+
+void Switches::resetStatefulPort(byte p) {
+  // Set mid power output as input.
+  pinMode(p, OUTPUT);
+  digitalWrite(p, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(p, LOW);
+  delayMicroseconds(10);
+  pinMode(p, INPUT);
 }
 
 void Switches::reset() {
@@ -50,6 +56,7 @@ void Switches::update() {
           // flippers, kick backs, jets and sling shots.
           _eventDispatcher->dispatch(new Event(
               EVENT_SOURCE_SWITCH, word(0, number[i]), state[i], true));
+          if (stateful[i]) resetStatefulPort(i);
         }
       }
     }

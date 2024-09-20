@@ -74,7 +74,7 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
             port = event->value;
             break;
           case CONFIG_TOPIC_NUMBER:
-            _switches->registerSwitch((byte)port, event->value);
+            _switches->registerSwitch((byte)port, event->value, (controllerType == CONTROLLER_16_8_1 && port >= 15 && port <= 18));
             activeSwitches = true;
             break;
         }
