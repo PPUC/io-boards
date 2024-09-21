@@ -224,7 +224,7 @@ void EffectsController::handleEvent(ConfigEvent *event) {
                   } else {
                     ((CombinedGiAndLightMatrixWS2812FXDevice *)
                          ws2812FXDevices[0][0])
-                        ->assignLedToLightMatrix(
+                        ->assignLedToLightMatrixDE(
                             config_number, config_ledNumber, config_color);
                   }
                   break;

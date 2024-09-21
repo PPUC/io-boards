@@ -136,7 +136,7 @@ void EventDispatcher::callListeners(ConfigEvent *event, int sender) {
       msg[3] = event->topic;
       msg[4] = event->index;
       msg[5] = event->key;
-      msg[6] = event->value >> 24;
+      msg[6] = (event->value >> 24) & 0xff;
       msg[7] = (event->value >> 16) & 0xff;
       msg[8] = (event->value >> 8) & 0xff;
       msg[9] = event->value & 0xff;

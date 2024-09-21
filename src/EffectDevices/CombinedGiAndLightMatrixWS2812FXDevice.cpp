@@ -76,7 +76,7 @@ void CombinedGiAndLightMatrixWS2812FXDevice::assignLedToLightMatrixDE(
     if (ledLightMatrixPositions[number][i] == -1) {
       ledLightMatrixPositions[number][i] = led;
       ledLightMatrixColors[number][i] = color;
-      break;
+      return;
     }
   }
 }
@@ -90,10 +90,9 @@ void CombinedGiAndLightMatrixWS2812FXDevice::assignLedToFlasher(
         if (ledLightMatrixPositions[_LIGHT_MATRIX_SIZE + offset][i] == -1) {
           ledLightMatrixPositions[_LIGHT_MATRIX_SIZE + offset][i] = led;
           ledLightMatrixColors[_LIGHT_MATRIX_SIZE + offset][i] = color;
-          break;
+          return;
         }
       }
-
       return;
     }
   }
@@ -208,6 +207,7 @@ void CombinedGiAndLightMatrixWS2812FXDevice::handleEvent(Event *event) {
           number = ((column - 1) * 8) + row;
         }
 
+        // We start at "0", not "1".
         --number;
       } else {
         number = 255;
@@ -337,6 +337,7 @@ void CombinedGiAndLightMatrixWS2812FXDevice::updateAfterGlow() {
                                     ledLightMatrixColors[number][i]);
           }
         }
+        continue;
       } else {
         glowBrightness =
             wavePWMHeatUp->getExponentialValue(millis() - heatUp[number]);
@@ -350,6 +351,7 @@ void CombinedGiAndLightMatrixWS2812FXDevice::updateAfterGlow() {
                                     RGBW_BLACK);
           }
         }
+        continue;
       } else {
         glowBrightness = wavePWMAfterGlow->getExponentialValue(
             millis() - afterGlow[number] + msAfterGlow);
