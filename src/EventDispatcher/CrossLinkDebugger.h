@@ -9,6 +9,7 @@
 #define CROSSLINKDEBUGGER_h
 
 #include <Arduino.h>
+#include <stdio.h>
 
 #include "Event.h"
 #include "EventListener.h"
@@ -20,8 +21,9 @@ class CrossLinkDebugger : public EventListener {
   void handleEvent(Event *event);
   void handleEvent(ConfigEvent *event);
 
- private:
-  static bool lock;
+  static void debug(const char *format, ...);
+
+  static bool active;
 };
 
 #endif

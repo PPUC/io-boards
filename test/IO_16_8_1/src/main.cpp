@@ -34,7 +34,7 @@ void setup() {
     usb_debugging = true;
     ioBoardController.debug();
     delay(10);
-    //ioBoardController.eventDispatcher()->addListener(new CrossLinkDebugger());
+    ioBoardController.eventDispatcher()->addListener(new CrossLinkDebugger());
   }
 
   core_0_initilized = true;
@@ -59,7 +59,7 @@ void setup1() {
 
   if (usb_debugging) {
     delay(10);
-    //effectsController.eventDispatcher()->addListener(new CrossLinkDebugger());
+    effectsController.eventDispatcher()->addListener(new CrossLinkDebugger());
   }
 
   effectsController.eventDispatcher()->setMultiCoreCrossLink(

@@ -1,5 +1,7 @@
 #include "PwmDevices.h"
 
+#include "EventDispatcher/CrossLinkDebugger.h"
+
 void PwmDevices::registerSolenoid(byte p, byte n, byte pow, uint16_t minPT,
                                   uint16_t maxPT, byte hP, uint16_t hPAT,
                                   byte fS) {
@@ -100,6 +102,7 @@ void PwmDevices::updateSolenoidOrFlasher(bool targetState, byte i) {
     analogWrite(port[i], power[i]);
     // Rememebr when it got activated.
     activated[i] = _ms;
+    CrossLinkDebugger::debug("Activated PWM device on port %d", port[i] + 1);
   } else if (!targetState && activated[i] > 0) {
     // Event received to deactivate the output.
     // Check if a minimum pulse time is configured for this output.

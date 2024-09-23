@@ -1,5 +1,7 @@
 #include "CrossLinkDebugger.h"
 
+bool CrossLinkDebugger::active = false;
+
 CrossLinkDebugger::CrossLinkDebugger() {
 #if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
   if (get_core_num() == 0) {
@@ -21,6 +23,8 @@ CrossLinkDebugger::CrossLinkDebugger() {
     rp2040.resumeOtherCore();
   }
 #endif
+
+  CrossLinkDebugger::active = true;
 }
 
 void CrossLinkDebugger::handleEvent(Event *event) {
@@ -63,4 +67,27 @@ void CrossLinkDebugger::handleEvent(ConfigEvent *event) {
 #if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
   rp2040.resumeOtherCore();
 #endif
+}
+
+void CrossLinkDebugger::debug(const char *format, ...) {
+  if (CrossLinkDebugger::active) {
+    char buffer[1024];
+
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+
+#if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
+    rp2040.idleOtherCore();
+    Serial.print("Core ");
+    Serial.print(get_core_num(), DEC);
+    Serial.print(" ");
+#endif
+    Serial.print("debug: ");
+    Serial.println(buffer);
+#if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
+    rp2040.resumeOtherCore();
+#endif
+  }
 }

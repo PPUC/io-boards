@@ -411,12 +411,12 @@ class EffectsController : public EventListener {
   byte boardId = 255;
   byte config_port = 0;
   byte config_type = 0;
+  neoPixelType config_neoPixelType = 0;
   byte config_amount = 0;
   byte config_afterGlow = 0;
   byte config_heatUp = 0;
   byte config_number = 0;
   byte config_ledNumber = 0;
-  byte config_brightness = 0;
   uint32_t config_color = 0;
 
   unsigned long ws2812UpdateInterval = 0;

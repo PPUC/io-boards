@@ -62,6 +62,7 @@
 #define PWM_TYPE_SOLENOID 1  // Coil
 #define PWM_TYPE_FLASHER 2   // Flasher
 #define PWM_TYPE_LAMP 3      // Lamp
+#define PWM_TYPE_SHAKER 4    // Shaker
 
 #define LED_TYPE_GI 1       // GI
 #define LED_TYPE_FLASHER 2  // Flasher

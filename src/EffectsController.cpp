@@ -139,12 +139,12 @@ void EffectsController::handleEvent(ConfigEvent *event) {
         switch (event->key) {
           case CONFIG_TOPIC_PORT:
             config_port = event->value;
-            config_type = 0;
+            config_neoPixelType = 0;
             config_amount = 0;
             config_afterGlow = 0;
             break;
           case CONFIG_TOPIC_TYPE:
-            config_type = event->value;
+            config_neoPixelType = (neoPixelType)event->value;
             break;
           case CONFIG_TOPIC_AMOUNT_LEDS:
             config_amount = event->value;
@@ -157,8 +157,9 @@ void EffectsController::handleEvent(ConfigEvent *event) {
             if (!ws2812FXDevices[0][0]) {
               ws2812FXDevices[0][0] =
                   new CombinedGiAndLightMatrixWS2812FXDevice(
-                      new WS2812FX(config_amount, config_port, config_type), 0,
-                      config_amount - 1, 0, 0, _eventDispatcher);
+                      new WS2812FX(config_amount, config_port,
+                                   config_neoPixelType),
+                      0, config_amount - 1, 0, 0, _eventDispatcher);
               ws2812FXDevices[0][0]->getWS2812FX()->init();
               ws2812FXDeviceCounters[0] = 1;
 
@@ -191,7 +192,6 @@ void EffectsController::handleEvent(ConfigEvent *event) {
               config_type = 0;
               config_number = 0;
               config_ledNumber = 0;
-              config_brightness = 0;
               config_color = 0;
               break;
             case CONFIG_TOPIC_TYPE:
@@ -202,9 +202,6 @@ void EffectsController::handleEvent(ConfigEvent *event) {
               break;
             case CONFIG_TOPIC_LED_NUMBER:
               config_ledNumber = event->value;
-              break;
-            case CONFIG_TOPIC_BRIGHTNESS:
-              config_brightness = event->value;
               break;
             case CONFIG_TOPIC_COLOR:
               config_color = event->value;
