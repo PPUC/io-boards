@@ -46,6 +46,16 @@ void EventDispatcher::addListener(EventListener *eventListener, char sourceId) {
 }
 
 void EventDispatcher::dispatch(Event *event) {
+  if (EVENT_RESET == event->sourceId) {
+    // Force immediate handling of the reset event. Forget about the others.
+    for (int i = 0; i <= stackCounter; i++) {
+      if (stackEvents[i]) {
+        delete stackEvents[i];
+      }
+    }
+    stackCounter = -1;
+  }
+
   if (stackCounter < (EVENT_STACK_SIZE - 1)) {
     stackEvents[++stackCounter] = event;
 
@@ -193,7 +203,8 @@ void EventDispatcher::update() {
             byte key = hwSerial[i]->read();
             uint32_t value = (((uint32_t)hwSerial[i]->read()) << 24) +
                              (((uint32_t)hwSerial[i]->read()) << 16) +
-                             (((uint32_t)hwSerial[i]->read()) << 8) + hwSerial[i]->read();
+                             (((uint32_t)hwSerial[i]->read()) << 8) +
+                             hwSerial[i]->read();
             byte stopByte = hwSerial[i]->read();
             if (stopByte == 0b10101010) {
               stopByte = hwSerial[i]->read();

@@ -307,6 +307,12 @@ class EffectsController : public EventListener {
 
       _ledBuiltInDevice = new LedBuiltInDevice();
       _ledBuiltInDevice->on();
+
+      addEffect(new LedBlinkEffect(), _ledBuiltInDevice, new Event(EVENT_RUN),
+                1,   // priority
+                -1,  // repeat
+                0    // mode
+      );
     } else {
       Serial.print("Unsupported Effects Controller: ");
       Serial.println(controllerType);
@@ -394,7 +400,7 @@ class EffectsController : public EventListener {
   int ws2812FXDeviceCounters[PPUC_MAX_WS2812FX_DEVICES] = {0};
   bool ws2812FXstates[PPUC_MAX_WS2812FX_DEVICES] = {0};
   bool ws2812FXrunning[PPUC_MAX_WS2812FX_DEVICES] = {0};
-  bool ws2812FXbrightness[PPUC_MAX_WS2812FX_DEVICES] = {0};
+  byte ws2812FXbrightness[PPUC_MAX_WS2812FX_DEVICES] = {0};
 #if defined(__IMXRT1062__)  // Teensy 4.1
   WS2812Serial* ws2812Serial[PPUC_MAX_WS2812FX_DEVICES];
 #endif

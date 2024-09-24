@@ -83,6 +83,9 @@ void PwmDevices::update() {
         digitalWrite(port[i], 0);
         activated[i] = 0;
         scheduled[i] = false;
+        CrossLinkDebugger::debug(
+            "Performed scheduled deactivation of PWM device on port %d",
+            port[i] + 1);
       } else if ((holdPowerActivationTime[i] > 0) &&
                  ((_ms - activated[i]) > holdPowerActivationTime[i])) {
         // Reduce the power of the activated output if the hold power activation
@@ -116,6 +119,8 @@ void PwmDevices::updateSolenoidOrFlasher(bool targetState, byte i) {
       digitalWrite(port[i], 0);
       // Mark the output as deactivated.
       activated[i] = 0;
+      CrossLinkDebugger::debug("Deactivated PWM device on port %d",
+                               port[i] + 1);
     }
   }
 }

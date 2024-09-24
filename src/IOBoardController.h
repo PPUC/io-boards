@@ -64,6 +64,7 @@ class IOBoardController : public EventListener {
   uint16_t holdPowerActivationTime = 0;
   byte fastSwitch = 0;
   byte type = 0;
+  uint32_t resetTimer = 0;
 
   EventDispatcher *_eventDispatcher;
 #if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)

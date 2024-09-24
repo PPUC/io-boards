@@ -1,5 +1,7 @@
 #include "IOBoardController.h"
 
+#include "EventDispatcher/CrossLinkDebugger.h"
+
 IOBoardController::IOBoardController(int cT) {
   _eventDispatcher = new EventDispatcher();
   _eventDispatcher->addListener(this, EVENT_CONFIGURATION);
@@ -39,14 +41,28 @@ void IOBoardController::update() {
     }
   }
 
+  if (resetTimer > 0 && resetTimer < millis()) {
+    if (!m_debug) {
+#if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
+      rp2040.reboot();
+#endif
+    } else {
+      resetTimer = 0;
+      CrossLinkDebugger::debug(
+          "Skipped reset to keep USB debugging connection alive.");
+    }
+  }
+
   eventDispatcher()->update();
 }
 
 void IOBoardController::handleEvent(Event *event) {
   switch (event->sourceId) {
     case EVENT_PING:
-      // In case that serial debugging is active, send 99 as PING response, otherwise 1.
-      _eventDispatcher->dispatch(new Event(EVENT_PONG, m_debug ? 99 : 1, boardId));
+      // In case that serial debugging is active, send 99 as PING response,
+      // otherwise 1.
+      _eventDispatcher->dispatch(
+          new Event(EVENT_PONG, m_debug ? 99 : 1, boardId));
       break;
 
     case EVENT_RUN:
@@ -58,9 +74,11 @@ void IOBoardController::handleEvent(Event *event) {
       _pwmDevices->reset();
       _switches->reset();
       _switchMatrix->reset();
-      activePwmDevices = false;
-      activeSwitches = false;
-      activeSwitchMatrix = false;
+
+      // Issue a reset of the board in 3 seconds.
+      // Core 1 should have enough time to rest it's devices.
+      resetTimer = millis() + 3000;
+
       break;
   }
 }
@@ -74,7 +92,9 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
             port = event->value;
             break;
           case CONFIG_TOPIC_NUMBER:
-            _switches->registerSwitch((byte)port, event->value, (controllerType == CONTROLLER_16_8_1 && port >= 15 && port <= 18));
+            _switches->registerSwitch((byte)port, event->value,
+                                      (controllerType == CONTROLLER_16_8_1 &&
+                                       port >= 15 && port <= 18));
             activeSwitches = true;
             break;
         }

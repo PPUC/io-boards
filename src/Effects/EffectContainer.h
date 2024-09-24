@@ -47,6 +47,11 @@ struct EffectContainer {
     repeat = r;
     mode = m;
   }
+
+  ~EffectContainer() {
+    if (effect) delete effect;
+    if (event) delete event;
+  }
 };
 
 #endif

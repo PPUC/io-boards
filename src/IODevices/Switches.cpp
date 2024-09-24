@@ -33,6 +33,8 @@ void Switches::reset() {
     number[i] = 0;
     state[i] = 0;
     toggled[i] = false;
+    if (stateful[i]) resetStatefulPort(i);
+    stateful[i] = false;
   }
 
   last = -1;

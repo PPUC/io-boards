@@ -15,7 +15,7 @@
 #define EVENT_SOURCE_EVENT \
   69  // "E" VPX/DOF/PUP common event from different system, like
 #define EVENT_SOURCE_EFFECT 70  // "F" custom event from running Effect
-#define EVENT_SOURCE_GI 71      // "G" WPC GI
+#define EVENT_SOURCE_GI 71      // "G" GI
 #define EVENT_SOURCE_LIGHT \
   76                   // "L" VPX/DOF/PUP lights, mainly playfield inserts
 #define EVENT_NULL 78  // "N" NULL event

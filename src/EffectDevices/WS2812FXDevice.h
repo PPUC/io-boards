@@ -28,6 +28,14 @@ class WS2812FXDevice : public EffectDevice {
     this->lastSegment = lastSegment;
   }
 
+  ~WS2812FXDevice() {
+    reset();
+
+    if (ws2812FX) {
+      delete ws2812FX;
+    }
+  }
+
   virtual void on();
 
   virtual void off();

@@ -100,31 +100,50 @@ void EffectsController::setBrightness(byte port, byte brightness) {
 }
 
 void EffectsController::handleEvent(Event *event) {
-  for (int i = 0; i <= stackCounter; i++) {
-    if (event->sourceId == stackEffectContainers[i]->event->sourceId &&
-        event->eventId == stackEffectContainers[i]->event->eventId &&
-        event->value == stackEffectContainers[i]->event->value &&
-        (mode == stackEffectContainers[i]->mode ||
-         -1 == stackEffectContainers[i]->mode  // -1 means any mode
-         )) {
-      for (int k = 0; k <= stackCounter; k++) {
-        if (stackEffectContainers[i]->device ==
-                stackEffectContainers[k]->device &&
-            stackEffectContainers[k]->effect->isRunning()) {
-          if (stackEffectContainers[i]->priority >
-              stackEffectContainers[k]->priority) {
-            stackEffectContainers[k]->effect->terminate();
-            stackEffectContainers[i]->effect->start(
-                stackEffectContainers[i]->repeat);
+  switch (event->sourceId) {
+    case EVENT_RESET:
+      if (_shakerPWMDevice) _shakerPWMDevice->reset();
+      if (_ledPWMDevice) _ledPWMDevice->reset();
+
+      for (int i = 0; i < PPUC_MAX_WS2812FX_DEVICES; i++) {
+        if (ws2812FXstates[i]) {
+          for (int k = ws2812FXDeviceCounters[i] - 1; k >= 0; k--) {
+            if (ws2812FXDevices[i][k]) {
+              delete ws2812FXDevices[i][k];
+            }
           }
-          break;
-        }
-        if (k == stackCounter) {
-          stackEffectContainers[i]->effect->start(
-              stackEffectContainers[i]->repeat);
         }
       }
-    }
+
+      break;
+
+    default:
+      for (int i = 0; i <= stackCounter; i++) {
+        if (event->sourceId == stackEffectContainers[i]->event->sourceId &&
+            event->eventId == stackEffectContainers[i]->event->eventId &&
+            event->value == stackEffectContainers[i]->event->value &&
+            (mode == stackEffectContainers[i]->mode ||
+             -1 == stackEffectContainers[i]->mode  // -1 means any mode
+             )) {
+          for (int k = 0; k <= stackCounter; k++) {
+            if (stackEffectContainers[i]->device ==
+                    stackEffectContainers[k]->device &&
+                stackEffectContainers[k]->effect->isRunning()) {
+              if (stackEffectContainers[i]->priority >
+                  stackEffectContainers[k]->priority) {
+                stackEffectContainers[k]->effect->terminate();
+                stackEffectContainers[i]->effect->start(
+                    stackEffectContainers[i]->repeat);
+              }
+              break;
+            }
+            if (k == stackCounter) {
+              stackEffectContainers[i]->effect->start(
+                  stackEffectContainers[i]->repeat);
+            }
+          }
+        }
+      }
   }
 }
 
