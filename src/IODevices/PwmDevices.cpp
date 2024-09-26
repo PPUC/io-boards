@@ -74,9 +74,10 @@ void PwmDevices::update() {
   for (byte i = 0; i < last; i++) {
     if (activated[i] > 0) {
       // The output is active.
+      uint16_t timePassed = _ms - activated[i];
       if ((scheduled[i] && (minPulseTime[i] > 0) &&
-           ((_ms - activated[i]) > minPulseTime[i])) ||
-          ((maxPulseTime[i] > 0) && ((_ms - activated[i]) > maxPulseTime[i]))) {
+           (timePassed > minPulseTime[i])) ||
+          ((maxPulseTime[i] > 0) && (timePassed > maxPulseTime[i]))) {
         // Deactivate the output if it is scheduled for delayed deactivation and
         // the minimum pulse time is reached. Deactivate the output if the
         // maximum pulse time is reached.
@@ -84,13 +85,17 @@ void PwmDevices::update() {
         activated[i] = 0;
         scheduled[i] = false;
         CrossLinkDebugger::debug(
-            "Performed scheduled deactivation of PWM device on port %d",
-            port[i] + 1);
+            "Performed scheduled deactivation of PWM device on port %d after "
+            "%dms",
+            port[i], timePassed);
       } else if ((holdPowerActivationTime[i] > 0) &&
-                 ((_ms - activated[i]) > holdPowerActivationTime[i])) {
+                 (timePassed > holdPowerActivationTime[i])) {
         // Reduce the power of the activated output if the hold power activation
         // time pased since the activation.
         analogWrite(port[i], holdPower[i]);
+        CrossLinkDebugger::debug(
+            "Reduced power of PWM device on port %d after %dms", port[i],
+            timePassed);
       }
     }
   }
@@ -105,7 +110,7 @@ void PwmDevices::updateSolenoidOrFlasher(bool targetState, byte i) {
     analogWrite(port[i], power[i]);
     // Rememebr when it got activated.
     activated[i] = _ms;
-    CrossLinkDebugger::debug("Activated PWM device on port %d", port[i] + 1);
+    CrossLinkDebugger::debug("Activated PWM device on port %d", port[i]);
   } else if (!targetState && activated[i] > 0) {
     // Event received to deactivate the output.
     // Check if a minimum pulse time is configured for this output.
@@ -119,46 +124,58 @@ void PwmDevices::updateSolenoidOrFlasher(bool targetState, byte i) {
       digitalWrite(port[i], 0);
       // Mark the output as deactivated.
       activated[i] = 0;
-      CrossLinkDebugger::debug("Deactivated PWM device on port %d",
-                               port[i] + 1);
+      CrossLinkDebugger::debug("Deactivated PWM device on port %d", port[i]);
     }
   }
 }
 
 void PwmDevices::handleEvent(Event *event) {
+  HighPowerOffAware::handleEvent(event);
+
   _ms = millis();
 
-  switch (event->sourceId) {
-    case EVENT_SOURCE_SOLENOID:
-      for (byte i = 0; i < last; i++) {
-        if ((type[i] == PWM_TYPE_SOLENOID || type[i] == PWM_TYPE_FLASHER) &&
-            number[i] == (byte)event->eventId) {
-          updateSolenoidOrFlasher((bool)event->value, i);
-        }
-      }
-      break;
-
-    case EVENT_SOURCE_SWITCH:
-      // A switch event was triggered or received. Activate or deactivate any
-      // output that is configured as "fastSwitch" for that switch.
-      for (byte i = 0; i < last; i++) {
-        if (type[i] == PWM_TYPE_SOLENOID &&
-            fastSwitch[i] == (byte)event->eventId) {
-          updateSolenoidOrFlasher((bool)event->value, i);
-        }
-      }
-      break;
-
-    case EVENT_SOURCE_LIGHT:
-      for (byte i = 0; i < last; i++) {
-        if (type[i] == PWM_TYPE_LAMP && number[i] == (byte)event->eventId) {
-          if (event->value) {
-            analogWrite(port[i], power[i]);
-          } else if (activated[i]) {
-            analogWrite(port[i], 0);
+  if (powerOn && coinDoorClosed) {
+    switch (event->sourceId) {
+      case EVENT_SOURCE_SOLENOID:
+        for (byte i = 0; i < last; i++) {
+          if ((type[i] == PWM_TYPE_SOLENOID || type[i] == PWM_TYPE_FLASHER) &&
+              number[i] == (byte)event->eventId) {
+            updateSolenoidOrFlasher((bool)event->value, i);
           }
         }
-      }
-      break;
+        break;
+
+      case EVENT_SOURCE_SWITCH:
+        // A switch event was triggered or received. Activate or deactivate any
+        // output that is configured as "fastSwitch" for that switch.
+        for (byte i = 0; i < last; i++) {
+          if (type[i] == PWM_TYPE_SOLENOID &&
+              fastSwitch[i] == (byte)event->eventId) {
+            updateSolenoidOrFlasher((bool)event->value, i);
+          }
+        }
+        break;
+
+      case EVENT_SOURCE_LIGHT:
+        for (byte i = 0; i < last; i++) {
+          if (type[i] == PWM_TYPE_LAMP && number[i] == (byte)event->eventId) {
+            if (event->value) {
+              analogWrite(port[i], power[i]);
+            } else if (activated[i]) {
+              analogWrite(port[i], 0);
+            }
+          }
+        }
+        break;
+    }
+  } else if (powerToggled) {
+    for (byte i = 0; i < last; i++) {
+      // Deactivate the output.
+      digitalWrite(port[i], 0);
+      // Mark the output as deactivated.
+      activated[i] = 0;
+      powerOn = false;
+      CrossLinkDebugger::debug("Deactivated PWM device on port %d", port[i]);
+    }
   }
 }

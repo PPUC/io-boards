@@ -9,20 +9,17 @@
 
 #include <Arduino.h>
 
-#include "../EventDispatcher/Event.h"
-#include "../EventDispatcher/EventDispatcher.h"
+#include "../HighPowerOffAware.h"
 
 #ifndef MAX_PWM_OUTPUTS
 #define MAX_PWM_OUTPUTS 16
 #endif
 
-class PwmDevices : public EventListener {
+class PwmDevices : public HighPowerOffAware {
  public:
   // Constructor
-  PwmDevices(EventDispatcher *eventDispatcher) {
+  PwmDevices(EventDispatcher *eventDispatcher): HighPowerOffAware(eventDispatcher) {
     eventDispatcher->addListener(this, EVENT_SOURCE_LIGHT);
-    eventDispatcher->addListener(this, EVENT_SOURCE_SOLENOID);
-    eventDispatcher->addListener(this, EVENT_SOURCE_SWITCH);
 
     // Adjust PWM properties if needed.
     // analogWriteFreq(5000);
@@ -39,8 +36,6 @@ class PwmDevices : public EventListener {
   void reset();
 
   void handleEvent(Event *event);
-
-  void handleEvent(ConfigEvent *event) {}
 
  private:
   unsigned long _ms;

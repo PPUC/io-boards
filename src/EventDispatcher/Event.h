@@ -32,13 +32,15 @@
 #define EVENT_NO_ERROR 98         // NO ERROR
 #define EVENT_ERROR 99            // ERROR
 
-#define CONFIG_TOPIC_PLATFORM 102       // "f"
-#define CONFIG_TOPIC_LED_STRING 103     // "g"
-#define CONFIG_TOPIC_LAMPS 108          // "l"
-#define CONFIG_TOPIC_MECHS 109          // "m"
-#define CONFIG_TOPIC_PWM 112            // "p"
-#define CONFIG_TOPIC_SWITCHES 115       // "s"
-#define CONFIG_TOPIC_SWITCH_MATRIX 120  // "x"
+#define CONFIG_TOPIC_PLATFORM 102                // "f"
+#define CONFIG_TOPIC_LED_STRING 103              // "g"
+#define CONFIG_TOPIC_LAMPS 108                   // "l"
+#define CONFIG_TOPIC_MECHS 109                   // "m"
+#define CONFIG_TOPIC_PWM 112                     // "p"
+#define CONFIG_TOPIC_COIN_DOOR_CLOSED_SWITCH 113 // "q"
+#define CONFIG_TOPIC_GAME_ON_SOLENOID 114        // "r"
+#define CONFIG_TOPIC_SWITCHES 115                // "s"
+#define CONFIG_TOPIC_SWITCH_MATRIX 120           // "x"
 
 #define CONFIG_TOPIC_HOLD_POWER_ACTIVATION_TIME 65  // "A"
 #define CONFIG_TOPIC_BRIGHTNESS 66                  // "B"

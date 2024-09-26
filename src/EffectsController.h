@@ -118,7 +118,7 @@ class EffectsController : public EventListener {
       _ledBuiltInDevice->on();
       _nullDevice = new NullDevice();
       _testButtons = new EffectControllerTestButtons(_eventDispatcher);
-      _shakerPWMDevice = new WavePWMDevice(36);
+      _shakerPWMDevice = new WavePWMDevice(36, _eventDispatcher);
       _shakerPWMDevice->off();
       _ledPWMDevice = new WavePWMDevice(37);
       _ledPWMDevice->off();
@@ -285,7 +285,7 @@ class EffectsController : public EventListener {
       _ledBuiltInDevice = new LedBuiltInDevice();
       _ledBuiltInDevice->on();
       _nullDevice = new NullDevice();
-      _shakerPWMDevice = new WavePWMDevice(9);
+      _shakerPWMDevice = new WavePWMDevice(9, _eventDispatcher);
       _shakerPWMDevice->off();
 #if defined(PIN_A0)
       brightnessControlBasePin = PIN_A0;
