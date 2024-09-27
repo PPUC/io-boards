@@ -1,8 +1,8 @@
 #include "Switches.h"
 
-void Switches::registerSwitch(byte p, byte n, bool stateful) {
+void Switches::registerSwitch(byte p, byte n, bool s) {
   if (last < (MAX_SWITCHES - 1)) {
-    if (stateful) {
+    if (s) {
       resetStatefulPort(p);
     }
 
@@ -11,6 +11,7 @@ void Switches::registerSwitch(byte p, byte n, bool stateful) {
     port[++last] = p;
     number[last] = n;
     toggled[last] = false;
+    stateful[last] = s;
     // Set the inverted value as initial state to let update() send the initial state on game start.
     // Note, we have active LOW!
     state[last] = digitalRead(p);

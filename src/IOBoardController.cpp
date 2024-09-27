@@ -92,6 +92,7 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
             port = event->value;
             break;
           case CONFIG_TOPIC_NUMBER:
+            // Ports 15-18 (labeled as 13-16) of IO_16_8_1 are stateful.
             _switches->registerSwitch((byte)port, event->value,
                                       (controllerType == CONTROLLER_16_8_1 &&
                                        port >= 15 && port <= 18));
