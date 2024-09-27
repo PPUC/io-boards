@@ -81,15 +81,26 @@ void CombinedGiAndLightMatrixWS2812FXDevice::assignLedToLightMatrixDE(
   }
 }
 
+void CombinedGiAndLightMatrixWS2812FXDevice::assignCustomLed(uint8_t number,
+                                                             int16_t led,
+                                                             uint32_t color) {
+  // Custom LEDs have numbers >= 100.
+  // Attch them right behind the original matrix.
+  assignLedToLightMatrixDE(number - 100 + _LIGHT_MATRIX_SIZE, led, color);
+}
+
 void CombinedGiAndLightMatrixWS2812FXDevice::assignLedToFlasher(
     uint8_t number, int16_t led, uint32_t color) {
   for (int offset = 0; offset < _MAX_FLASHERS; offset++) {
     if (flasherNumber[offset] == number) {
       // Flasher already registered, add another LED to it.
       for (int i = 0; i < _MAX_LEDS_PER_LIGHT; i++) {
-        if (ledLightMatrixPositions[_LIGHT_MATRIX_SIZE + offset][i] == -1) {
-          ledLightMatrixPositions[_LIGHT_MATRIX_SIZE + offset][i] = led;
-          ledLightMatrixColors[_LIGHT_MATRIX_SIZE + offset][i] = color;
+        if (ledLightMatrixPositions[_LIGHT_MATRIX_SIZE + _MAX_CUSTOM_LEDS +
+                                    offset][i] == -1) {
+          ledLightMatrixPositions[_LIGHT_MATRIX_SIZE + _MAX_CUSTOM_LEDS +
+                                  offset][i] = led;
+          ledLightMatrixColors[_LIGHT_MATRIX_SIZE + _MAX_CUSTOM_LEDS + offset]
+                              [i] = color;
           return;
         }
       }
@@ -98,12 +109,12 @@ void CombinedGiAndLightMatrixWS2812FXDevice::assignLedToFlasher(
   }
 
   // Flasher not yet registered, find a free slot.
-  for (int f = _MAX_LEDS_PER_LIGHT; f < _MAX_LEDS_PER_LIGHT + _MAX_FLASHERS;
-       f++) {
+  for (int f = _LIGHT_MATRIX_SIZE + _MAX_CUSTOM_LEDS;
+       f < (_LIGHT_MATRIX_SIZE + _MAX_CUSTOM_LEDS + _MAX_FLASHERS); f++) {
     if (ledLightMatrixPositions[f][0] == -1) {
       ledLightMatrixPositions[f][0] = led;
       ledLightMatrixColors[f][0] = color;
-      flasherNumber[_MAX_LEDS_PER_LIGHT - f] = number;
+      flasherNumber[f - (_LIGHT_MATRIX_SIZE + _MAX_CUSTOM_LEDS)] = number;
       return;
     }
   }
@@ -210,16 +221,15 @@ void CombinedGiAndLightMatrixWS2812FXDevice::handleEvent(Event *event) {
         // We start at "0", not "1".
         --number;
       } else {
-        number = 255;
         for (int offset = 0; offset < _MAX_FLASHERS; offset++) {
           if (flasherNumber[offset] == number) {
-            number = _LIGHT_MATRIX_SIZE + offset;
+            number = _LIGHT_MATRIX_SIZE + _MAX_CUSTOM_LEDS + offset;
             break;
           }
         }
 
-        if (number == 255) {
-          // The solenoid isn't a registered falsher.
+        if (number < (_LIGHT_MATRIX_SIZE + _MAX_CUSTOM_LEDS)) {
+          // The solenoid isn't a registered flasher.
           return;
         }
       }
@@ -325,7 +335,8 @@ void CombinedGiAndLightMatrixWS2812FXDevice::updateAfterGlow() {
     }
   }
 
-  for (uint8_t number = 0; number < _LIGHT_MATRIX_SIZE + _MAX_FLASHERS;
+  for (uint8_t number = 0;
+       number < _LIGHT_MATRIX_SIZE + _MAX_CUSTOM_LEDS + _MAX_FLASHERS;
        number++) {
     uint8_t glowBrightness;
     if (heatUp[number] > 0) {

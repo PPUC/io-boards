@@ -43,9 +43,6 @@ EffectsController::createCombinedGiAndLightMatrixWs2812FXDevice(int port) {
   ws2812FXDevices[port][0] = giAndLightMatrix;
   delete ws2812FXDevice;
 
-  _eventDispatcher->addListener(giAndLightMatrix, EVENT_SOURCE_GI);
-  _eventDispatcher->addListener(giAndLightMatrix, EVENT_SOURCE_LIGHT);
-
   return giAndLightMatrix;
 }
 
@@ -232,7 +229,12 @@ void EffectsController::handleEvent(ConfigEvent *event) {
                                             config_color);
                   break;
                 case LED_TYPE_LAMP:
-                  if (platform == PLATFORM_WPC) {
+                  if (config_number >= 100) {
+                    ((CombinedGiAndLightMatrixWS2812FXDevice *)
+                         ws2812FXDevices[0][0])
+                        ->assignCustomLed(config_number, config_ledNumber,
+                                          config_color);
+                  } else if (platform == PLATFORM_WPC) {
                     ((CombinedGiAndLightMatrixWS2812FXDevice *)
                          ws2812FXDevices[0][0])
                         ->assignLedToLightMatrixWPC(

@@ -1,47 +1,55 @@
 /*
   CombinedGiAndLightMatrixWS2812FXDevice.h
-  Created by Markus Kalkbrenner, 2021 - 2023.
+  Created by Markus Kalkbrenner, 2021 - 2024.
+
+   WPC matrix numbering:
+
+      | C1 | C2 | C3 | C4 | C5 | C6 | C7 | C8
+   ---+----+----+----+----+----+----+----+----
+   R1 | 11 | 21 | 31 | 41 | 51 | 61 | 71 | 81
+   ---+----+----+----+----+----+----+----+----
+   R2 | 12 | 22 | 32 | 42 | 52 | 62 | 72 | 82
+   ---+----+----+----+----+----+----+----+----
+   R3 | 13 | 23 | 33 | 43 | 53 | 63 | 73 | 83
+   ---+----+----+----+----+----+----+----+----
+   R4 | 14 | 24 | 34 | 44 | 54 | 64 | 74 | 84
+   ---+----+----+----+----+----+----+----+----
+   R5 | 15 | 25 | 35 | 45 | 55 | 65 | 75 | 85
+   ---+----+----+----+----+----+----+----+----
+   R6 | 16 | 26 | 36 | 46 | 56 | 66 | 76 | 86
+   ---+----+----+----+----+----+----+----+----
+   R7 | 17 | 27 | 37 | 47 | 57 | 67 | 77 | 87
+   ---+----+----+----+----+----+----+----+----
+   R8 | 18 | 28 | 38 | 48 | 58 | 68 | 78 | 88
+
+   DE and SYS4-SYS11 matrix numbering:
+
+      | C1 | C2 | C3 | C4 | C5 | C6 | C7 | C8
+   ---+----+----+----+----+----+----+----+----
+   R1 |  1 |  9 | 17 | 25 | 33 | 41 | 49 | 57
+   ---+----+----+----+----+----+----+----+----
+   R2 |  2 | 10 | 18 | 26 | 34 | 42 | 50 | 58
+   ---+----+----+----+----+----+----+----+----
+   R3 |  3 | 11 | 19 | 27 | 35 | 43 | 51 | 59
+   ---+----+----+----+----+----+----+----+----
+   R4 |  4 | 12 | 20 | 28 | 36 | 44 | 52 | 60
+   ---+----+----+----+----+----+----+----+----
+   R5 |  5 | 13 | 21 | 29 | 37 | 45 | 53 | 61
+   ---+----+----+----+----+----+----+----+----
+   R6 |  6 | 14 | 22 | 30 | 38 | 46 | 54 | 62
+   ---+----+----+----+----+----+----+----+----
+   R7 |  7 | 15 | 23 | 31 | 39 | 47 | 55 | 63
+   ---+----+----+----+----+----+----+----+----
+  R8 |  8 | 16 | 24 | 32 | 40 | 48 | 56 | 64
+
+  In order to ease the AfterGlow handling and to avoid long iterations across
+  arrays and to reduce the numer of addressable LED strings, we extend the
+  original Lamp Matrix.
+  The internal numbering of any matrix is 0 to 63. Starting at position 64 we
+  add custom LEDs which are added to the playfield and which are not part of the
+  original matrix. The amount of custom LEDs is limited by _MAX_CUSTOM_LEDS.
+  Flashers are added to the matrix at position (63 + _MAX_CUSTOM_LEDS).
 */
-
-// WPC matrix numbering:
-//
-//    | C1 | C2 | C3 | C4 | C5 | C6 | C7 | C8
-// ---+----+----+----+----+----+----+----+----
-// R1 | 11 | 21 | 31 | 41 | 51 | 61 | 71 | 81
-// ---+----+----+----+----+----+----+----+----
-// R2 | 12 | 22 | 32 | 42 | 52 | 62 | 72 | 82
-// ---+----+----+----+----+----+----+----+----
-// R3 | 13 | 23 | 33 | 43 | 53 | 63 | 73 | 83
-// ---+----+----+----+----+----+----+----+----
-// R4 | 14 | 24 | 34 | 44 | 54 | 64 | 74 | 84
-// ---+----+----+----+----+----+----+----+----
-// R5 | 15 | 25 | 35 | 45 | 55 | 65 | 75 | 85
-// ---+----+----+----+----+----+----+----+----
-// R6 | 16 | 26 | 36 | 46 | 56 | 66 | 76 | 86
-// ---+----+----+----+----+----+----+----+----
-// R7 | 17 | 27 | 37 | 47 | 57 | 67 | 77 | 87
-// ---+----+----+----+----+----+----+----+----
-// R8 | 18 | 28 | 38 | 48 | 58 | 68 | 78 | 88
-
-// DE and SYS11 matrix numbering:
-//
-//    | C1 | C2 | C3 | C4 | C5 | C6 | C7 | C8
-// ---+----+----+----+----+----+----+----+----
-// R1 |  1 |  9 | 17 | 25 | 33 | 41 | 49 | 57
-// ---+----+----+----+----+----+----+----+----
-// R2 |  2 | 10 | 18 | 26 | 34 | 42 | 50 | 58
-// ---+----+----+----+----+----+----+----+----
-// R3 |  3 | 11 | 19 | 27 | 35 | 43 | 51 | 59
-// ---+----+----+----+----+----+----+----+----
-// R4 |  4 | 12 | 20 | 28 | 36 | 44 | 52 | 60
-// ---+----+----+----+----+----+----+----+----
-// R5 |  5 | 13 | 21 | 29 | 37 | 45 | 53 | 61
-// ---+----+----+----+----+----+----+----+----
-// R6 |  6 | 14 | 22 | 30 | 38 | 46 | 54 | 62
-// ---+----+----+----+----+----+----+----+----
-// R7 |  7 | 15 | 23 | 31 | 39 | 47 | 55 | 63
-// ---+----+----+----+----+----+----+----+----
-// R8 |  8 | 16 | 24 | 32 | 40 | 48 | 56 | 64
 
 #ifndef CombinedGiAndLightMatrixWS2812FXDevice_h
 #define CombinedGiAndLightMatrixWS2812FXDevice_h
@@ -58,6 +66,7 @@
 #define _MAX_LEDS_GI_STRING 50
 #define _LIGHT_MATRIX_SIZE 64
 #define _MAX_LEDS_PER_LIGHT 3
+#define _MAX_CUSTOM_LEDS 12
 #define _MAX_FLASHERS 12
 
 class CombinedGiAndLightMatrixWS2812FXDevice : public WS2812FXDevice,
@@ -76,7 +85,8 @@ class CombinedGiAndLightMatrixWS2812FXDevice : public WS2812FXDevice,
         ledGIPositions[number][i] = -1;
       }
     }
-    for (int number = 0; number < _LIGHT_MATRIX_SIZE + _MAX_FLASHERS;
+    for (int number = 0;
+         number < (_LIGHT_MATRIX_SIZE + _MAX_CUSTOM_LEDS + _MAX_FLASHERS);
          number++) {
       for (int i = 0; i < _MAX_LEDS_PER_LIGHT; i++) {
         ledLightMatrixPositions[number][i] = -1;
@@ -109,6 +119,8 @@ class CombinedGiAndLightMatrixWS2812FXDevice : public WS2812FXDevice,
   void assignLedToLightMatrixSYS11(uint8_t number, int16_t led);
   void assignLedToLightMatrixSYS11(uint8_t number, int16_t led, uint32_t color);
 
+  void assignCustomLed(uint8_t number, int16_t led, uint32_t color);
+
   void assignLedToFlasher(uint8_t number, int16_t led, uint32_t color);
 
   void setDimmedPixelColor(int16_t led, uint32_t color, uint8_t brightness);
@@ -133,10 +145,10 @@ class CombinedGiAndLightMatrixWS2812FXDevice : public WS2812FXDevice,
 
   // Internally we store the positions in Data East numbering from 1 to 64.
   // The WPC-specific functions convert the WPC-specific numbering.
-  int16_t ledLightMatrixPositions[_LIGHT_MATRIX_SIZE + _MAX_FLASHERS]
-                                 [_MAX_LEDS_PER_LIGHT] = {{0}};
-  uint32_t ledLightMatrixColors[_LIGHT_MATRIX_SIZE + _MAX_FLASHERS]
-                               [_MAX_LEDS_PER_LIGHT] = {{0}};
+  int16_t ledLightMatrixPositions[_LIGHT_MATRIX_SIZE + _MAX_CUSTOM_LEDS +
+                                  _MAX_FLASHERS][_MAX_LEDS_PER_LIGHT] = {{0}};
+  uint32_t ledLightMatrixColors[_LIGHT_MATRIX_SIZE + _MAX_CUSTOM_LEDS +
+                                _MAX_FLASHERS][_MAX_LEDS_PER_LIGHT] = {{0}};
 
   uint8_t flasherNumber[_MAX_FLASHERS] = {0};
 
@@ -152,8 +164,9 @@ class CombinedGiAndLightMatrixWS2812FXDevice : public WS2812FXDevice,
   int16_t msAfterGlow = 0;
   uint32_t heatUpGI[NUM_GI_STRINGS] = {0};
   uint32_t afterGlowGI[NUM_GI_STRINGS] = {0};
-  uint32_t heatUp[_LIGHT_MATRIX_SIZE + _MAX_FLASHERS] = {0};
-  uint32_t afterGlow[_LIGHT_MATRIX_SIZE + _MAX_FLASHERS] = {0};
+  uint32_t heatUp[_LIGHT_MATRIX_SIZE + _MAX_CUSTOM_LEDS + _MAX_FLASHERS] = {0};
+  uint32_t afterGlow[_LIGHT_MATRIX_SIZE + _MAX_CUSTOM_LEDS + _MAX_FLASHERS] = {
+      0};
 };
 
 #endif
