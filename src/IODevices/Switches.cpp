@@ -22,19 +22,19 @@ void Switches::resetStatefulPort(byte p) {
   // Set mid power output as input.
   pinMode(p, OUTPUT);
   digitalWrite(p, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(p, LOW);
-  delayMicroseconds(10);
   pinMode(p, INPUT);
 }
 
 void Switches::reset() {
   for (uint8_t i = 0; i < MAX_SWITCHES; i++) {
+    if (stateful[i]) resetStatefulPort(port[i]);
+  }
+
+  for (uint8_t i = 0; i < MAX_SWITCHES; i++) {
     port[i] = 0;
     number[i] = 0;
     state[i] = 0;
     toggled[i] = false;
-    if (stateful[i]) resetStatefulPort(i);
     stateful[i] = false;
   }
 
@@ -59,7 +59,6 @@ void Switches::update() {
           // flippers, kick backs, jets and sling shots.
           _eventDispatcher->dispatch(new Event(
               EVENT_SOURCE_SWITCH, word(0, number[i]), state[i], true));
-          if (stateful[i]) resetStatefulPort(i);
         }
       }
     }
@@ -75,6 +74,7 @@ void Switches::handleEvent(Event *event) {
         _ms = millis();
         for (int i = 0; i <= last; i++) {
           toggled[i] = false;
+          if (stateful[i]) resetStatefulPort(port[i]);
         }
       }
       break;
@@ -89,6 +89,7 @@ void Switches::handleEvent(Event *event) {
               new Event(EVENT_SOURCE_SWITCH, word(0, number[i]), state[i]));
         } else {
           toggled[i] = false;
+          if (stateful[i]) resetStatefulPort(port[i]);
         }
       }
       _ms = millis();
