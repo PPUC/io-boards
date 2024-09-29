@@ -45,6 +45,7 @@ class Switches : public EventListener {
 
   byte boardId;
   unsigned long _ms;
+  bool running = false;
 
   byte port[MAX_SWITCHES] = {0};
   byte number[MAX_SWITCHES] = {0};

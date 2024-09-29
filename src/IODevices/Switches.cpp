@@ -7,14 +7,13 @@ void Switches::registerSwitch(byte p, byte n, bool s) {
     }
 
     pinMode(p, INPUT);
-    delayMicroseconds(10);
     port[++last] = p;
     number[last] = n;
     toggled[last] = false;
     stateful[last] = s;
-    // Set the inverted value as initial state to let update() send the initial state on game start.
+    delayMicroseconds(10);
     // Note, we have active LOW!
-    state[last] = digitalRead(p);
+    state[last] = !digitalRead(p);
   }
 }
 
@@ -68,7 +67,7 @@ void Switches::update() {
 void Switches::handleEvent(Event *event) {
   switch (event->sourceId) {
     case EVENT_POLL_EVENTS:
-      if (boardId == (byte)event->value) {
+      if (running && boardId == (byte)event->value) {
         // This I/O board has been polled for events, so all current switch
         // states are transmitted. Reset switch debounce timer and toggles.
         _ms = millis();
@@ -93,6 +92,7 @@ void Switches::handleEvent(Event *event) {
         }
       }
       _ms = millis();
+      running = true;
       break;
   }
 }
