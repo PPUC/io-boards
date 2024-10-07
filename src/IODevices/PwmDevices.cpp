@@ -16,7 +16,7 @@ void PwmDevices::registerSolenoid(byte p, byte n, byte pow, uint16_t minPT,
     fastSwitch[last] = fS;
 
     pinMode(p, OUTPUT);
-    digitalWrite(p, 0);
+    analogWrite(p, 0);
     type[last++] = PWM_TYPE_SOLENOID;
   }
 }
@@ -45,12 +45,20 @@ void PwmDevices::registerLamp(byte p, byte n, byte pow) {
   }
 }
 
+void PwmDevices::off() {
+  for (uint8_t i = 0; i < last; i++) {
+    // Turn off PWM output.
+    analogWrite(port[i], 0);
+    activated[i] = 0;
+    currentPower[i] = 0;
+    scheduled[i] = 0;
+  }
+}
+
 void PwmDevices::reset() {
+  off();
+
   for (uint8_t i = 0; i < MAX_PWM_OUTPUTS; i++) {
-    if (i < last) {
-      // Turn off PWM output.
-      digitalWrite(port[i], 0);
-    }
     port[i] = 0;
     number[i] = 0;
     power[i] = 0;
@@ -61,6 +69,7 @@ void PwmDevices::reset() {
     fastSwitch[i] = 0;
     type[i] = 0;
     activated[i] = 0;
+    currentPower[i] = 0;
     scheduled[i] = 0;
   }
 
@@ -74,28 +83,31 @@ void PwmDevices::update() {
   for (byte i = 0; i < last; i++) {
     if (activated[i] > 0) {
       // The output is active.
-      uint16_t timePassed = _ms - activated[i];
+      uint32_t timePassed = _ms - activated[i];
       if ((scheduled[i] && (minPulseTime[i] > 0) &&
            (timePassed > minPulseTime[i])) ||
           ((maxPulseTime[i] > 0) && (timePassed > maxPulseTime[i]))) {
         // Deactivate the output if it is scheduled for delayed deactivation and
         // the minimum pulse time is reached. Deactivate the output if the
         // maximum pulse time is reached.
-        digitalWrite(port[i], 0);
+        analogWrite(port[i], 0);
         activated[i] = 0;
+        holdPower[i] = 0;
         scheduled[i] = false;
         CrossLinkDebugger::debug(
             "Performed scheduled deactivation of PWM device on port %d after "
             "%dms",
             port[i], timePassed);
       } else if ((holdPowerActivationTime[i] > 0) &&
+                 (currentPower[i] > holdPower[i]) &&
                  (timePassed > holdPowerActivationTime[i])) {
         // Reduce the power of the activated output if the hold power activation
         // time pased since the activation.
         analogWrite(port[i], holdPower[i]);
+        currentPower[i] = holdPower[i];
         CrossLinkDebugger::debug(
-            "Reduced power of PWM device on port %d after %dms", port[i],
-            timePassed);
+            "Reduced power of PWM device on port %d to power %d after %dms",
+            port[i], holdPower[i], timePassed);
       }
     }
   }
@@ -110,7 +122,9 @@ void PwmDevices::updateSolenoidOrFlasher(bool targetState, byte i) {
     analogWrite(port[i], power[i]);
     // Rememebr when it got activated.
     activated[i] = _ms;
-    CrossLinkDebugger::debug("Activated PWM device on port %d", port[i]);
+    currentPower[i] = power[i];
+    CrossLinkDebugger::debug("Activated PWM device on port %d with power %d",
+                             port[i], power[i]);
   } else if (!targetState && activated[i] > 0) {
     // Event received to deactivate the output.
     // Check if a minimum pulse time is configured for this output.
@@ -121,9 +135,10 @@ void PwmDevices::updateSolenoidOrFlasher(bool targetState, byte i) {
       scheduled[i] = true;
     } else {
       // Deactivate the output.
-      digitalWrite(port[i], 0);
+      analogWrite(port[i], 0);
       // Mark the output as deactivated.
       activated[i] = 0;
+      currentPower[i] = 0;
       CrossLinkDebugger::debug("Deactivated PWM device on port %d", port[i]);
     }
   }
@@ -171,9 +186,10 @@ void PwmDevices::handleEvent(Event *event) {
   } else if (powerToggled) {
     for (byte i = 0; i < last; i++) {
       // Deactivate the output.
-      digitalWrite(port[i], 0);
+      analogWrite(port[i], 0);
       // Mark the output as deactivated.
       activated[i] = 0;
+      currentPower[i] = 0;
       powerOn = false;
       CrossLinkDebugger::debug("Deactivated PWM device on port %d", port[i]);
     }

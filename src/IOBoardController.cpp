@@ -25,6 +25,10 @@ IOBoardController::IOBoardController(int cT) {
     _pwmDevices = new PwmDevices(_eventDispatcher);
     _switches = new Switches(boardId, _eventDispatcher);
     _switchMatrix = new SwitchMatrix(boardId, _eventDispatcher);
+
+    // Adjust PWM properties if needed.
+    analogWriteFreq(500);
+    analogWriteResolution(8);
   }
 }
 
@@ -38,6 +42,10 @@ void IOBoardController::update() {
     }
     if (activePwmDevices) {
       pwmDevices()->update();
+    }
+  } else {
+    if (activePwmDevices) {
+      pwmDevices()->off();
     }
   }
 

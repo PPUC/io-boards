@@ -18,7 +18,7 @@
 #endif
 
 #ifndef SWITCH_DEBOUNCE
-#define SWITCH_DEBOUNCE 5
+#define SWITCH_DEBOUNCE 2
 #endif
 
 class Switches : public EventListener {

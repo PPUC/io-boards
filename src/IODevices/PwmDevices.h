@@ -18,13 +18,10 @@
 class PwmDevices : public HighPowerOffAware {
  public:
   // Constructor
-  PwmDevices(EventDispatcher *eventDispatcher): HighPowerOffAware(eventDispatcher) {
+  PwmDevices(EventDispatcher *eventDispatcher)
+      : HighPowerOffAware(eventDispatcher) {
     eventDispatcher->addListener(this, EVENT_SOURCE_LIGHT);
-
-    // Adjust PWM properties if needed.
-    // analogWriteFreq(5000);
-    // analogWriteRange(65535);
-    // analogWriteResolution(16);
+    // Listening to solenoids and switches is added in HighPowerOffAware().
   }
 
   void registerSolenoid(byte p, byte n, byte pow, uint16_t minPT,
@@ -33,12 +30,13 @@ class PwmDevices : public HighPowerOffAware {
   void registerLamp(byte p, byte n, byte pow);
 
   void update();
+  void off();
   void reset();
 
   void handleEvent(Event *event);
 
  private:
-  unsigned long _ms;
+  uint32_t _ms;
 
   byte port[MAX_PWM_OUTPUTS] = {0};
   byte number[MAX_PWM_OUTPUTS] = {0};
@@ -49,7 +47,8 @@ class PwmDevices : public HighPowerOffAware {
   uint16_t holdPowerActivationTime[MAX_PWM_OUTPUTS] = {0};
   byte fastSwitch[MAX_PWM_OUTPUTS] = {0};
   byte type[MAX_PWM_OUTPUTS] = {0};
-  unsigned long activated[MAX_PWM_OUTPUTS] = {0};
+  uint32_t activated[MAX_PWM_OUTPUTS] = {0};
+  byte currentPower[MAX_PWM_OUTPUTS] = {0};
   bool scheduled[MAX_PWM_OUTPUTS] = {0};
   byte last = 0;
 

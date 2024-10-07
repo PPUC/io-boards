@@ -5,10 +5,26 @@
 #include "EffectsController.h"
 #include "EventDispatcher/CrossLinkDebugger.h"
 #include "IOBoardController.h"
+#include "RPi_Pico_TimerInterrupt.h"
 
 IOBoardController ioBoardController(CONTROLLER_16_8_1);
+
 // Platform will be adjusted by ConfigEvent.
 EffectsController effectsController(CONTROLLER_16_8_1, PLATFORM_LIBPINMAME);
+
+RPI_PICO_Timer ITimer(1);
+
+volatile uint32_t watchdog_ms = millis();
+
+// Turn off all High Power Outputs in case the main loop has not finished in 1
+// second (or 2 seconds in edge cases).
+bool watchdog(struct repeating_timer *t) {
+  if ((millis() - watchdog_ms) > 1000) {
+    for (int i = 19; i <= 26; i++) digitalWrite(i, LOW);
+  }
+
+  return true;
+}
 
 bool usb_debugging = false;
 bool core_0_initilized = false;
@@ -51,6 +67,13 @@ void setup() {
   // https://community.platformio.org/t/serial-monitor-not-working/1512/25
   while (!Serial1) {
   }
+
+  // The watchdog interferes with the USB debuging.
+  if (!usb_debugging) {
+    if (!ITimer.attachInterruptInterval(1000000, watchdog)) {
+      // @todo
+    }
+  }
 }
 
 void setup1() {
@@ -68,6 +91,9 @@ void setup1() {
   effectsController.start();
 }
 
-void loop() { ioBoardController.update(); }
+void loop() {
+  watchdog_ms = millis();
+  ioBoardController.update();
+}
 
 void loop1() { effectsController.update(); }
