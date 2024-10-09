@@ -417,6 +417,7 @@ class EffectsController : public EventListener {
   byte boardId = 255;
   byte config_port = 0;
   byte config_type = 0;
+  byte config_brightness = 50;
   neoPixelType config_neoPixelType = 0;
   byte config_amount = 0;
   byte config_afterGlow = 0;

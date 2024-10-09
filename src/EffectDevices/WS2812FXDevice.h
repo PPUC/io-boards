@@ -72,7 +72,7 @@ class WS2812FXDevice : public EffectDevice {
   int firstSegment;
   int lastSegment;
 
-  byte brightness = 64;
+  byte brightness = 50;
 
   bool stopped = true;
   bool afterGlowSupport = false;

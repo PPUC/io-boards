@@ -158,9 +158,13 @@ void EffectsController::handleEvent(ConfigEvent *event) {
             config_neoPixelType = 0;
             config_amount = 0;
             config_afterGlow = 0;
+            config_brightness = 50;
             break;
           case CONFIG_TOPIC_TYPE:
             config_neoPixelType = (neoPixelType)event->value;
+            break;
+          case CONFIG_TOPIC_BRIGHTNESS:
+            config_brightness = event->value;
             break;
           case CONFIG_TOPIC_AMOUNT_LEDS:
             config_amount = event->value;
@@ -180,7 +184,7 @@ void EffectsController::handleEvent(ConfigEvent *event) {
               ws2812FXDeviceCounters[0] = 1;
 
               // Brightness might be overwritten later.
-              // ws2812FXDevices[0][0]->setBrightness(WS2812FX_BRIGHTNESS);
+              ws2812FXDevices[0][0]->setBrightness(config_brightness);
               // "off" means no effects, standard operation mode.
               ws2812FXDevices[0][0]->off();
               if (config_heatUp > 0) {
