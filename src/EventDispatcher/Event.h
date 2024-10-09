@@ -8,6 +8,9 @@
 
 #include <inttypes.h>
 
+// microseconds
+#define RS485_MODE_SWITCH_DELAY 50
+
 #define EVENT_SOURCE_ANY 42     // "*"
 #define EVENT_SOURCE_DEBUG 66   // "B" Debug
 #define EVENT_CONFIGURATION 67  // "C" Configure I/O

@@ -15,11 +15,13 @@ EffectsController effectsController(CONTROLLER_16_8_1, PLATFORM_LIBPINMAME);
 RPI_PICO_Timer ITimer(1);
 
 volatile uint32_t watchdog_ms = millis();
+volatile uint32_t lastPoll_ms = millis();
 
 // Turn off all High Power Outputs in case the main loop has not finished in 1
 // second (or 2 seconds in edge cases).
 bool watchdog(struct repeating_timer *t) {
-  if ((millis() - watchdog_ms) > 1000) {
+  uint32_t ms = millis();
+  if ((ms - watchdog_ms) > 1000 || (ms - lastPoll_ms) > 3000) {
     for (int i = 19; i <= 26; i++) digitalWrite(i, LOW);
   }
 
@@ -94,6 +96,7 @@ void setup1() {
 void loop() {
   watchdog_ms = millis();
   ioBoardController.update();
+  lastPoll_ms = ioBoardController.eventDispatcher()->getLastPoll();
 }
 
 void loop1() { effectsController.update(); }

@@ -50,6 +50,8 @@ class EventDispatcher {
 
   void update();
 
+  uint32_t getLastPoll();
+
  private:
   void callListeners(Event* event, int sender, bool flush);
 
@@ -68,6 +70,8 @@ class EventDispatcher {
   int rs485Pin = 0;
   byte board = 255;
   bool error = false;
+  uint32_t lastPoll;
+  bool running = false;
 
   bool multiCore = false;
   int crossLink = -1;

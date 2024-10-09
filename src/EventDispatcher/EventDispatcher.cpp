@@ -230,7 +230,7 @@ void EventDispatcher::update() {
                     if (rs485) {
                       digitalWrite(rs485Pin, HIGH);  // Write.
                       // Wait until the RS485 converter switched to write mode.
-                      delayMicroseconds(500);
+                      delayMicroseconds(RS485_MODE_SWITCH_DELAY);
                     }
 
                     for (int k = 0; k <= stackCounter; k++) {
@@ -248,15 +248,20 @@ void EventDispatcher::update() {
                     callListeners(new Event(EVENT_NULL, 1, board),
                                   MAX_CROSS_LINKS, true);
 
+                    lastPoll = millis();
+
                     if (rs485) {
                       // Flush the serial buffer and wait until done.
                       hwSerial[i]->flush();
                       digitalWrite(rs485Pin, LOW);  // Read.
                       // Wait until the RS485 converter switched back to read
                       // mode.
-                      delayMicroseconds(200);
+                      delayMicroseconds(RS485_MODE_SWITCH_DELAY);
                     }
+                  } else if (sourceId == EVENT_RUN) {
+                    running = true;
                   }
+
                 } else {
 #if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
                   if (Serial) {
@@ -348,4 +353,10 @@ void EventDispatcher::update() {
     }
   }
 #endif
+}
+
+uint32_t EventDispatcher::getLastPoll() {
+  if (running) return lastPoll;
+
+  return millis();
 }
