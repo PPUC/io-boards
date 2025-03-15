@@ -29,6 +29,15 @@ class WavePWMDevice : public EffectDevice, public HighPowerOffAware {
     pinMode(pin, OUTPUT);
   }
 
+  WavePWMDevice(int pin, uint8_t maxPWM, EventDispatcher* eventDispatcher)
+      : HighPowerOffAware(eventDispatcher) {
+    this->wavePWM = new WavePWM();
+    this->pin = pin;
+    // A hard limit, for example to run a 12V motor at 48V, maxPWM has to be 63.
+    this->pwmLimitFactor = maxPWM / 255;
+    pinMode(pin, OUTPUT);
+  }
+
   void on();
 
   void reset();
@@ -46,6 +55,7 @@ class WavePWMDevice : public EffectDevice, public HighPowerOffAware {
 
   int pin;
   uint8_t currentPWM = 0;
+  float pwmLimitFactor = 1.0;
 };
 
 #endif

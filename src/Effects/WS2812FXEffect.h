@@ -37,6 +37,28 @@ class WS2812FXEffect : public Effect {
     this->duration = duration;
   }
 
+  WS2812FXEffect(uint8_t segment, uint8_t mode, uint32_t color, uint16_t speed,
+                 uint8_t options, int duration = 0) {
+    this->segment = segment;
+    this->mode = mode;
+    this->colors[0] = color;
+    this->speed = speed;
+    this->options = options;
+    this->duration = duration;
+  }
+
+  WS2812FXEffect(uint8_t segment, uint8_t mode, const uint32_t colors[],
+                 uint16_t speed, uint8_t options, int duration = 0) {
+    this->segment = segment;
+    this->mode = mode;
+    this->colors[0] = colors[0];
+    this->colors[1] = colors[1];
+    this->colors[2] = colors[2];
+    this->speed = speed;
+    this->options = options;
+    this->duration = duration;
+  }
+
   virtual void setDevice(EffectDevice* effectDevice);
 
   virtual void start(int repeat = 0);
@@ -55,6 +77,7 @@ class WS2812FXEffect : public Effect {
 
  protected:
   WS2812FX* ws2812FX;
+  uint8_t segment = 255;
   uint8_t mode;
   uint32_t colors[3] = {0, 0, 0};
   uint16_t speed;

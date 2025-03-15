@@ -35,39 +35,57 @@
 #define EVENT_NO_ERROR 98         // NO ERROR
 #define EVENT_ERROR 99            // ERROR
 
-#define CONFIG_TOPIC_PLATFORM 102                // "f"
-#define CONFIG_TOPIC_LED_STRING 103              // "g"
-#define CONFIG_TOPIC_LAMPS 108                   // "l"
-#define CONFIG_TOPIC_MECHS 109                   // "m"
-#define CONFIG_TOPIC_PWM 112                     // "p"
-#define CONFIG_TOPIC_COIN_DOOR_CLOSED_SWITCH 113 // "q"
-#define CONFIG_TOPIC_GAME_ON_SOLENOID 114        // "r"
-#define CONFIG_TOPIC_SWITCHES 115                // "s"
-#define CONFIG_TOPIC_SWITCH_MATRIX 120           // "x"
+#define CONFIG_TOPIC_PLATFORM 102                 // "f"
+#define CONFIG_TOPIC_LED_STRING 103               // "g"
+#define CONFIG_TOPIC_LED_SEGMENT 104              // "h"
+#define CONFIG_TOPIC_LED_EFFECT 105               // "i"
+#define CONFIG_TOPIC_PWM_EFFECT 106               // "j"
+#define CONFIG_TOPIC_LAMPS 108                    // "l"
+#define CONFIG_TOPIC_MECHS 109                    // "m"
+#define CONFIG_TOPIC_PWM 112                      // "p"
+#define CONFIG_TOPIC_COIN_DOOR_CLOSED_SWITCH 113  // "q"
+#define CONFIG_TOPIC_GAME_ON_SOLENOID 114         // "r"
+#define CONFIG_TOPIC_SWITCHES 115                 // "s"
+#define CONFIG_TOPIC_TRIGGER 116                  // "t"
+#define CONFIG_TOPIC_SWITCH_MATRIX 120            // "x"
 
 #define CONFIG_TOPIC_HOLD_POWER_ACTIVATION_TIME 65  // "A"
+#define CONFIG_TOPIC_DURATION 65                    // "A"
+#define CONFIG_TOPIC_VALUE 65                       // "A"
 #define CONFIG_TOPIC_BRIGHTNESS 66                  // "B"
+#define CONFIG_TOPIC_REVERSE 66                     // "B"
 #define CONFIG_TOPIC_COLOR 67                       // "C"
 #define CONFIG_TOPIC_FAST_SWITCH 70                 // "F"
+#define CONFIG_TOPIC_FREQUENCY 70                   // "F"
 #define CONFIG_TOPIC_AFTER_GLOW 71                  // "G"
 #define CONFIG_TOPIC_HOLD_POWER 72                  // "H"
 #define CONFIG_TOPIC_LED_NUMBER 76                  // "L"
-#define CONFIG_TOPIC_MAX_PULSE_TIME 77              // "M"
+#define CONFIG_TOPIC_MIN_PULSE_TIME 77              // "M"
+#define CONFIG_TOPIC_FROM 77                        // "M"
+#define CONFIG_TOPIC_MIN_INTENSITY 77               // "M"
 #define CONFIG_TOPIC_NUMBER 78                      // "N"
 #define CONFIG_TOPIC_AMOUNT_LEDS 79                 // "O"
 #define CONFIG_TOPIC_PORT 80                        // "P"
-#define CONFIG_TOPIC_MAX_PULSE_TIME 77              // "M"
-#define CONFIG_TOPIC_MIN_PULSE_TIME 84              // "T"
+#define CONFIG_TOPIC_SPEED 83                       // "S"
+#define CONFIG_TOPIC_SOURCE 83                      // "S"
+#define CONFIG_TOPIC_MAX_PULSE_TIME 84              // "T"
+#define CONFIG_TOPIC_TO 84                          // "T"
+#define CONFIG_TOPIC_MAX_INTENSITY 84               // "T"
 #define CONFIG_TOPIC_LIGHT_UP 85                    // "U"
 #define CONFIG_TOPIC_ACTIVE_LOW 86                  // "V"
 #define CONFIG_TOPIC_POWER 87                       // "W"
 #define CONFIG_TOPIC_TYPE 89                        // "Y"
+#define CONFIG_TOPIC_EFFECT 89                      // "Y"
+#define CONFIG_TOPIC_MODE 90                        // "Z"
+#define CONFIG_TOPIC_PRIORITY 91                    //
+#define CONFIG_TOPIC_REPEAT 92                      //
 #define CONFIG_TOPIC_NULL 99                        // NULL
 
 #define PWM_TYPE_SOLENOID 1  // Coil
 #define PWM_TYPE_FLASHER 2   // Flasher
 #define PWM_TYPE_LAMP 3      // Lamp
-#define PWM_TYPE_SHAKER 4    // Shaker
+#define PWM_TYPE_MOTOR 4     // Motor
+#define PWM_TYPE_SHAKER 5    // Shaker
 
 #define LED_TYPE_GI 1       // GI
 #define LED_TYPE_FLASHER 2  // Flasher
@@ -75,6 +93,10 @@
 
 #define MATRIX_TYPE_COLUMN 1  // Column
 #define MATRIX_TYPE_ROW 2     // Row
+
+#define PWM_EFFECT_SINE 1
+#define PWM_EFFECT_RAMP_DOWN_STOP 2
+#define PWM_EFFECT_IMPULSE 3
 
 struct Event {
   uint8_t sourceId;

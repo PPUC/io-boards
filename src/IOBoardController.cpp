@@ -189,6 +189,12 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
                 _pwmDevices->registerLamp((byte)port, number, power);
                 activePwmDevices = true;
                 break;
+              case PWM_TYPE_MOTOR:  // Motor
+                // @todo
+                break;
+              case PWM_TYPE_SHAKER:  // Shaker
+                // Shaker is handled by the EffectController.
+                break;
             }
             break;
         }

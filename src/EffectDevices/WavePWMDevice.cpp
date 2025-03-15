@@ -8,7 +8,7 @@ void WavePWMDevice::reset() { setPWM(0); }
 
 void WavePWMDevice::setPWM(uint8_t pwm) {
   if (powerOn && coinDoorClosed) {
-    analogWrite(pin, pwm);
+    analogWrite(pin, (int)(pwm * pwmLimitFactor));
   }
   currentPWM = pwm;
 }
