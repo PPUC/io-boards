@@ -42,10 +42,15 @@ jobs:
                 python -m pip install --upgrade pip
                 pip install --upgrade platformio
 
-            - name: Install elf2uf2 (from pico-tools)
+            - name: Build elf2uf2 from source
               run: |
-                sudo apt update
-                sudo apt install -y pico-sdk-tools  # Installs elf2uf2
+                sudo apt update && sudo apt install -y cmake gcc-arm-none-eabi libnewlib-arm-none-eabi
+                git clone --depth=1 https://github.com/raspberrypi/pico-sdk.git
+                cd pico-sdk/tools/elf2uf2
+                mkdir build && cd build
+                cmake ..
+                make
+                sudo cp elf2uf2 /usr/local/bin/
 
             - name: Run PlatformIO
               run: |
