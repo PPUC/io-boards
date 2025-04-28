@@ -45,15 +45,12 @@ jobs:
             - name: Build elf2uf2 from source
               run: |
                 sudo apt update && sudo apt install -y cmake gcc-arm-none-eabi libnewlib-arm-none-eabi
-                git clone --depth=1 https://github.com/raspberrypi/pico-sdk.git
-                cd pico-sdk
-                git submodule update --init
-                mkdir -p build
-                cd build
-                cmake ..
-                make elf2uf2
-                sudo cp tools/elf2uf2/elf2uf2 /usr/local/bin/
-                which elf2uf2
+                git clone https://github.com/ckormanyos/elf2uf2.git
+                cd elf2uf2
+                make all
+                sudo cp bin/elf2uf2 /usr/local/bin/
+                cd ..
+
             - name: Run PlatformIO
               run: |
                 cd test/${{ matrix.controller }}
