@@ -11,6 +11,7 @@ jobs:
         runs-on: ubuntu-latest
 
         strategy:
+            fail-fast: false
             matrix:
                 controller: ['EffectController', 'EffectControllerPico', 'InputController', 'IO_16_8_1', 'NanoController']
 
