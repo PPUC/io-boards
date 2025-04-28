@@ -20,31 +20,6 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - name: Checkout pico-sdk
-              uses: actions/checkout@v4
-              with:
-                repository: raspberrypi/pico-sdk
-                path: pico-sdk
-                fetch-depth: 1
-
-            - name: Checkout picotool
-              uses: actions/checkout@v4
-              with:
-                repository: raspberrypi/picotool
-                path: picotool
-                fetch-depth: 1
-
-            - name: Build and install picotool
-              run: |
-                sudo apt-get update
-                sudo apt-get install -y cmake build-essential libusb-1.0-0-dev
-                cd picotool
-                mkdir build
-                cd build
-                cmake .. -DPICO_SDK_PATH=../../pico-sdk
-                make
-                sudo cp picotool /usr/local/bin/
-
             - name: Cache pip
               uses: actions/cache@v4
               with:
@@ -77,7 +52,7 @@ jobs:
                 cd test/${{ matrix.controller }}
                 ELF_FILE=$(find .pio/build/ -name "*.elf" | head -n 1)
                 echo "Found ELF file: $ELF_FILE"
-                picotool save "${ELF_FILE}" --format uf2 --output "${ELF_FILE%.elf}.uf2"
+                ${HOME}/.platformio/packages/tool-picotool-rp2040-earlephilhower/picotool save "${ELF_FILE}" --format uf2 --output "${ELF_FILE%.elf}.uf2"
 
             - name: Upload UF2 artifact
               uses: actions/upload-artifact@v4
