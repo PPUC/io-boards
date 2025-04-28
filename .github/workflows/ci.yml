@@ -20,11 +20,19 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Checkout pico-sdk
+              uses: actions/checkout@v4
+              with:
+                repository: raspberrypi/pico-sdk
+                path: pico-sdk
+                fetch-depth: 1
+
             - name: Checkout picotool
               uses: actions/checkout@v4
               with:
                 repository: raspberrypi/picotool
                 path: picotool
+                fetch-depth: 1
 
             - name: Build and install picotool
               run: |
@@ -33,7 +41,7 @@ jobs:
                 cd picotool
                 mkdir build
                 cd build
-                cmake ..
+                cmake .. -DPICO_SDK_PATH=../../pico-sdk
                 make
                 sudo cp picotool /usr/local/bin/
 
