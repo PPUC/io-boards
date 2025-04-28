@@ -17,10 +17,10 @@ jobs:
         name: PPUC ${{ matrix.controller }}
 
         steps:
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v4
 
             - name: Cache pip
-              uses: actions/cache@v3
+              uses: actions/cache@v4
               with:
                 path: ~/.cache/pip
                 key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
@@ -28,13 +28,13 @@ jobs:
                   ${{ runner.os }}-pip-
 
             - name: Cache PlatformIO
-              uses: actions/cache@v3
+              uses: actions/cache@v4
               with:
                 path: ~/.platformio
                 key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
 
             - name: Set up Python
-              uses: actions/setup-python@v3
+              uses: actions/setup-python@v5
 
             - name: Install PlatformIO
               run: |
@@ -58,7 +58,7 @@ jobs:
 
             # New Step: Upload the UF2 as Artifact
             - name: Upload UF2 artifact
-              uses: actions/upload-artifact@v3
+              uses: actions/upload-artifact@v4
               with:
                 name: ${{ matrix.controller }}-firmware
                 path: |
