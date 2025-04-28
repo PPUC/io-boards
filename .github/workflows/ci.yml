@@ -2,9 +2,7 @@ name: PPUC CI
 
 on:
     push:
-
     pull_request:
-
     schedule:
         - cron: '0 8 * * *' # run at 08:00 UTC
 
@@ -47,3 +45,21 @@ jobs:
               run: |
                 cd test/${{ matrix.controller }}
                 pio run
+
+            # New Step: Convert ELF/BIN to UF2
+            - name: Create UF2 file
+              run: |
+                cd test/${{ matrix.controller }}
+                # Find the ELF file
+                ELF_FILE=$(find .pio/build/ -name "*.elf" | head -n 1)
+                echo "Found ELF file: $ELF_FILE"
+                # Use PlatformIO's elf2uf2 tool (should be available)
+                elf2uf2 "$ELF_FILE" "${ELF_FILE%.elf}.uf2"
+
+            # New Step: Upload the UF2 as Artifact
+            - name: Upload UF2 artifact
+              uses: actions/upload-artifact@v3
+              with:
+                name: ${{ matrix.controller }}-firmware
+                path: |
+                  test/${{ matrix.controller }}/.pio/build/**/*.uf2
