@@ -42,17 +42,28 @@ jobs:
                 python -m pip install --upgrade pip
                 pip install --upgrade platformio
 
+            - name: Install elf2uf2 (Pico SDK tool)
+              run: |
+                sudo apt update && sudo apt install -y cmake gcc-arm-none-eabi
+                git clone https://github.com/raspberrypi/pico-sdk.git
+                cd pico-sdk
+                git submodule update --init
+                cd tools/elf2uf2
+                mkdir build && cd build
+                cmake .. && make
+                sudo cp elf2uf2 /usr/local/bin/
+
             - name: Run PlatformIO
               run: |
                 cd test/${{ matrix.controller }}
                 pio run
 
-            - name: Create UF2 file
+            - name: Create UF2 file (using elf2uf2)
               run: |
                 cd test/${{ matrix.controller }}
                 ELF_FILE=$(find .pio/build/ -name "*.elf" | head -n 1)
                 echo "Found ELF file: $ELF_FILE"
-                ${HOME}/.platformio/packages/tool-picotool-rp2040-earlephilhower/picotool save -f uf2 "${ELF_FILE}" "${ELF_FILE%.elf}.uf2"
+                elf2uf2 "$ELF_FILE" "${ELF_FILE%.elf}.uf2"
 
             - name: Upload UF2 artifact
               uses: actions/upload-artifact@v4
