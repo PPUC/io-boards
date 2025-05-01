@@ -6,6 +6,10 @@
 #ifndef PPUC_h
 #define PPUC_h
 
+#define FIRMWARE_VERSION_MAJOR 0  // X Digits
+#define FIRMWARE_VERSION_MINOR 1  // Max 2 Digits
+#define FIRMWARE_VERSION_PATCH 0  // Max 2 Digits
+
 #include <Arduino.h>
 
 #include "PPUCPlatforms.h"
