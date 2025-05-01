@@ -109,4 +109,5 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         with:
           draft: true
-          files: *.uf2
+          files: |
+            *.uf2
