@@ -96,7 +96,7 @@ jobs:
         with:
           name: ${{ matrix.controller }}-firmware
           path: |
-            ${{ matrix.controller }}.uf2
+            ${{ matrix.controller }}-${{ needs.version.outputs.tag }}.uf2
 
   post-build:
     runs-on: ubuntu-latest
