@@ -23,4 +23,6 @@
 
 #include <EffectDevices/Definitions.h>
 
+#define CUSTOM_LED_OFFSET 130
+
 #endif

@@ -84,9 +84,9 @@ void CombinedGiAndLightMatrixWS2812FXDevice::assignLedToLightMatrixDE(
 void CombinedGiAndLightMatrixWS2812FXDevice::assignCustomLed(uint8_t number,
                                                              int16_t led,
                                                              uint32_t color) {
-  // Custom LEDs have numbers >= 100.
+  // Custom LEDs have numbers >= CUSTOM_LED_OFFSET.
   // Attch them right behind the original matrix.
-  assignLedToLightMatrixDE(number - 100 + _LIGHT_MATRIX_SIZE, led, color);
+  assignLedToLightMatrixDE(number - CUSTOM_LED_OFFSET + _LIGHT_MATRIX_SIZE, led, color);
 }
 
 void CombinedGiAndLightMatrixWS2812FXDevice::assignLedToFlasher(
