@@ -66,12 +66,17 @@
   ---+----+----+----+----+----+----+----+----
   R10| 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80
 
-  Bally 35 is speecial. It can drive 60 lamps. But using some relays 60 differnt
-  lamps could be drived, for example used in Elektra to drive the lamps of two
-  different playfields. In libpiname that is handled by adding an offset of 60
-  to the lamp number if the relays are switched. So we have 120 lamps.
+  Bally 35 is speecial. It can drive 60 lamps. But using relays, 60 different
+  lamps could be driven, for example used in Elektra to drive the lamps of two
+  different playfields. In libpiname that is handled using a standard 8x8 matrix
+  and adding a second (virtual) 8x8 matrix. We don't see the state of the relay,
+  but get dedicated lamp numbers from 1-60 and 65-124. So lamps that get triggered
+  in combination with the relay get offset of 64 to their number. So we have 120
+  lamps out of 128.
 
-  Capcom uses two 8x8 matrix and has no GI. So we have 128 CPU-controlled lamps.
+  Capcom uses two real 8x8 matrix and has no GI. So we have 128 CPU-controlled
+  lamps.
+
   In order to ease the AfterGlow handling and to avoid long iterations across
   arrays and to reduce the number of addressable LED strings, we extend the
   original Lamp Matrix.
