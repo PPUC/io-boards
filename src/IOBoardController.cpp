@@ -25,10 +25,11 @@ IOBoardController::IOBoardController(int cT) {
     _pwmDevices = new PwmDevices(_eventDispatcher);
     _switches = new Switches(boardId, _eventDispatcher);
     _switchMatrix = new SwitchMatrix(boardId, _eventDispatcher);
-
+#if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
     // Adjust PWM properties if needed.
     analogWriteFreq(500);
     analogWriteResolution(8);
+#endif
   }
 }
 
