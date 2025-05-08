@@ -88,6 +88,7 @@
 #include <Arduino.h>
 #include <WavePWM.h>
 
+#include "../PPUC.h"
 #include "../EventDispatcher/Event.h"
 #include "../EventDispatcher/EventDispatcher.h"
 #include "../EventDispatcher/EventListener.h"
