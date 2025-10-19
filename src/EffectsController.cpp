@@ -185,7 +185,7 @@ void EffectsController::handleEvent(ConfigEvent *event) {
               ws2812FXDeviceCounters[0] = 1;
 
               // Brightness might be overwritten later.
-              //ws2812FXDevices[0][0]->setBrightness(config_values[3]);
+              ws2812FXDevices[0][0]->setBrightness(config_values[3]);
               // "off" means no effects, standard operation mode.
               ws2812FXDevices[0][0]->off();
               if (config_values[4] > 0) {
@@ -331,147 +331,144 @@ void EffectsController::handleEvent(ConfigEvent *event) {
                 break;
             }
             break;
+        }
+        break;
 
-          case CONFIG_TOPIC_LAMPS:
-            if (ws2812FXDevices[0][0]) {
-              switch (event->key) {
-                case CONFIG_TOPIC_PORT:
-                  config_values[0] = event->value;  // port
-                  config_values[1] = 0;             // type
-                  config_values[2] = 0;             // number
-                  config_values[3] = 0;             // led number
-                  config_payload = 0;               // color
+      case CONFIG_TOPIC_LAMPS:
+        if (ws2812FXDevices[0][0]) {
+          switch (event->key) {
+            case CONFIG_TOPIC_PORT:
+              config_values[0] = event->value;  // port
+              config_values[1] = 0;             // type
+              config_values[2] = 0;             // number
+              config_values[3] = 0;             // led number
+              config_payload = 0;               // color
+              break;
+            case CONFIG_TOPIC_TYPE:
+              config_values[1] = event->value;
+              break;
+            case CONFIG_TOPIC_NUMBER:
+              config_values[2] = event->value;
+              break;
+            case CONFIG_TOPIC_LED_NUMBER:
+              config_values[3] = event->value;
+              break;
+            case CONFIG_TOPIC_COLOR:
+              config_payload = event->value;
+              switch (config_values[1]) {
+                case LED_TYPE_GI:
+                  ((CombinedGiAndLightMatrixWS2812FXDevice *)
+                       ws2812FXDevices[0][0])
+                      ->assignLedToGiString(config_values[2], config_values[3],
+                                            config_payload);
                   break;
-                case CONFIG_TOPIC_TYPE:
-                  config_values[1] = event->value;
-                  break;
-                case CONFIG_TOPIC_NUMBER:
-                  config_values[2] = event->value;
-                  break;
-                case CONFIG_TOPIC_LED_NUMBER:
-                  config_values[3] = event->value;
-                  break;
-                case CONFIG_TOPIC_COLOR:
-                  config_payload = event->value;
-                  switch (config_values[1]) {
-                    case LED_TYPE_GI:
-                      ((CombinedGiAndLightMatrixWS2812FXDevice *)
-                           ws2812FXDevices[0][0])
-                          ->assignLedToGiString(config_values[2],
-                                                config_values[3],
-                                                config_payload);
-                      break;
-                    case LED_TYPE_LAMP:
-                      if (config_values[2] >= CUSTOM_LED_OFFSET) {
-                        ((CombinedGiAndLightMatrixWS2812FXDevice *)
-                             ws2812FXDevices[0][0])
-                            ->assignCustomLed(config_values[2],
-                                              config_values[3], config_payload);
-                      } else if (platform == PLATFORM_WPC) {
-                        ((CombinedGiAndLightMatrixWS2812FXDevice *)
-                             ws2812FXDevices[0][0])
-                            ->assignLedToLightMatrixWPC(config_values[2],
-                                                        config_values[3],
-                                                        config_payload);
-                      } else {
-                        ((CombinedGiAndLightMatrixWS2812FXDevice *)
-                             ws2812FXDevices[0][0])
-                            ->assignLedToLightMatrixDE(config_values[2],
-                                                       config_values[3],
-                                                       config_payload);
-                      }
-                      break;
-                    case LED_TYPE_FLASHER:
-                      ((CombinedGiAndLightMatrixWS2812FXDevice *)
-                           ws2812FXDevices[0][0])
-                          ->assignLedToFlasher(config_values[2],
-                                               config_values[3],
-                                               config_payload);
-                      break;
+                case LED_TYPE_LAMP:
+                  if (config_values[2] >= CUSTOM_LED_OFFSET) {
+                    ((CombinedGiAndLightMatrixWS2812FXDevice *)
+                         ws2812FXDevices[0][0])
+                        ->assignCustomLed(config_values[2], config_values[3],
+                                          config_payload);
+                  } else if (platform == PLATFORM_WPC) {
+                    ((CombinedGiAndLightMatrixWS2812FXDevice *)
+                         ws2812FXDevices[0][0])
+                        ->assignLedToLightMatrixWPC(
+                            config_values[2], config_values[3], config_payload);
+                  } else {
+                    ((CombinedGiAndLightMatrixWS2812FXDevice *)
+                         ws2812FXDevices[0][0])
+                        ->assignLedToLightMatrixDE(
+                            config_values[2], config_values[3], config_payload);
                   }
                   break;
-              }
-            }
-            break;
-
-          case CONFIG_TOPIC_PWM:
-            switch (event->key) {
-              case CONFIG_TOPIC_PORT:
-                config_values[0] = event->value;  // port
-                config_values[1] = 0;             // power
-              case CONFIG_TOPIC_POWER:
-                config_values[1] = event->value;
-                break;
-              case CONFIG_TOPIC_TYPE:
-                switch (event->value) {
-                  case PWM_TYPE_SHAKER:  // Shaker
-                    _shakerPWMDevice = new WavePWMDevice(
-                        config_values[0], config_values[1], _eventDispatcher);
-                    _shakerPWMDevice->off();
-                    break;
-                }
-                break;
-            }
-            break;
-
-          case CONFIG_TOPIC_PWM_EFFECT:
-            if (_shakerPWMDevice) {
-              switch (event->key) {
-                case CONFIG_TOPIC_PORT:
-                  config_values[0] = event->value;  // port
-                  config_values[1] = 0;             // duration
-                  config_values[2] = 0;             // effect
-                  config_values[3] = 0;             // frequency
-                  config_values[4] = 0;             // max intensity
-                  config_values[5] = 0;             // min intensity
-                  config_values[6] = 0;             // mode
-                  config_values[7] = 0;             // priority
-                  config_values[8] = 0;             // repeat
-                  config_payload = 0;               // color
-                  pwmEffect = nullptr;
-                  break;
-                case CONFIG_TOPIC_DURATION:
-                  config_values[1] = event->value;
-                  break;
-                case CONFIG_TOPIC_EFFECT:
-                  config_values[2] = event->value;
-                  break;
-                case CONFIG_TOPIC_FREQUENCY:
-                  config_values[3] = event->value;
-                  break;
-                case CONFIG_TOPIC_MAX_INTENSITY:
-                  config_values[4] = event->value;
-                  break;
-                case CONFIG_TOPIC_MIN_INTENSITY:
-                  config_values[5] = event->value;
-                  break;
-                case CONFIG_TOPIC_MODE:
-                  config_values[6] = event->value;
-                  break;
-                case CONFIG_TOPIC_PRIORITY:
-                  config_values[7] = event->value;
-                  break;
-                case CONFIG_TOPIC_REPEAT:
-                  config_values[8] = event->value;
-                  switch (config_values[2]) {
-                    case PWM_EFFECT_SINE:
-                      pwmEffect =
-                          new SinePWMEffect(config_values[3], config_values[1],
-                                            config_values[4], config_values[5]);
-                      break;
-                    case PWM_EFFECT_IMPULSE:
-                      pwmEffect = new ImpulsePWMEffect(config_values[3],
-                                                       config_values[4]);
-                      break;
-                    case PWM_EFFECT_RAMP_DOWN_STOP:
-                      pwmEffect = new RampDownStopPWMEffect(config_values[3]);
-                      break;
-                  }
+                case LED_TYPE_FLASHER:
+                  ((CombinedGiAndLightMatrixWS2812FXDevice *)
+                       ws2812FXDevices[0][0])
+                      ->assignLedToFlasher(config_values[2], config_values[3],
+                                           config_payload);
                   break;
               }
+              break;
+          }
+        }
+        break;
+
+      case CONFIG_TOPIC_PWM:
+        switch (event->key) {
+          case CONFIG_TOPIC_PORT:
+            config_values[0] = event->value;  // port
+            config_values[1] = 0;             // power
+          case CONFIG_TOPIC_POWER:
+            config_values[1] = event->value;
+            break;
+          case CONFIG_TOPIC_TYPE:
+            switch (event->value) {
+              case PWM_TYPE_SHAKER:  // Shaker
+                _shakerPWMDevice = new WavePWMDevice(
+                    config_values[0], config_values[1], _eventDispatcher);
+                _shakerPWMDevice->off();
+                break;
             }
             break;
         }
+        break;
+
+      case CONFIG_TOPIC_PWM_EFFECT:
+        if (_shakerPWMDevice) {
+          switch (event->key) {
+            case CONFIG_TOPIC_PORT:
+              config_values[0] = event->value;  // port
+              config_values[1] = 0;             // duration
+              config_values[2] = 0;             // effect
+              config_values[3] = 0;             // frequency
+              config_values[4] = 0;             // max intensity
+              config_values[5] = 0;             // min intensity
+              config_values[6] = 0;             // mode
+              config_values[7] = 0;             // priority
+              config_values[8] = 0;             // repeat
+              config_payload = 0;               // color
+              pwmEffect = nullptr;
+              break;
+            case CONFIG_TOPIC_DURATION:
+              config_values[1] = event->value;
+              break;
+            case CONFIG_TOPIC_EFFECT:
+              config_values[2] = event->value;
+              break;
+            case CONFIG_TOPIC_FREQUENCY:
+              config_values[3] = event->value;
+              break;
+            case CONFIG_TOPIC_MAX_INTENSITY:
+              config_values[4] = event->value;
+              break;
+            case CONFIG_TOPIC_MIN_INTENSITY:
+              config_values[5] = event->value;
+              break;
+            case CONFIG_TOPIC_MODE:
+              config_values[6] = event->value;
+              break;
+            case CONFIG_TOPIC_PRIORITY:
+              config_values[7] = event->value;
+              break;
+            case CONFIG_TOPIC_REPEAT:
+              config_values[8] = event->value;
+              switch (config_values[2]) {
+                case PWM_EFFECT_SINE:
+                  pwmEffect =
+                      new SinePWMEffect(config_values[3], config_values[1],
+                                        config_values[4], config_values[5]);
+                  break;
+                case PWM_EFFECT_IMPULSE:
+                  pwmEffect =
+                      new ImpulsePWMEffect(config_values[3], config_values[4]);
+                  break;
+                case PWM_EFFECT_RAMP_DOWN_STOP:
+                  pwmEffect = new RampDownStopPWMEffect(config_values[3]);
+                  break;
+              }
+              break;
+          }
+        }
+        break;
     }
   }
 }
