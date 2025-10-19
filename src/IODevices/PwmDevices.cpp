@@ -133,6 +133,8 @@ void PwmDevices::updateSolenoidOrFlasher(bool targetState, byte i) {
       // A minimum pulse time is configured for this output.
       // Don't deactivate it immediately but schedule its later deactivation.
       scheduled[i] = true;
+      CrossLinkDebugger::debug("Scheduled PWM device state change port %d",
+                             port[i]);
     } else {
       // Deactivate the output.
       analogWrite(port[i], 0);
