@@ -185,7 +185,7 @@ void EffectsController::handleEvent(ConfigEvent *event) {
               ws2812FXDeviceCounters[0] = 1;
 
               // Brightness might be overwritten later.
-              ws2812FXDevices[0][0]->setBrightness(config_values[3]);
+              //ws2812FXDevices[0][0]->setBrightness(config_values[3]);
               // "off" means no effects, standard operation mode.
               ws2812FXDevices[0][0]->off();
               if (config_values[4] > 0) {
@@ -340,7 +340,7 @@ void EffectsController::handleEvent(ConfigEvent *event) {
                   config_values[1] = 0;             // type
                   config_values[2] = 0;             // number
                   config_values[3] = 0;             // led number
-                  config_payload = 0;
+                  config_payload = 0;               // color
                   break;
                 case CONFIG_TOPIC_TYPE:
                   config_values[1] = event->value;
