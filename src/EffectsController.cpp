@@ -306,8 +306,8 @@ void EffectsController::handleEvent(ConfigEvent *event) {
                 if (ws1812Effect) {
                   addEffect(
                       ws1812Effect, ws2812FXDevices[0][0],
-                      new Event(config_values[0], config_values[1],
-                                config_values[2]),
+                      new Event(config_values[2], config_values[3],
+                                config_values[4]),
                       config_values[7],  // priority
                       config_values[8] == 255 ? -1
                                               : config_values[8],  // repeat
@@ -320,8 +320,8 @@ void EffectsController::handleEvent(ConfigEvent *event) {
                 if (pwmEffect) {
                   addEffect(
                       pwmEffect, _shakerPWMDevice,
-                      new Event(config_values[0], config_values[1],
-                                config_values[2]),
+                      new Event(config_values[2], config_values[3],
+                                config_values[4]),
                       config_values[7],  // priority
                       config_values[8] == 255 ? -1
                                               : config_values[8],  // repeat
