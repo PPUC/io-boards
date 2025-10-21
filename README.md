@@ -21,7 +21,7 @@ The development happens as part of the [PinMAME project](https://github.com/vpin
 
 We want to enable people to be creative and to modernize old pinball machines using today's technology. Our goal is to
 establish an open and affordable platform for that. Ideally people will publish their game-specific PPUs so others could
-leverage and potentially improve them. We want to see a growing library of PPUs and a vital homebrew pinball community.  
+leverage and potentially improve them. We want to see a growing library of PPUs and a vital homebrew pinball community.
 
 ## Concept
 
@@ -48,7 +48,7 @@ WIP
 
 ### Replacing a CPU (and drivers)
 
-WIP, see [PinMAME project](https://github.com/vpinball/pinmame/tree/master/src/ppuc).
+WIP, see [PPUC.org](https://ppuc.org).
 
 ## Licence
 
