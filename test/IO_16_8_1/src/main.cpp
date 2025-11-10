@@ -7,6 +7,10 @@
 #include "IOBoardController.h"
 #include "RPi_Pico_TimerInterrupt.h"
 
+// set to officially supported 200MHz clock
+// @see SYS_CLK_MHZ https://github.com/raspberrypi/pico-sdk/releases/tag/2.1.1
+#define SYS_CLK_MHZ 200
+
 IOBoardController ioBoardController(CONTROLLER_16_8_1);
 
 // Platform will be adjusted by ConfigEvent.
@@ -38,6 +42,9 @@ bool core_0_initilized = false;
 // both cores.
 
 void setup() {
+  // Overclock according to Raspberry Pi Pico SDK recommendations.
+  set_sys_clock_khz(SYS_CLK_MHZ * 1000, true);
+
   uint32_t timeout = millis() + 2000;
 
   Serial.begin(115200);
