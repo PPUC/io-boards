@@ -18,18 +18,14 @@ IOBoardController::IOBoardController(int cT) {
     _eventDispatcher->setRS485ModePin(2);
     _eventDispatcher->setBoard(boardId);
     _eventDispatcher->setCrossLinkSerial(Serial1);
-#if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
     _multiCoreCrossLink = new MultiCoreCrossLink();
     _eventDispatcher->setMultiCoreCrossLink(_multiCoreCrossLink);
-#endif
     _pwmDevices = new PwmDevices(_eventDispatcher);
     _switches = new Switches(boardId, _eventDispatcher);
     _switchMatrix = new SwitchMatrix(boardId, _eventDispatcher);
-#if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
     // Adjust PWM properties if needed.
     analogWriteFreq(500);
     analogWriteResolution(8);
-#endif
   }
 }
 
@@ -52,9 +48,7 @@ void IOBoardController::update() {
 
   if (resetTimer > 0 && resetTimer < millis()) {
     if (!m_debug) {
-#if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
       rp2040.reboot();
-#endif
     } else {
       resetTimer = 0;
       CrossLinkDebugger::debug(
@@ -84,9 +78,9 @@ void IOBoardController::handleEvent(Event *event) {
       _switches->reset();
       _switchMatrix->reset();
 
-      // Issue a reset of the board in 3 seconds.
-      // Core 1 should have enough time to rest it's devices.
-      resetTimer = millis() + 3000;
+      // Issue a delayed reset of the board.
+      // Core 1 should have enough time to turn off it's devices.
+      resetTimer = millis() + WAIT_FOR_EFFECT_CONTROLLER_RESET;
 
       break;
   }

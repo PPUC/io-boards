@@ -71,10 +71,6 @@ WS2812FXDevice *EffectsController::ws2812FXDevice(int port, int number) {
   return ws2812FXDevices[--port][number];
 }
 
-GeneralIlluminationWPC *EffectsController::generalIllumintationWPC() {
-  return _generalIllumintationWPC;
-}
-
 void EffectsController::addEffect(Effect *effect, EffectDevice *device,
                                   Event *event, int priority, int repeat,
                                   int mode) {
@@ -474,14 +470,6 @@ void EffectsController::handleEvent(ConfigEvent *event) {
 }
 
 void EffectsController::update() {
-  if (controllerType == CONTROLLER_MEGA_ALL_INPUT) {
-    _testButtons->update();
-  }
-
-  if (platform == PLATFORM_WPC && controllerType != CONTROLLER_16_8_1) {
-    _generalIllumintationWPC->update();
-  }
-
   _eventDispatcher->update();
 
   for (int i = 0; i <= stackCounter; i++) {

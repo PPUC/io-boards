@@ -97,7 +97,6 @@
 #include "../EventDispatcher/Event.h"
 #include "../EventDispatcher/EventDispatcher.h"
 #include "../EventDispatcher/EventListener.h"
-#include "../InputDevices/GeneralIlluminationWPC.h"
 #include "WS2812FXDevice.h"
 
 #define _MAX_LEDS_GI_STRING 50
@@ -106,6 +105,10 @@
 #define _MAX_CUSTOM_LEDS 24
 #define _MAX_FLASHERS 12
 
+// Number of WPC GI strings
+#define NUM_GI_STRINGS 5
+// Number of WPC GI brightness steps
+#define NUM_BRIGHTNESS 8
 class CombinedGiAndLightMatrixWS2812FXDevice : public WS2812FXDevice,
                                                public EventListener {
  public:

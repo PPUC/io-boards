@@ -1,15 +1,14 @@
-// Markus Kalkbrenner 2023
-
-#include <PPUC.h>
-
-#include "EffectsController.h"
-#include "EventDispatcher/CrossLinkDebugger.h"
-#include "IOBoardController.h"
-#include "RPi_Pico_TimerInterrupt.h"
+// Markus Kalkbrenner 2023-2025
 
 // set to officially supported 200MHz clock
 // @see SYS_CLK_MHZ https://github.com/raspberrypi/pico-sdk/releases/tag/2.1.1
 #define SYS_CLK_MHZ 200
+
+#include "EffectsController.h"
+#include "EventDispatcher/CrossLinkDebugger.h"
+#include "IOBoardController.h"
+#include "PPUC.h"
+#include "RPi_Pico_TimerInterrupt.h"
 
 IOBoardController ioBoardController(CONTROLLER_16_8_1);
 
@@ -43,11 +42,12 @@ bool core_0_initilized = false;
 
 void setup() {
   // Overclock according to Raspberry Pi Pico SDK recommendations.
-  set_sys_clock_khz(SYS_CLK_MHZ * 1000, true);
+  set_sys_clock_khz(SYS_CLK_KHZ, true);
 
-  uint32_t timeout = millis() + 2000;
+  uint32_t timeout = millis() + WAIT_FOR_SERIAL_DEBUGGER_TIMEOUT;
 
   Serial.begin(115200);
+  // Wait for a serial connection of a debugger via USB.
   // The Pico implements USB itself so special care must be taken. Use
   // while(!Serial){} in the setup() code before printing anything so that it
   // waits for the USB connection to be established.
@@ -60,6 +60,8 @@ void setup() {
     ioBoardController.debug();
     delay(10);
     ioBoardController.eventDispatcher()->addListener(new CrossLinkDebugger());
+  } else {
+    Serial.end();
   }
 
   core_0_initilized = true;

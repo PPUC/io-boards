@@ -67,9 +67,7 @@ class IOBoardController : public EventListener {
   uint32_t resetTimer = 0;
 
   EventDispatcher *_eventDispatcher;
-#if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
   MultiCoreCrossLink *_multiCoreCrossLink;
-#endif
 };
 
 #endif

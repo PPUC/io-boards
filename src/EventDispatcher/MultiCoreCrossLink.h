@@ -1,9 +1,7 @@
 #ifndef MULTI_CORE_CROSS_LINK_h
 #define MULTI_CORE_CROSS_LINK_h
 
-#if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
 #include <pico/util/queue.h>
-#endif
 
 #include <Arduino.h>
 
@@ -29,7 +27,6 @@ typedef struct QueuedConfigEvent {
 } ConfigEventItem;
 
 class MultiCoreCrossLink {
-#if defined(ARDUINO_ARCH_MBED_RP2040) || defined(ARDUINO_ARCH_RP2040)
  public:
   MultiCoreCrossLink() {
     if (get_core_num() == 0) {
@@ -90,7 +87,6 @@ class MultiCoreCrossLink {
  private:
   queue_t _eventQueue[2];
   queue_t _configEventQueue;
-#endif
 };
 
 #endif
