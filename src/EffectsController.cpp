@@ -359,22 +359,10 @@ void EffectsController::handleEvent(ConfigEvent *event) {
                                             config_payload);
                   break;
                 case LED_TYPE_LAMP:
-                  if (config_values[2] >= CUSTOM_LED_OFFSET) {
-                    ((CombinedGiAndLightMatrixWS2812FXDevice *)
-                         ws2812FXDevices[0][0])
-                        ->assignCustomLed(config_values[2], config_values[3],
-                                          config_payload);
-                  } else if (platform == PLATFORM_WPC) {
-                    ((CombinedGiAndLightMatrixWS2812FXDevice *)
-                         ws2812FXDevices[0][0])
-                        ->assignLedToLightMatrixWPC(
-                            config_values[2], config_values[3], config_payload);
-                  } else {
-                    ((CombinedGiAndLightMatrixWS2812FXDevice *)
-                         ws2812FXDevices[0][0])
-                        ->assignLedToLightMatrixDE(
-                            config_values[2], config_values[3], config_payload);
-                  }
+                  ((CombinedGiAndLightMatrixWS2812FXDevice *)
+                       ws2812FXDevices[0][0])
+                      ->assignLedToLightMatrix(
+                          config_values[2], config_values[3], config_payload);
                   break;
                 case LED_TYPE_FLASHER:
                   ((CombinedGiAndLightMatrixWS2812FXDevice *)

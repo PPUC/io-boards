@@ -81,12 +81,10 @@ jobs:
 
       - name: Run PlatformIO
         run: |
-          cd test/${{ matrix.controller }}
           pio run
 
       - name: Create UF2 file (using elf2uf2)
         run: |
-          cd test/${{ matrix.controller }}
           ELF_FILE=$(find .pio/build/ -name "*.elf" | head -n 1)
           echo "Found ELF file: $ELF_FILE"
           elf2uf2 "$ELF_FILE" "${ELF_FILE%.elf}.uf2"
