@@ -31,9 +31,6 @@ IOBoardController::IOBoardController(int cT) {
 
 void IOBoardController::update() {
   if (running) {
-    if (activeSwitches) {
-      switches()->update();
-    }
     if (activeSwitchMatrix) {
       switchMatrix()->update();
     }
@@ -75,7 +72,6 @@ void IOBoardController::handleEvent(Event *event) {
     case EVENT_RESET:
       // Clear all configurations or reboot the device.
       _pwmDevices->reset();
-      _switches->reset();
       _switchMatrix->reset();
 
       // Issue a delayed reset of the board.
@@ -95,10 +91,7 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
             port = event->value;
             break;
           case CONFIG_TOPIC_NUMBER:
-            // Ports 15-18 (labeled as 13-16) of IO_16_8_1 are stateful.
-            _switches->registerSwitch((byte)port, event->value,
-                                      (controllerType == CONTROLLER_16_8_1 &&
-                                       port >= 15 && port <= 18));
+            _switches->registerSwitch((byte)port, event->value);
             activeSwitches = true;
             break;
         }

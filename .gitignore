@@ -1,3 +1,4 @@
 .idea
 .pio
 .DS_Store
+*.pio.h

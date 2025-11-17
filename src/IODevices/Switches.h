@@ -12,49 +12,65 @@
 
 #include "../EventDispatcher/Event.h"
 #include "../EventDispatcher/EventDispatcher.h"
+#include "hardware/gpio.h"
+#include "hardware/pio.h"
 
-#ifndef MAX_SWITCHES
+#define SWITCHES_BASE_PIN 3
 #define MAX_SWITCHES 16
-#endif
-
-#ifndef SWITCH_DEBOUNCE
 #define SWITCH_DEBOUNCE 2
-#endif
 
 class Switches : public EventListener {
  public:
   Switches(byte bId, EventDispatcher* eD) {
     boardId = bId;
-    _ms = millis();
     _eventDispatcher = eD;
     _eventDispatcher->addListener(this, EVENT_POLL_EVENTS);
     _eventDispatcher->addListener(this, EVENT_READ_SWITCHES);
+
+    pio = pio0;
+    sm = 0;
+
+    lastStable = 0;
+    for (int i = 0; i < MAX_SWITCHES; i++) {
+      debounceTime[i] = 0;
+    }
   }
 
-  void registerSwitch(byte p, byte n, bool stateful = false);
-
-  void update();
-  void reset();
+  void registerSwitch(byte p, byte n);
 
   void handleEvent(Event* event);
 
   void handleEvent(ConfigEvent* event) {}
 
- private:
-  void resetStatefulPort(byte p);
+  void handleSwitchChanges(uint16_t raw);
 
+  PIO pio;
+  int sm;
+
+ private:
   byte boardId;
-  unsigned long _ms;
   bool running = false;
+  bool active = false;
 
   byte port[MAX_SWITCHES] = {0};
   byte number[MAX_SWITCHES] = {0};
-  bool state[MAX_SWITCHES] = {0};
-  bool toggled[MAX_SWITCHES] = {0};
-  bool stateful[MAX_SWITCHES] = {0};
   int last = -1;
 
+  uint16_t lastStable;
+  absolute_time_t debounceTime[MAX_SWITCHES];
+
   EventDispatcher* _eventDispatcher;
+
+  static Switches* instance;
+
+  static void __not_in_flash_func(onSwitchCanges)() {
+    // IRQ0 clear
+    pio0_hw->irq = 1u << 0;
+
+    // Get 16 bit from FIFO
+    uint32_t raw = pio_sm_get_blocking(instance->pio, instance->sm);
+    instance->handleSwitchChanges(raw & 0xFFFF);
+  }
 };
 
 #endif

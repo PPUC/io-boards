@@ -1,98 +1,85 @@
 #include "Switches.h"
 
-void Switches::registerSwitch(byte p, byte n, bool s) {
-  if (last < (MAX_SWITCHES - 1)) {
-    if (s) {
-      resetStatefulPort(p);
-    }
+#include "Switches.pio.h"
 
-    pinMode(p, INPUT);
+Switches* Switches::instance = nullptr;
+
+void Switches::registerSwitch(byte p, byte n) {
+  if (last < (MAX_SWITCHES - 1)) {
     port[++last] = p;
     number[last] = n;
-    toggled[last] = false;
-    stateful[last] = s;
-    delayMicroseconds(10);
-    // Note, we have active LOW!
-    state[last] = !digitalRead(p);
+    active = true;
   }
 }
 
-void Switches::resetStatefulPort(byte p) {
-  // Set mid power output as input.
-  pinMode(p, OUTPUT);
-  digitalWrite(p, HIGH);
-  pinMode(p, INPUT);
-}
+void Switches::handleSwitchChanges(uint16_t raw) {
+  absolute_time_t now = get_absolute_time();
+  uint16_t changed = raw ^ lastStable;
 
-void Switches::reset() {
-  for (uint8_t i = 0; i < MAX_SWITCHES; i++) {
-    if (stateful[i]) resetStatefulPort(port[i]);
-  }
+  for (int i = 0; i < MAX_SWITCHES; i++) {
+    uint16_t mask = 1u << i;
 
-  for (uint8_t i = 0; i < MAX_SWITCHES; i++) {
-    port[i] = 0;
-    number[i] = 0;
-    state[i] = 0;
-    toggled[i] = false;
-    stateful[i] = false;
-  }
-
-  last = -1;
-}
-
-void Switches::update() {
-  // Wait for SWITCH_DEBOUNCE milliseconds to debounce the switches. That covers
-  // the edge case that a switch was hit right before the last polling of
-  // events. After SWITCH_DEBOUNCE milliseconds every switch is allowed to
-  // toggle once until the events get polled again.
-  if (millis() - _ms >= SWITCH_DEBOUNCE) {
-    for (int i = 0; i <= last; i++) {
-      if (!toggled[i]) {
-        // Note, we have active LOW!
-        bool new_state = !digitalRead(port[i]);
-        if (new_state != state[i]) {
-          state[i] = new_state;
-          toggled[i] = true;
-          // Dispatch all switch events as "local fast".
-          // If a PWM output registered to it, we have "fast flip". Useful for
-          // flippers, kick backs, jets and sling shots.
-          _eventDispatcher->dispatch(new Event(
-              EVENT_SOURCE_SWITCH, word(0, number[i]), state[i], true));
-        }
+    if (changed & mask) {
+      // Debounce
+      if (absolute_time_diff_us(debounceTime[i], now) >=
+          SWITCH_DEBOUNCE * 1000) {
+        bool newState = !(raw & mask);  // active-low
+        debounceTime[i] = now;
+        lastStable = (lastStable & ~mask) | (newState ? mask : 0);
+        // Dispatch all switch events as "local fast".
+        // If a PWM output registered to it, we have "fast flip". Useful for
+        // flippers, kick backs, jets and sling shots.
+        _eventDispatcher->dispatch(
+            new Event(EVENT_SOURCE_SWITCH, word(0, number[i]), newState, true));
       }
     }
   }
 }
 
-void Switches::handleEvent(Event *event) {
+void Switches::handleEvent(Event* event) {
   switch (event->sourceId) {
-    case EVENT_POLL_EVENTS:
-      if (running && boardId == (byte)event->value) {
-        // This I/O board has been polled for events, so all current switch
-        // states are transmitted. Reset switch debounce timer and toggles.
-        _ms = millis();
-        for (int i = 0; i <= last; i++) {
-          toggled[i] = false;
-          if (stateful[i]) resetStatefulPort(port[i]);
-        }
-      }
-      break;
-
     case EVENT_READ_SWITCHES:
-      // The CPU requested all current states.
-      for (int i = 0; i <= last; i++) {
-        // Send all states of switches that haven't been toggled since last poll
-        // (and dispatched their event already).
-        if (!toggled[i]) {
+      // The CPU requested all current states. Usually this event is sent when
+      // the game gets started.
+      if (active) {
+        // First, send OFF for all switches then ON for the active ones using
+        // the IRQ handler.
+        for (int i = 0; i <= last; i++) {
           _eventDispatcher->dispatch(
-              new Event(EVENT_SOURCE_SWITCH, word(0, number[i]), state[i]));
-        } else {
-          toggled[i] = false;
-          if (stateful[i]) resetStatefulPort(port[i]);
+              new Event(EVENT_SOURCE_SWITCH, word(0, number[i]), 0));
+        }
+
+        if (!running) {
+          instance = this;
+          running = true;
+
+          extern const pio_program_t switches_pio_program;
+          uint offset = pio_add_program(pio, &switches_pio_program);
+          pio_sm_config c = switches_pio_program_get_default_config(offset);
+
+          sm_config_set_in_pins(&c, SWITCHES_BASE_PIN);
+          sm_config_set_sideset_pins(&c, 15);  // Side-set begins at GPIO 15
+          sm_config_set_set_pins(&c, 15, 4);   // Set begins at GPIO 15
+
+          // Connect 16 GPIOs to this PIO block
+          for (uint i = 0; i < 16; i++) {
+            pio_gpio_init(pio, SWITCHES_BASE_PIN + i);
+          }
+
+          // Set the pin direction at the PIO
+          pio_sm_set_consecutive_pindirs(pio, sm, SWITCHES_BASE_PIN, 16, false);
+
+          sm_config_set_in_shift(&c, true, false, 16);
+
+          pio_sm_init(pio, sm, offset, &c);
+
+          irq_set_exclusive_handler(PIO0_IRQ_0, onSwitchCanges);
+          irq_set_enabled(PIO0_IRQ_0, true);
+          pio_set_irq0_source_enabled(pio, pis_interrupt0, true);
+
+          pio_sm_set_enabled(pio, sm, true);
         }
       }
-      _ms = millis();
-      running = true;
       break;
   }
 }

@@ -3,8 +3,10 @@
         {
             "name": "Mac",
             "includePath": [
-                "${workspaceFolder}/**",
-                "${env:HOME}/.platformio/packages/framework-arduinopico/**"
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/.pio/libdeps/IO_16_8_1/**",
+                "${env:HOME}/.platformio/packages/framework-arduinopico/**",
+                "/Library/Developer/CommandLineTools/usr/lib/clang/*/include"
             ],
             "defines": [],
             "intelliSenseMode": "macos-clang-arm64"
