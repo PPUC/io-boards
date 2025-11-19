@@ -7,7 +7,7 @@
   GPIO16,17,18: UART TX, UART RX, RS485 Direction
   GPIO19-24, 26, 27: Power Out (PWM)
   GPIO25: Status-LED
-  GPIO28: ADC für Adressierung
+  GPIO28: ADC for Board ID
   GPIO29: Reserve (z.B. für einen LED-Strip oder zweite Status-LED)
 */
 
@@ -49,8 +49,6 @@ class IOBoardController : public EventListener {
 
   bool running = false;
   bool activePwmDevices = false;
-  bool activeSwitches = false;
-  bool activeSwitchMatrix = false;
   bool m_debug = false;
 
   int controllerType;

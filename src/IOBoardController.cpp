@@ -31,9 +31,6 @@ IOBoardController::IOBoardController(int cT) {
 
 void IOBoardController::update() {
   if (running) {
-    if (activeSwitchMatrix) {
-      switchMatrix()->update();
-    }
     if (activePwmDevices) {
       pwmDevices()->update();
     }
@@ -72,7 +69,6 @@ void IOBoardController::handleEvent(Event *event) {
     case EVENT_RESET:
       // Clear all configurations or reboot the device.
       _pwmDevices->reset();
-      _switchMatrix->reset();
 
       // Issue a delayed reset of the board.
       // Core 1 should have enough time to turn off it's devices.
@@ -92,7 +88,6 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
             break;
           case CONFIG_TOPIC_NUMBER:
             _switches->registerSwitch((byte)port, event->value);
-            activeSwitches = true;
             break;
         }
         break;
@@ -104,28 +99,13 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
               _switchMatrix->setActiveLow();
             }
             break;
-          case CONFIG_TOPIC_MAX_PULSE_TIME:
-            _switchMatrix->setPulseTime((byte)event->value);
-            break;
-          case CONFIG_TOPIC_TYPE:
-            type = event->value;
-            number = 0;
-            port = 0;
-            break;
-          case CONFIG_TOPIC_NUMBER:
-            number = event->value;
-            break;
           case CONFIG_TOPIC_PORT:
             port = event->value;
-            if (MATRIX_TYPE_COLUMN == type) {
-              _switchMatrix->registerColumn(port, number);
-            } else {
-              _switchMatrix->registerRow(port, number);
-            }
-            activeSwitchMatrix = true;
+            break;
+          case CONFIG_TOPIC_NUMBER:
+            _switchMatrix->registerSwitch((byte)port, event->value);
             break;
         }
-
         break;
 
       case CONFIG_TOPIC_PWM:

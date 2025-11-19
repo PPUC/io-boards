@@ -91,9 +91,6 @@
 #define LED_TYPE_FLASHER 2  // Flasher
 #define LED_TYPE_LAMP 3     // Lamp
 
-#define MATRIX_TYPE_COLUMN 1  // Column
-#define MATRIX_TYPE_ROW 2     // Row
-
 #define PWM_EFFECT_SINE 1
 #define PWM_EFFECT_RAMP_DOWN_STOP 2
 #define PWM_EFFECT_IMPULSE 3

@@ -1,6 +1,6 @@
 /*
   SwitchMatrix_h.
-  Created by Markus Kalkbrenner, 2023.
+  Created by Markus Kalkbrenner, 2023-2025.
 */
 
 #ifndef SwitchMatrix_h
@@ -8,60 +8,71 @@
 
 #include "../EventDispatcher/Event.h"
 #include "../EventDispatcher/EventDispatcher.h"
-#include "../PPUC.h"
+#include "hardware/gpio.h"
+#include "hardware/pio.h"
 
-#ifndef MAX_COLUMNS
-#define MAX_COLUMNS 10
-#endif
-
-#ifndef MAX_ROWS
-#define MAX_ROWS 8
-#endif
+#define SWITCH_MATRIX_BASE_PIN 0
+#define COLUMNS_BASE_PIN (SWITCH_MATRIX_BASE_PIN + 8)
+#define MATRIX_SWITCHES 64
+#define MATRIX_SWITCH_DEBOUNCE 2
 
 class SwitchMatrix : public EventListener {
  public:
-  SwitchMatrix(byte bId, EventDispatcher *eD) {
+  SwitchMatrix(byte bId, EventDispatcher* eD) {
     boardId = bId;
-    platform = PLATFORM_LIBPINMAME;
-
-    reset();
-
-    _ms = millis();
     _eventDispatcher = eD;
     _eventDispatcher->addListener(this, EVENT_POLL_EVENTS);
     _eventDispatcher->addListener(this, EVENT_READ_SWITCHES);
+
+    pio = pio0;
+    sm_columns = 0;
+    sm_odd_rows = 2;
+    sm_even_rows = 1;
   }
 
-  void registerColumn(byte p, byte n);
-  void registerRow(byte p, byte n);
-
   void setActiveLow();
-  void setPulseTime(byte pT);
+  void registerSwitch(byte p, byte n);
 
-  void update();
-  void reset();
+  void handleEvent(Event* event);
 
-  void handleEvent(Event *event);
+  void handleEvent(ConfigEvent* event) {}
 
-  void handleEvent(ConfigEvent *event) {}
+  void handleRowChanges(uint32_t raw, uint8_t even);
+
+  PIO pio;
+  int sm_columns;
+  int sm_even_rows;
+  int sm_odd_rows;
 
  private:
   byte boardId;
-  byte platform;
-  byte pulseTime;
-  byte pauseTime;
-  bool activeLow;
-  bool active;
+  bool activeLow = false;
+  bool running = false;
+  bool active = false;
 
-  unsigned long _ms;
+  byte mapping[MATRIX_SWITCHES] = {0};
+  uint32_t lastStable[2] = {0};
+  absolute_time_t debounceTime[MATRIX_SWITCHES] = {0};
 
-  int8_t columns[MAX_COLUMNS];
-  int8_t rows[MAX_ROWS];
-  bool state[MAX_COLUMNS][MAX_ROWS] = {0};
-  bool toggled[MAX_COLUMNS][MAX_ROWS] = {0};
-  byte column = 0;
+  EventDispatcher* _eventDispatcher;
 
-  EventDispatcher *_eventDispatcher;
+  static SwitchMatrix* instance;
+
+  static void __not_in_flash_func(onOddRowChanges)() {
+    // IRQ0 clear
+    pio0_hw->irq = 1u << 0;
+
+    uint32_t raw = pio_sm_get_blocking(instance->pio, instance->sm_odd_rows);
+    instance->handleRowChanges(raw, 0);
+  }
+
+  static void __not_in_flash_func(onEvenRowChanges)() {
+    // IRQ1 clear
+    pio0_hw->irq = 1u << 1;
+
+    uint32_t raw = pio_sm_get_blocking(instance->pio, instance->sm_even_rows);
+    instance->handleRowChanges(raw, 1);
+  }
 };
 
 #endif

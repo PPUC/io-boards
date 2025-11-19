@@ -14,18 +14,30 @@ void Switches::registerSwitch(byte p, byte n) {
 
 void Switches::handleSwitchChanges(uint16_t raw) {
   absolute_time_t now = get_absolute_time();
-  uint16_t changed = raw ^ lastStable;
+  uint16_t changed = raw ^ lastStable;  // raw to raw comparison
 
   for (int i = 0; i < MAX_SWITCHES; i++) {
+    if (number[i] == 0) continue;  // Not registered
+
     uint16_t mask = 1u << i;
 
     if (changed & mask) {
       // Debounce
       if (absolute_time_diff_us(debounceTime[i], now) >=
           SWITCH_DEBOUNCE * 1000) {
-        bool newState = !(raw & mask);  // active-low
         debounceTime[i] = now;
-        lastStable = (lastStable & ~mask) | (newState ? mask : 0);
+
+        bool rawBit = (raw & mask) != 0;
+
+        // logical pressed state for active-low
+        bool newState = !rawBit;
+
+        // store raw stable bit (not logical)
+        if (rawBit)
+          lastStable |= mask;  // raw = 1
+        else
+          lastStable &= ~mask;  // raw = 0
+
         // Dispatch all switch events as "local fast".
         // If a PWM output registered to it, we have "fast flip". Useful for
         // flippers, kick backs, jets and sling shots.
@@ -45,8 +57,10 @@ void Switches::handleEvent(Event* event) {
         // First, send OFF for all switches then ON for the active ones using
         // the IRQ handler.
         for (int i = 0; i <= last; i++) {
-          _eventDispatcher->dispatch(
-              new Event(EVENT_SOURCE_SWITCH, word(0, number[i]), 0));
+          if (number[i] != 0) {
+            _eventDispatcher->dispatch(
+                new Event(EVENT_SOURCE_SWITCH, word(0, number[i]), 0));
+          }
         }
 
         if (!running) {
@@ -73,7 +87,7 @@ void Switches::handleEvent(Event* event) {
 
           pio_sm_init(pio, sm, offset, &c);
 
-          irq_set_exclusive_handler(PIO0_IRQ_0, onSwitchCanges);
+          irq_set_exclusive_handler(PIO0_IRQ_0, onSwitchChanges);
           irq_set_enabled(PIO0_IRQ_0, true);
           pio_set_irq0_source_enabled(pio, pis_interrupt0, true);
 

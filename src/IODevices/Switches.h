@@ -29,11 +29,6 @@ class Switches : public EventListener {
 
     pio = pio0;
     sm = 0;
-
-    lastStable = 0;
-    for (int i = 0; i < MAX_SWITCHES; i++) {
-      debounceTime[i] = 0;
-    }
   }
 
   void registerSwitch(byte p, byte n);
@@ -56,14 +51,14 @@ class Switches : public EventListener {
   byte number[MAX_SWITCHES] = {0};
   int last = -1;
 
-  uint16_t lastStable;
-  absolute_time_t debounceTime[MAX_SWITCHES];
+  uint16_t lastStable = 0;
+  absolute_time_t debounceTime[MAX_SWITCHES] = {0};
 
   EventDispatcher* _eventDispatcher;
 
   static Switches* instance;
 
-  static void __not_in_flash_func(onSwitchCanges)() {
+  static void __not_in_flash_func(onSwitchChanges)() {
     // IRQ0 clear
     pio0_hw->irq = 1u << 0;
 
