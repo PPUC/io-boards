@@ -83,10 +83,6 @@ void EffectsController::addEffect(EffectContainer *container) {
   stackEffectContainers[++stackCounter] = container;
 }
 
-void EffectsController::attachBrightnessControl(byte port, byte poti) {
-  brightnessControl[--port] = poti;
-}
-
 void EffectsController::setBrightness(byte port, byte brightness) {
   ws2812FXDevices[--port][0]->setBrightness(brightness);
   ws2812FXbrightness[port] = brightness;
@@ -142,6 +138,12 @@ void EffectsController::handleEvent(Event *event) {
 
 void EffectsController::handleEvent(ConfigEvent *event) {
   if (event->boardId == boardId) {
+    if (flickerState)
+      _ledBuiltInDevice->on();
+    else
+      _ledBuiltInDevice->off();
+    flickerState = !flickerState;
+
     switch (event->topic) {
       case CONFIG_TOPIC_PLATFORM:
         platform = event->value;
@@ -514,24 +516,6 @@ void EffectsController::update() {
         ((CombinedGiAndLightMatrixWS2812FXDevice *)ws2812FXDevices[i][0])
             ->updateAfterGlow();
         ws2812FXDevices[i][0]->getWS2812FX()->show();
-      }
-    }
-  }
-
-  if (brightnessControlBasePin > 0) {
-    if (millis() - brightnessUpdateInterval >
-        UPDATE_INTERVAL_WS2812FX_BRIGHTNESS) {
-      // Don't update the brightness too often.
-      brightnessUpdateInterval = millis();
-      for (byte i = 0; i < PPUC_MAX_BRIGHTNESS_CONTROLS; i++) {
-        brightnessControlReads[i] =
-            analogRead(brightnessControlBasePin + i) / 4;
-      }
-      for (byte i = 0; i < PPUC_MAX_WS2812FX_DEVICES; i++) {
-        if (brightnessControl[i] > 0) {
-          setBrightness(i + 1,
-                        brightnessControlReads[brightnessControl[i - 1]]);
-        }
       }
     }
   }

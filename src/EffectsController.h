@@ -133,10 +133,7 @@ class EffectsController : public EventListener {
   byte ws2812FXbrightness[PPUC_MAX_WS2812FX_DEVICES] = {0};
   EffectContainer* stackEffectContainers[EFFECT_STACK_SIZE];
   int stackCounter = -1;
-  byte brightnessControl[PPUC_MAX_WS2812FX_DEVICES] = {0};
-  byte brightnessControlReads[PPUC_MAX_BRIGHTNESS_CONTROLS] = {0};
-  byte brightnessControlBasePin = 0;
-
+  bool flickerState = false;
   int mode = 0;
 
   byte platform;
