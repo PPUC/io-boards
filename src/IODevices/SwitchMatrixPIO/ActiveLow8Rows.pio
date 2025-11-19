@@ -1,0 +1,37 @@
+.program active_low_8_rows_pio
+    ; Initialize X to all pins HIGH
+    set x, 0         ; X = 0x0
+    mov y, ~x        ; Y = 0xFFFFFFFF
+    mov x, y         ; X = 0xFFFFFFFF
+    mov osr, y       ; OSR = 0xFFFFFFFF
+
+loop:
+    set y, 0         ; X = 0x0
+    mov isr, ~y      ; ISR = 0xFFFFFFFF
+    wait 0 PIN 4     ; wait for column 1
+    in pins, 8       ; read 8 rows to ISR (shifting into lower 8 bits of the 32bit ISR)
+    wait 0 PIN 5     ; wait for column 2
+    in pins, 8       ; read 8 rows to ISR (shifting into lower 8 bits of the 32bit ISR)
+    wait 0 PIN 6     ; wait for odd column 3
+    in pins, 8       ; read 8 rows to ISR (shifting into lower 8 bits of the 32bit ISR)
+    wait 0 PIN 7     ; wait for odd column 4
+    in pins, 8       ; read 8 rows to ISR (shifting into lower 8 bits of the 32bit ISR)
+
+    mov y, isr       ; copy ISR to X for comparison
+    jmp x!=y changed
+
+    ; two consecutive identical reads required for debouncing
+    mov y, osr       ; copy OSR to Y for comparison
+    jmp x!=y new_stable_state
+
+    jmp loop
+
+changed:
+    mov x, isr       ; update X to the new state
+    jmp loop
+
+new_stable_state:
+    mov osr, isr     ; update OSR to the new state, used for debouncing
+    push block       ; push ISR to FIFO, "block" waits until the CPU handled enough data in the FIFO, so we don't overflow it, ISR is empty after that!
+    irq 0            ; trigger interrupt 0 to notify the main CPU that matrix changed
+    jmp loop

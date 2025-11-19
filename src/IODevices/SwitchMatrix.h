@@ -11,9 +11,9 @@
 #include "hardware/gpio.h"
 #include "hardware/pio.h"
 
-#define SWITCH_MATRIX_BASE_PIN 0
-#define COLUMNS_BASE_PIN (SWITCH_MATRIX_BASE_PIN + 8)
-#define MATRIX_SWITCHES 64
+#define COLUMNS_BASE_PIN 13 // GPIO 13-16 for columns, the only pins with required hardware on IO_16_8_1 board
+#define NUM_COLUMNS 4
+#define MAX_ROWS 8
 #define MATRIX_SWITCH_DEBOUNCE 2
 
 class SwitchMatrix : public EventListener {
@@ -23,55 +23,42 @@ class SwitchMatrix : public EventListener {
     _eventDispatcher = eD;
     _eventDispatcher->addListener(this, EVENT_POLL_EVENTS);
     _eventDispatcher->addListener(this, EVENT_READ_SWITCHES);
-
-    pio = pio0;
-    sm_columns = 0;
-    sm_odd_rows = 2;
-    sm_even_rows = 1;
   }
 
-  void setActiveLow();
+  void setActiveLow() { activeLow = true; }
+  void setNumRows(uint8_t n) { numRows = n; }
   void registerSwitch(byte p, byte n);
 
   void handleEvent(Event* event);
 
   void handleEvent(ConfigEvent* event) {}
 
-  void handleRowChanges(uint32_t raw, uint8_t even);
+  void handleRowChanges(uint32_t raw);
 
-  PIO pio;
-  int sm_columns;
-  int sm_even_rows;
-  int sm_odd_rows;
+  PIO pio = pio0;
+  int sm_columns = 0;
+  int sm_rows = 1;
 
  private:
   byte boardId;
   bool activeLow = false;
+  uint8_t numRows = 4;
   bool running = false;
   bool active = false;
 
-  byte mapping[MATRIX_SWITCHES] = {0};
-  uint32_t lastStable[2] = {0};
-  absolute_time_t debounceTime[MATRIX_SWITCHES] = {0};
-
+  byte mapping[NUM_COLUMNS * MAX_ROWS] = {0};
+  uint32_t lastStable = 0;
+  absolute_time_t debounceTime[NUM_COLUMNS * MAX_ROWS][2] = {0};
   EventDispatcher* _eventDispatcher;
 
   static SwitchMatrix* instance;
 
-  static void __not_in_flash_func(onOddRowChanges)() {
+  static void __not_in_flash_func(onRowChanges)() {
     // IRQ0 clear
     pio0_hw->irq = 1u << 0;
 
-    uint32_t raw = pio_sm_get_blocking(instance->pio, instance->sm_odd_rows);
-    instance->handleRowChanges(raw, 0);
-  }
-
-  static void __not_in_flash_func(onEvenRowChanges)() {
-    // IRQ1 clear
-    pio0_hw->irq = 1u << 1;
-
-    uint32_t raw = pio_sm_get_blocking(instance->pio, instance->sm_even_rows);
-    instance->handleRowChanges(raw, 1);
+    uint32_t raw = pio_sm_get_blocking(instance->pio, instance->sm_rows);
+    instance->handleRowChanges(raw);
   }
 };
 

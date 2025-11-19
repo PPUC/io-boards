@@ -65,6 +65,7 @@
 #define CONFIG_TOPIC_MIN_INTENSITY 77               // "M"
 #define CONFIG_TOPIC_NUMBER 78                      // "N"
 #define CONFIG_TOPIC_AMOUNT_LEDS 79                 // "O"
+#define CONFIG_TOPIC_NUM_ROWS 79                    // "O"
 #define CONFIG_TOPIC_PORT 80                        // "P"
 #define CONFIG_TOPIC_SPEED 83                       // "S"
 #define CONFIG_TOPIC_SOURCE 83                      // "S"

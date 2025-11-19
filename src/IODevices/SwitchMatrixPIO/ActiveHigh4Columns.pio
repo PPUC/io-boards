@@ -1,0 +1,15 @@
+.program active_high_4_columns_pio
+.wrap_target
+    set x, 1
+    mov isr, x       ; initialize ISR with 0x00000001
+    set x, 0         ; X = 0
+    set y, 3         ; 4 columns (0-3)
+    nop [16]         ; short delay to let other state machines perform debouncing
+
+loop:
+    mov osr, isr     ; copy ISR to OSR for output
+    out pins, 4      ; set 4 pins for columns, one is HIGH, others LOW
+    in x, 1          ; shift left ISR by 1 bit
+    nop [16]         ; short delay to let other state machines read rows
+    jmp y-- loop     ; decrement Y, loop until Y < 0
+.wrap

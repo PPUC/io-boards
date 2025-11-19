@@ -56,6 +56,7 @@ class IOBoardController : public EventListener {
   byte port = 0;
   byte number = 0;
   byte power = 0;
+  byte rows = 0;
   uint16_t minPulseTime = 0;
   uint16_t maxPulseTime = 0;
   byte holdPower = 0;

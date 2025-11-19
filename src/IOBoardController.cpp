@@ -81,17 +81,6 @@ void IOBoardController::handleEvent(Event *event) {
 void IOBoardController::handleEvent(ConfigEvent *event) {
   if (event->boardId == boardId) {
     switch (event->topic) {
-      case CONFIG_TOPIC_SWITCHES:
-        switch (event->key) {
-          case CONFIG_TOPIC_PORT:
-            port = event->value;
-            break;
-          case CONFIG_TOPIC_NUMBER:
-            _switches->registerSwitch((byte)port, event->value);
-            break;
-        }
-        break;
-
       case CONFIG_TOPIC_SWITCH_MATRIX:
         switch (event->key) {
           case CONFIG_TOPIC_ACTIVE_LOW:
@@ -99,11 +88,27 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
               _switchMatrix->setActiveLow();
             }
             break;
+          case CONFIG_TOPIC_NUM_ROWS:
+            rows = (uint8_t)event->value;
+            _switchMatrix->setNumRows(rows);
+            _switches->setNumSwitches(MAX_SWITCHES - NUM_COLUMNS - rows);
+            break;
           case CONFIG_TOPIC_PORT:
             port = event->value;
             break;
           case CONFIG_TOPIC_NUMBER:
             _switchMatrix->registerSwitch((byte)port, event->value);
+            break;
+        }
+        break;
+
+      case CONFIG_TOPIC_SWITCHES:
+        switch (event->key) {
+          case CONFIG_TOPIC_PORT:
+            port = event->value;
+            break;
+          case CONFIG_TOPIC_NUMBER:
+            _switches->registerSwitch((byte)port, event->value);
             break;
         }
         break;
