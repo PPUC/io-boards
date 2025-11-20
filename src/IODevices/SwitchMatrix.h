@@ -11,7 +11,7 @@
 #include "hardware/gpio.h"
 #include "hardware/pio.h"
 
-#define COLUMNS_BASE_PIN 13 // GPIO 13-16 for columns, the only pins with required hardware on IO_16_8_1 board
+#define COLUMNS_BASE_PIN 15 // GPIO 15-18 for columns, the only pins with required hardware on IO_16_8_1 board
 #define NUM_COLUMNS 4
 #define MAX_ROWS 8
 #define MATRIX_SWITCH_DEBOUNCE 2

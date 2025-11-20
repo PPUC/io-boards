@@ -15,7 +15,7 @@
 #include "hardware/gpio.h"
 #include "hardware/pio.h"
 
-#define SWITCHES_BASE_PIN 0
+#define SWITCHES_BASE_PIN 3
 #define MAX_SWITCHES 16
 #define SWITCH_DEBOUNCE 2
 

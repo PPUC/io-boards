@@ -8,13 +8,13 @@
 loop:
     set y, 0         ; X = 0x0
     mov isr, ~y      ; ISR = 0xFFFFFFFF
-    wait 0 PIN 4     ; wait for column 1
+    wait 0 PIN 8     ; wait for column 1
     in pins, 8       ; read 8 rows to ISR (shifting into lower 8 bits of the 32bit ISR)
-    wait 0 PIN 5     ; wait for column 2
+    wait 0 PIN 9     ; wait for column 2
     in pins, 8       ; read 8 rows to ISR (shifting into lower 8 bits of the 32bit ISR)
-    wait 0 PIN 6     ; wait for odd column 3
+    wait 0 PIN 10    ; wait for odd column 3
     in pins, 8       ; read 8 rows to ISR (shifting into lower 8 bits of the 32bit ISR)
-    wait 0 PIN 7     ; wait for odd column 4
+    wait 0 PIN 11     ; wait for odd column 4
     in pins, 8       ; read 8 rows to ISR (shifting into lower 8 bits of the 32bit ISR)
 
     mov y, isr       ; copy ISR to X for comparison
