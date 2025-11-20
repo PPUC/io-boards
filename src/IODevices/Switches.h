@@ -40,6 +40,17 @@ class Switches : public EventListener {
   PIO pio = pio0;
   int sm = 2; // State machine 0 and 1 are used by SwitchMatrix
 
+  static Switches* instance;
+
+  static void __not_in_flash_func(onSwitchChanges)() {
+    // IRQ1 clear
+    pio0_hw->irq = 1u << 1;
+
+    // Get 16 bit from FIFO
+    uint32_t raw = pio_sm_get_blocking(instance->pio, instance->sm);
+    instance->handleSwitchChanges(raw & 0xFFFF);
+  }
+
  private:
   byte boardId;
   uint8_t numSwitches = MAX_SWITCHES;
@@ -54,17 +65,6 @@ class Switches : public EventListener {
   absolute_time_t debounceTime[MAX_SWITCHES][2] = {0};
 
   EventDispatcher* _eventDispatcher;
-
-  static Switches* instance;
-
-  static void __not_in_flash_func(onSwitchChanges)() {
-    // IRQ1 clear
-    pio0_hw->irq = 1u << 1;
-
-    // Get 16 bit from FIFO
-    uint32_t raw = pio_sm_get_blocking(instance->pio, instance->sm);
-    instance->handleSwitchChanges(raw & 0xFFFF);
-  }
 };
 
 #endif

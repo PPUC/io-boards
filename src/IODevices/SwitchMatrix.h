@@ -39,7 +39,17 @@ class SwitchMatrix : public EventListener {
   int sm_columns = 0;
   int sm_rows = 1;
 
- private:
+  static SwitchMatrix* instance;
+
+  static void __not_in_flash_func(onRowChanges)() {
+    // IRQ0 clear
+    pio0_hw->irq = 1u << 0;
+
+    uint32_t raw = pio_sm_get_blocking(instance->pio, instance->sm_rows);
+    instance->handleRowChanges(raw);
+  }
+
+  private:
   byte boardId;
   bool activeLow = false;
   uint8_t numRows = 4;
@@ -50,16 +60,6 @@ class SwitchMatrix : public EventListener {
   uint32_t lastStable = 0;
   absolute_time_t debounceTime[NUM_COLUMNS * MAX_ROWS][2] = {0};
   EventDispatcher* _eventDispatcher;
-
-  static SwitchMatrix* instance;
-
-  static void __not_in_flash_func(onRowChanges)() {
-    // IRQ0 clear
-    pio0_hw->irq = 1u << 0;
-
-    uint32_t raw = pio_sm_get_blocking(instance->pio, instance->sm_rows);
-    instance->handleRowChanges(raw);
-  }
 };
 
 #endif

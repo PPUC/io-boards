@@ -107,7 +107,7 @@ void Switches::handleEvent(Event* event) {
           pio_sm_init(pio, sm, offset, &c);
           irq_set_exclusive_handler(PIO0_IRQ_1, onSwitchChanges);
           irq_set_enabled(PIO0_IRQ_1, true);
-          pio_set_irq0_source_enabled(pio, pis_interrupt1, true);
+          pio_set_irq1_source_enabled(pio, pis_interrupt1, true);
           pio_sm_set_enabled(pio, sm, true);
         }
       }
