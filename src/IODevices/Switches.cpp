@@ -18,10 +18,10 @@ void Switches::handleSwitchChanges(uint16_t raw) {
   absolute_time_t now = get_absolute_time();
   uint16_t changed = raw ^ lastStable;  // raw to raw comparison
 
-  for (int i = 0; i < numSwitches; i++) {
+  for (int i = 0; i <= last; i++) {
     if (number[i] == 0) continue;  // Not registered
 
-    uint16_t mask = 1u << (numSwitches - 1 - i); // the switches are in inverted order
+    uint16_t mask = 1u << (port[i] - SWITCHES_BASE_PIN);
 
     if (changed & mask) {
       bool rawBit = (raw & mask) != 0;
@@ -93,9 +93,9 @@ void Switches::handleEvent(Event* event) {
 
           sm_config_set_in_pins(&c, SWITCHES_BASE_PIN);
           if (MAX_SWITCHES == numSwitches) {
-            // Using GPIO 12-15 as switch inputs on IO_16_8_1 board requires resetting the sateful input after reading.
-            sm_config_set_sideset_pins(&c, 13);  // Side-set begins at GPIO 13
-            sm_config_set_set_pins(&c, 13, 4);   // Set begins at GPIO 13
+            // Using GPIO 15-18 as switch inputs on IO_16_8_1 board requires resetting the sateful input after reading.
+            sm_config_set_set_pins(&c, 15, 4);   // Set begins at GPIO 15 for 4 pins
+            sm_config_set_sideset_pins(&c, 15);  // Side-set begins at GPIO 15
           }
           // Connect GPIOs to this PIO block
           for (uint i = 0; i < numSwitches; i++) {

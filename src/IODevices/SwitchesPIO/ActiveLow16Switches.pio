@@ -28,7 +28,6 @@ changed:
     nop              ; short delay for debouncing
     nop              ; short delay for debouncing
     nop              ; short delay for debouncing
-    nop              ; short delay for debouncing
     jmp loop
 
 new_stable_state:
@@ -37,12 +36,13 @@ new_stable_state:
     irq 1            ; trigger interrupt 1 to notify the main CPU that switches changed
 
     ; Reset stateful pins (GPIO 15-18)
-    set pindirs, 0b1111     side 0      ; change direction of 4 pins (15-18) to output, set LOW
+    set pindirs, 0b1111                 ; change direction of 4 pins (15-18) to output
+    nop                     side 0      ; set LOW
     nop                     side 0b1111 ; set 4 pins to HIGH
     nop                     side 0b1111 ; short delay
     nop                     side 0b1111 ; short delay
     nop                     side 0b1111 ; short delay
     nop                     side 0      ; set LOW
-    set pindirs, 0          side 0      ; change direction all pins back to input
+    set pindirs, 0                      ; change direction all pins back to input
 
     jmp loop
