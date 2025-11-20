@@ -65,6 +65,7 @@
 #define CONFIG_TOPIC_MIN_INTENSITY 77               // "M"
 #define CONFIG_TOPIC_NUMBER 78                      // "N"
 #define CONFIG_TOPIC_AMOUNT_LEDS 79                 // "O"
+#define CONFIG_TOPIC_NUM_ROWS 79                    // "O"
 #define CONFIG_TOPIC_PORT 80                        // "P"
 #define CONFIG_TOPIC_SPEED 83                       // "S"
 #define CONFIG_TOPIC_SOURCE 83                      // "S"
@@ -90,9 +91,6 @@
 #define LED_TYPE_GI 1       // GI
 #define LED_TYPE_FLASHER 2  // Flasher
 #define LED_TYPE_LAMP 3     // Lamp
-
-#define MATRIX_TYPE_COLUMN 1  // Column
-#define MATRIX_TYPE_ROW 2     // Row
 
 #define PWM_EFFECT_SINE 1
 #define PWM_EFFECT_RAMP_DOWN_STOP 2

@@ -1,0 +1,31 @@
+.program active_low_4_switches_pio
+    ; Initialize X to all pins HIGH
+    set x, 0         ; X = 0x0
+    mov y, ~x        ; Y = 0xFFFFFFFF
+    mov x, y         ; X = 0xFFFFFFFF
+    mov osr, y       ; OSR = 0xFFFFFFFF
+
+loop:
+    set y, 0         ; X = 0x0
+    mov isr, ~y      ; ISR = 0xFFFFFFFF
+    in pins, 4       ; read 4 switches to ISR (filling lower 4 bits of the 32bit ISR)
+
+    mov y, isr       ; copy ISR to Y for comparison
+    jmp x!=y changed ; jump to "changed" if X (old state) != Y (new state)
+
+    ; two consecutive identical reads required for debouncing
+    mov y, osr       ; copy OSR to Y for comparison
+    jmp x!=y new_stable_state
+
+    jmp loop
+
+changed:
+    mov x, isr       ; update X to the new state
+    nop [16]         ; short delay for debouncing
+    jmp loop
+
+new_stable_state:
+    mov osr, isr     ; update OSR to the new state, used for debouncing
+    push block       ; push ISR to FIFO, "block" waits until the CPU handled enough data in the FIFO, so we don't overflow it, ISR is empty after that!
+    irq 1            ; trigger interrupt 1 to notify the main CPU that switches changed
+    jmp loop
