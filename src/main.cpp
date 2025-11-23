@@ -47,7 +47,7 @@ void setup() {
   uint32_t timeout = millis() + WAIT_FOR_SERIAL_DEBUGGER_TIMEOUT;
 
   Serial.begin(115200);
-  // Wait for a serial connection of a debugger via USB.
+  // Wait for a serial connection of a debugger via USB. Serial us USB CDC
   // The Pico implements USB itself so special care must be taken. Use
   // while(!Serial){} in the setup() code before printing anything so that it
   // waits for the USB connection to be established.
@@ -68,15 +68,15 @@ void setup() {
   rp2040.restartCore1();
 
   // RS485 connection.
-  Serial1.setTX(0);
-  Serial1.setRX(1);
-  Serial1.setFIFOSize(1024);  // @todo find the right size.
+  Serial1.end();  // Deactivete UART to empty TX FIFO after reboot
+  delay(5);
+  pinMode(RS485_MODE_PIN, OUTPUT);
+  digitalWrite(RS485_MODE_PIN, LOW);  // Read mode
+  delay(5);
   Serial1.begin(115200);
-  // The Pico implements USB itself so special care must be taken. Use
-  // while(!Serial){} in the setup() code before printing anything so that it
-  // waits for the USB connection to be established.
-  // https://community.platformio.org/t/serial-monitor-not-working/1512/25
-  while (!Serial1) {
+  // Empty RX FIFO after reboot
+  while (Serial1.available()) {
+    Serial1.read();
   }
 
   // The watchdog interferes with the USB debuging.

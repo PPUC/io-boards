@@ -18,10 +18,6 @@
 #define MAX_EVENT_LISTENERS 32
 #endif
 
-#ifndef MAX_CROSS_LINKS
-#define MAX_CROSS_LINKS 8
-#endif
-
 #ifndef EVENT_STACK_SIZE
 #define EVENT_STACK_SIZE 100
 #endif
@@ -40,8 +36,6 @@ class EventDispatcher {
 
   void setCrossLinkSerial(HardwareSerial& reference);
 
-  void addCrossLinkSerial(HardwareSerial& reference);
-
   void addListener(EventListener* eventListener, char sourceId);
 
   void addListener(EventListener* eventListener);
@@ -53,9 +47,9 @@ class EventDispatcher {
   uint32_t getLastPoll();
 
  private:
-  void callListeners(Event* event, int sender, bool flush);
+  void callListeners(Event* event, bool sendToOtherCore, bool sendToRS485);
 
-  void callListeners(ConfigEvent* event, int sender);
+  void callListeners(ConfigEvent* event, bool sendToOtherCore);
 
   Event* stackEvents[EVENT_STACK_SIZE];
   int stackCounter = -1;
@@ -67,15 +61,14 @@ class EventDispatcher {
   byte msg[12];
 
   bool rs485 = false;
-  int rs485Pin = 0;
+  uint8_t rs485Pin = 0;
   byte board = 255;
   bool error = false;
   uint32_t lastPoll;
   bool running = false;
 
   bool multiCore = false;
-  int crossLink = -1;
-  HardwareSerial* hwSerial[MAX_CROSS_LINKS];
+  HardwareSerial* hwSerial;
   MultiCoreCrossLink* multiCoreCrossLink;
 };
 

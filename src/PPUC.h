@@ -12,10 +12,12 @@
 
 #include <Arduino.h>
 
-#include "PPUCTimings.h"
 #include "PPUCPlatforms.h"
+#include "PPUCTimings.h"
 
 #define CONTROLLER_16_8_1 1
+
+#define RS485_MODE_PIN 2
 
 #include <EffectDevices/Definitions.h>
 
