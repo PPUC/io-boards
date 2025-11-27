@@ -2,6 +2,8 @@
 
 #include "EventDispatcher/CrossLinkDebugger.h"
 
+#define SWITCH_DEBOUNCE 10
+
 IOBoardController::IOBoardController(int cT) {
   _eventDispatcher = new EventDispatcher();
   _eventDispatcher->addListener(this, EVENT_CONFIGURATION);
@@ -15,6 +17,11 @@ IOBoardController::IOBoardController(int cT) {
     // Read bordID. Ideal value at 10bit resolution: (DIP+1)*1023*2/35 -> 58.46
     // to 935.3
     boardId = 16 - ((int)((analogRead(28) + 29.23) / 58.46));
+    m_debug = (boardId & 0b1000) != 0;
+    if (m_debug) {
+      boardId -= 8;
+    }
+
     _eventDispatcher->setBoard(boardId);
     _eventDispatcher->setRS485ModePin(RS485_MODE_PIN);
     _eventDispatcher->setCrossLinkSerial(Serial1);
@@ -31,6 +38,12 @@ IOBoardController::IOBoardController(int cT) {
 
 void IOBoardController::update() {
   if (running) {
+    if (activeSwitches) {
+      // nop
+    }
+    if (activeSwitchMatrix) {
+      //switchMatrix()->update();
+    }
     if (activePwmDevices) {
       pwmDevices()->update();
     }
@@ -98,6 +111,7 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
             break;
           case CONFIG_TOPIC_NUMBER:
             _switchMatrix->registerSwitch((byte)port, event->value);
+            activeSwitchMatrix = true;
             break;
         }
         break;
@@ -108,7 +122,11 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
             port = event->value;
             break;
           case CONFIG_TOPIC_NUMBER:
-            _switches->registerSwitch((byte)port, event->value);
+            number = event->value;
+            break;
+          case CONFIG_TOPIC_DEBOUNCE_TIME:
+            _switches->registerSwitch((byte)port, number, event->value);
+            activeSwitches = true;
             break;
         }
         break;

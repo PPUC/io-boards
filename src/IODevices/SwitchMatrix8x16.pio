@@ -1,0 +1,114 @@
+.program columns8x16_pio
+.wrap_target
+    set y, 7         ; 8 columns (0-7)
+
+loop:
+    mov osr, y       ; copy Y to OSR for output
+    out pins, 8      ; set 8 pins for columns, one is active LOW, others HIGH
+    nop [16]         ; short delay to let other state machines read rows
+    jmp y-- loop     ; decrement Y, loop until Y < 0
+.wrap
+
+
+.program even_rows_high_pio
+    ; Initialize X to all pins HIGH.
+    set x, 0         ; X = 0x0
+    mov y, ~x        ; Y = 0xFFFFFFFF
+    mov x, y         ; X = 0xFFFFFFFF
+    mov isr, y       ; ISR = 0xFFFFFFFF
+
+loop:
+    wait 0 GPIO 10   ; wait for even column 8
+    in pins, 16      ; read 16 rows to ISR (shifting into lower 16 bits of the 32bit ISR)
+    wait 0 GPIO 8    ; wait for even column 6
+    in pins, 16      ; read 16 rows to ISR (shifting into lower 16 bits of the 32bit ISR)
+
+    mov y, isr       ; copy ISR to Y for comparison
+    jmp x!=y changed ; jump to "changed" if X (old state) != Y (new state)
+    jmp loop
+
+changed:
+    mov osr, y
+    push block       ; push OSR to FIFO, "block" waits until the CPU handled enough data in the FIFO, so we don't overflow it
+    irq 1            ; trigger interrupt 1 to notify the main CPU that a even columns state has changed
+    mov x, y         ; update X to the new switch states
+    jmp loop
+
+
+.program odd_rows_high_pio
+    ; Initialize X to all pins HIGH.
+    set x, 0         ; X = 0x0
+    mov y, ~x        ; Y = 0xFFFFFFFF
+    mov x, y         ; X = 0xFFFFFFFF
+    mov isr, y       ; ISR = 0xFFFFFFFF
+
+loop:
+    wait 0 GPIO 9    ; wait for odd column 7
+    in pins, 16      ; read 16 rows to ISR (shifting into lower 16 bits of the 32bit ISR)
+    wait 0 GPIO 7    ; wait for odd column 5
+    in pins, 16      ; read 16 rows to ISR (shifting into lower 16 bits of the 32bit ISR)
+
+    mov y, isr       ; copy ISR to Y for comparison
+    jmp x!=y changed ; jump to "changed" if X (old state) != Y (new state)
+    jmp loop
+
+changed:
+    mov osr, y
+    push block       ; push OSR to FIFO, "block" waits until the CPU handled enough data in the FIFO, so we don't overflow it
+    irq 0            ; trigger interrupt 0 to notify the main CPU that a odd columns state has changed
+    mov x, y         ; update X to the new odd columns state
+    jmp loop
+
+
+; IMPORTANT:
+; The "low" PIO programs must run on a separate PIO instance from the "high" PIO programs,
+; because of the limitation of interrupts per PIO instance (only 2).
+
+.program even_rows_low_pio
+    ; Initialize X to all pins HIGH.
+    set x, 0         ; X = 0x0
+    mov y, ~x        ; Y = 0xFFFFFFFF
+    mov x, y         ; X = 0xFFFFFFFF
+    mov isr, y       ; ISR = 0xFFFFFFFF
+
+loop:
+    wait 0 GPIO 6    ; wait for even column 4
+    in pins, 16      ; read 16 rows to ISR (shifting into lower 16 bits of the 32bit ISR)
+    wait 0 GPIO 4    ; wait for even column 2
+    in pins, 16      ; read 16 rows to ISR (shifting into lower 16 bits of the 32bit ISR)
+
+    mov y, isr       ; copy ISR to Y for comparison
+    jmp x!=y changed ; jump to "changed" if X (old state) != Y (new state)
+    jmp loop
+
+changed:
+    mov osr, y
+    push block       ; push OSR to FIFO, "block" waits until the CPU handled enough data in the FIFO, so we don't overflow it
+    irq 1            ; trigger interrupt 1 to notify the main CPU that a even columns state has changed
+    mov x, y         ; update X to the new switch states
+    jmp loop
+
+
+.program odd_rows_low_pio
+    ; Initialize X to all pins HIGH.
+    set x, 0         ; X = 0x0
+    mov y, ~x        ; Y = 0xFFFFFFFF
+    mov x, y         ; X = 0xFFFFFFFF
+    mov isr, y       ; ISR = 0xFFFFFFFF
+
+loop:
+    wait 0 GPIO 5    ; wait for odd column 3
+    in pins, 16      ; read 16 rows to ISR (shifting into lower 16 bits of the 32bit ISR)
+    wait 0 GPIO 3    ; wait for odd column 1
+    in pins, 16      ; read 16 rows to ISR (shifting into lower 16 bits of the 32bit ISR)
+
+    mov y, isr       ; copy ISR to Y for comparison
+    jmp x!=y changed ; jump to "changed" if X (old state) != Y (new state)
+    jmp loop
+
+changed:
+    mov osr, y
+    push block       ; push OSR to FIFO, "block" waits until the CPU handled enough data in the FIFO, so we don't overflow it
+    irq 0            ; trigger interrupt 0 to notify the main CPU that a odd columns state has changed
+    mov x, y         ; update X to the new odd columns state
+    jmp loop

@@ -10,6 +10,8 @@
 
 #include <Arduino.h>
 
+#include <queue>
+
 #include "Event.h"
 #include "EventListener.h"
 #include "MultiCoreCrossLink.h"
@@ -51,8 +53,7 @@ class EventDispatcher {
 
   void callListeners(ConfigEvent* event, bool sendToOtherCore);
 
-  Event* stackEvents[EVENT_STACK_SIZE];
-  int stackCounter = -1;
+  std::queue<Event*> eventQueue;
 
   EventListener* eventListeners[MAX_EVENT_LISTENERS];
   char eventListenerFilters[MAX_EVENT_LISTENERS];

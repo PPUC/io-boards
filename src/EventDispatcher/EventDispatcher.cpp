@@ -36,28 +36,22 @@ void EventDispatcher::addListener(EventListener *eventListener, char sourceId) {
 void EventDispatcher::dispatch(Event *event) {
   if (EVENT_RESET == event->sourceId) {
     // Force immediate handling of the reset event. Forget about the others.
-    for (int i = 0; i <= stackCounter; i++) {
-      if (stackEvents[i]) {
-        delete stackEvents[i];
-      }
+    while (!eventQueue.empty()) {
+      Event *e = eventQueue.front();
+      eventQueue.pop();
+      delete e;
     }
-    stackCounter = -1;
   }
 
-  if (stackCounter < (EVENT_STACK_SIZE - 1)) {
-    stackEvents[++stackCounter] = event;
+  eventQueue.push(event);
 
-    if (event->localFast) {
-      for (byte i = 0; i <= numListeners; i++) {
-        if (event->sourceId == eventListenerFilters[i] ||
-            EVENT_SOURCE_ANY == eventListenerFilters[i]) {
-          eventListeners[i]->handleEvent(event);
-        }
+  if (event->localFast) {
+    for (byte i = 0; i <= numListeners; i++) {
+      if (event->sourceId == eventListenerFilters[i] ||
+          EVENT_SOURCE_ANY == eventListenerFilters[i]) {
+        eventListeners[i]->handleEvent(event);
       }
     }
-  } else {
-    // Too many events stacked, delete the event and free the memory.
-    delete event;
   }
 }
 
@@ -111,12 +105,11 @@ void EventDispatcher::callListeners(ConfigEvent *event, bool sendToOtherCore) {
 void EventDispatcher::update() {
   if (!rs485) {  // We're on Core1, the EffectController. Transmit stacked
                  // events to Core0.
-    for (int i = 0; i <= stackCounter; i++) {
-      Event *event = stackEvents[i];
-      callListeners(event, true, false);
+    while (!eventQueue.empty()) {
+      Event *e = eventQueue.front();
+      eventQueue.pop();
+      callListeners(e, true, false);
     }
-    // -1 means empty.
-    stackCounter = -1;
   } else {
     if (hwSerial->available() >= 7) {
       bool success = false;
@@ -165,12 +158,11 @@ void EventDispatcher::update() {
                     // Wait until the RS485 converter switched to write mode.
                     delayMicroseconds(RS485_MODE_SWITCH_DELAY);
 
-                    for (int k = 0; k <= stackCounter; k++) {
-                      Event *event = stackEvents[k];
-                      callListeners(event, true, true);
+                    while (!eventQueue.empty()) {
+                      Event *e = eventQueue.front();
+                      eventQueue.pop();
+                      callListeners(e, true, true);
                     }
-                    // -1 means empty.
-                    stackCounter = -1;
 
                     // Send NULL event to indicate that transmission is
                     // complete.

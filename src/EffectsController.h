@@ -59,7 +59,7 @@ class EffectsController : public EventListener {
     if (controllerType == CONTROLLER_16_8_1) {
       // Read bordID. Ideal value at 10bit resolution: (DIP+1)*1023*2/35
       // -> 58.46 to 935.3
-      boardId = 16 - ((int)((analogRead(28) + 29.23) / 58.46));
+      boardId = (16 - ((int)((analogRead(28) + 29.23) / 58.46))) & 0b0111;
 
       _ledBuiltInDevice = new LedBuiltInDevice();
       _ledBuiltInDevice->on();

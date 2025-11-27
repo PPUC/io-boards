@@ -63,6 +63,7 @@
 #define CONFIG_TOPIC_MIN_PULSE_TIME 77              // "M"
 #define CONFIG_TOPIC_FROM 77                        // "M"
 #define CONFIG_TOPIC_MIN_INTENSITY 77               // "M"
+#define CONFIG_TOPIC_DEBOUNCE_TIME 77               // "M"
 #define CONFIG_TOPIC_NUMBER 78                      // "N"
 #define CONFIG_TOPIC_AMOUNT_LEDS 79                 // "O"
 #define CONFIG_TOPIC_NUM_ROWS 79                    // "O"

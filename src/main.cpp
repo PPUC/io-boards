@@ -44,29 +44,6 @@ void setup() {
   // Overclock according to Raspberry Pi Pico SDK recommendations.
   set_sys_clock_khz(SYS_CLK_KHZ, true);
 
-  uint32_t timeout = millis() + WAIT_FOR_SERIAL_DEBUGGER_TIMEOUT;
-
-  Serial.begin(115200);
-  // Wait for a serial connection of a debugger via USB. Serial us USB CDC
-  // The Pico implements USB itself so special care must be taken. Use
-  // while(!Serial){} in the setup() code before printing anything so that it
-  // waits for the USB connection to be established.
-  // https://community.platformio.org/t/serial-monitor-not-working/1512/25
-  while (!Serial && millis() < timeout) {
-  }
-
-  if (Serial) {
-    usb_debugging = true;
-    ioBoardController.debug();
-    delay(10);
-    ioBoardController.eventDispatcher()->addListener(new CrossLinkDebugger());
-  } else {
-    Serial.end();
-  }
-
-  core_0_initilized = true;
-  rp2040.restartCore1();
-
   // RS485 connection.
   Serial1.end();  // Deactivete UART to empty TX FIFO after reboot
   delay(5);
@@ -79,12 +56,40 @@ void setup() {
     Serial1.read();
   }
 
-  // The watchdog interferes with the USB debuging.
-  if (!usb_debugging) {
+  usb_debugging = ioBoardController.isDebug();
+
+  if (usb_debugging) {
+    pinMode(LED_BUILTIN, OUTPUT);
+    Serial.begin(115200);
+    delay(100);
+    // Wait for a serial connection of a debugger via USB CDC.
+    // The Pico implements USB itself so special care must be taken. Use
+    // while(!Serial){} in the setup() code before printing anything so that
+    // it waits for the USB connection to be established.
+    // https://community.platformio.org/t/serial-monitor-not-working/1512/25
+    while (!Serial) {
+      digitalWrite(LED_BUILTIN, HIGH);
+      delay(100);
+      digitalWrite(LED_BUILTIN, LOW);
+      delay(100);
+      digitalWrite(LED_BUILTIN, HIGH);
+      delay(100);
+      digitalWrite(LED_BUILTIN, LOW);
+      delay(1000);
+    }
+
+    Serial.println("USB Serial debugging active.");
+   // ioBoardController.eventDispatcher()->addListener(new CrossLinkDebugger());
+  } else {
+    // The watchdog interferes with the USB debuging, so only start it
+    // if USB debugging is not active.
     if (!ITimer.attachInterruptInterval(1000000, watchdog)) {
       // @todo
     }
   }
+
+  core_0_initilized = true;
+  rp2040.restartCore1();
 }
 
 void setup1() {
