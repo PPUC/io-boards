@@ -1,14 +1,6 @@
 /*
   IOBoardController.h
   Created by Markus Kalkbrenner.
-
-  GPIO0-7: Input (Switches) or low power output
-  GPIO8-15: Input (Switches)
-  GPIO16,17,18: UART TX, UART RX, RS485 Direction
-  GPIO19-24, 26, 27: Power Out (PWM)
-  GPIO25: Status-LED
-  GPIO28: ADC for Board ID
-  GPIO29: Reserve (z.B. für einen LED-Strip oder zweite Status-LED)
 */
 
 #ifndef IOBOARDCONTROLLER_h

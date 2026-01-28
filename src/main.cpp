@@ -32,7 +32,7 @@ bool watchdog(struct repeating_timer *t) {
 }
 
 bool usb_debugging = false;
-bool core_0_initilized = false;
+bool core_0_initialized = false;
 
 // Each controller will be bound to its own core and has it's own
 // EventDispatcher. Only the EventDispatcher of IOBoardController
@@ -88,12 +88,12 @@ void setup() {
     }
   }
 
-  core_0_initilized = true;
+  core_0_initialized = true;
   rp2040.restartCore1();
 }
 
 void setup1() {
-  while (!core_0_initilized) {
+  while (!core_0_initialized) {
   }
 
   if (usb_debugging) {
