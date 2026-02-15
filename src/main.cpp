@@ -8,6 +8,7 @@
 #include "EventDispatcher/CrossLinkDebugger.h"
 #include "IOBoardController.h"
 #include "PPUC.h"
+#include "PPUCProtocolV2.h"
 #include "RPi_Pico_TimerInterrupt.h"
 
 IOBoardController ioBoardController(CONTROLLER_16_8_1);
@@ -50,7 +51,7 @@ void setup() {
   pinMode(RS485_MODE_PIN, OUTPUT);
   digitalWrite(RS485_MODE_PIN, LOW);  // Read mode
   delay(5);
-  Serial1.begin(115200);
+  Serial1.begin(ppuc::v2::kBaudRate);
   // Empty RX FIFO after reboot
   while (Serial1.available()) {
     Serial1.read();
