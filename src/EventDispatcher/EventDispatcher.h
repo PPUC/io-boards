@@ -53,7 +53,6 @@ class EventDispatcher {
 
  private:
   bool readBytes(byte* buffer, size_t len);
-  bool handleLegacyFrame();
   bool handleV2Frame();
   bool startV2UartDmaTransport();
   void stopV2UartDmaTransport();
@@ -115,7 +114,6 @@ class EventDispatcher {
   bool rs485 = false;
   uint8_t rs485Pin = 0;
   byte board = 255;
-  bool error = false;
   uint32_t lastPoll;
   bool running = false;
 

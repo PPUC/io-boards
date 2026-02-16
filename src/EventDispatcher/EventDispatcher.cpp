@@ -502,146 +502,6 @@ bool EventDispatcher::handleV2Frame() {
   return processV2Frame(v2Buffer, payloadBytes);
 }
 
-bool EventDispatcher::handleLegacyFrame() {
-  if (hwSerial->available() < 7) {
-    return false;
-  }
-
-  bool success = false;
-
-  byte startByte = hwSerial->read();
-  if (startByte == 255) {
-    byte sourceId = hwSerial->read();
-    if (sourceId != 0) {
-      if (sourceId == EVENT_CONFIGURATION) {
-        // Config Event has 12 bytes, 2 bytes are already parsed above.
-        while (hwSerial->available() < 10) {
-        }
-
-        // We have a ConfigEvent.
-        byte boardId = hwSerial->read();
-        byte topic = hwSerial->read();
-        byte index = hwSerial->read();
-        byte key = hwSerial->read();
-        uint32_t value = (((uint32_t)hwSerial->read()) << 24) +
-                         (((uint32_t)hwSerial->read()) << 16) +
-                         (((uint32_t)hwSerial->read()) << 8) +
-                         hwSerial->read();
-        byte stopByte = hwSerial->read();
-        if (stopByte == 0b10101010) {
-          stopByte = hwSerial->read();
-          if (stopByte == 0b01010101) {
-            success = true;
-            callListeners(new ConfigEvent(boardId, topic, index, key, value),
-                          true);
-          }
-        }
-      } else {
-        word eventId = word(hwSerial->read(), hwSerial->read());
-        if (eventId != 0) {
-          byte value = hwSerial->read();
-          byte stopByte = hwSerial->read();
-          if (stopByte == 0b10101010) {
-            stopByte = hwSerial->read();
-            if (stopByte == 0b01010101) {
-              success = true;
-              callListeners(new Event((char)sourceId, eventId, value), true,
-                            false);
-
-              if (sourceId == EVENT_POLL_EVENTS && board == value) {
-                digitalWrite(rs485Pin, HIGH);  // Write.
-                // Wait until the RS485 converter switched to write mode.
-                delayMicroseconds(RS485_MODE_SWITCH_DELAY);
-
-                while (!eventQueue.empty()) {
-                  Event *e = eventQueue.front();
-                  eventQueue.pop();
-                  callListeners(e, true, true);
-                }
-
-                // Send NULL event to indicate that transmission is complete.
-                callListeners(new Event(EVENT_NULL, 1, board), false, true);
-
-                lastPoll = millis();
-
-                // Flush the serial buffer and wait until done.
-                hwSerial->flush();
-                digitalWrite(rs485Pin, LOW);  // Read.
-                // Wait until the RS485 converter switched back to read mode.
-                delayMicroseconds(RS485_MODE_SWITCH_DELAY);
-              } else if (sourceId == EVENT_RUN) {
-                running = true;
-              }
-
-            } else {
-              if (Serial) {
-                rp2040.idleOtherCore();
-                Serial.print("Received wrong second stop byte ");
-                Serial.println(stopByte, DEC);
-                rp2040.resumeOtherCore();
-              }
-            }
-          } else {
-            if (Serial) {
-              rp2040.idleOtherCore();
-              Serial.print("Received wrong first stop byte ");
-              Serial.println(stopByte, DEC);
-              rp2040.resumeOtherCore();
-            }
-          }
-        } else {
-          if (Serial) {
-            rp2040.idleOtherCore();
-            Serial.print("Received invalid event id ");
-            Serial.println(eventId, DEC);
-            rp2040.resumeOtherCore();
-          }
-        }
-      }
-    } else {
-      if (Serial) {
-        rp2040.idleOtherCore();
-        Serial.print("Received invalid source id ");
-        Serial.println(sourceId, DEC);
-        rp2040.resumeOtherCore();
-      }
-    }
-  } else {
-    if (Serial) {
-      rp2040.idleOtherCore();
-      Serial.print("Received wrong start byte ");
-      Serial.println(startByte, DEC);
-      rp2040.resumeOtherCore();
-    }
-    // We didn't receive a start byte. Fake "success" to start over with the
-    // next byte.
-    success = true;
-  }
-
-  if (success) {
-    if (error) {
-      error = false;
-      dispatch(new Event(EVENT_NO_ERROR, 1, board));
-    }
-  } else {
-    error = true;
-    dispatch(new Event(EVENT_ERROR, 1, board));
-
-    while (hwSerial->available()) {
-      byte bits = hwSerial->read();
-      if (bits == 0b10101010 && hwSerial->available()) {
-        bits = hwSerial->read();
-        if (bits == 0b01010101) {
-          // Now we should be back in sync.
-          break;
-        }
-      }
-    }
-  }
-
-  return success;
-}
-
 void EventDispatcher::update() {
   if (!rs485) {  // We're on Core1, the EffectController. Transmit stacked
                  // events to Core0.
@@ -660,14 +520,13 @@ void EventDispatcher::update() {
     if (v2UartDmaActive) {
       serviceV2UartDmaRx();
     } else {
+      // Fallback parser is still needed for V2 bootstrap and fault handling:
+      // - bootstrap: receive initial V2 setup frame before DMA cutover
+      // - fault path: continue operating if UART DMA transport cannot start
       while (hwSerial->available() > 0) {
         int firstByte = hwSerial->peek();
         if (firstByte == ppuc::v2::kSyncByte) {
           if (!handleV2Frame()) {
-            break;
-          }
-        } else if (firstByte == 255) {
-          if (!handleLegacyFrame()) {
             break;
           }
         } else {
