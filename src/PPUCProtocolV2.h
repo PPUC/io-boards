@@ -42,6 +42,7 @@ enum FrameType : uint8_t {
   kFrameMapping = 0x06,
   kFrameReset = 0x07,
   kFrameConfig = 0x08,
+  kFrameSwitchNoChange = 0x09,
 };
 
 enum MappingDomain : uint8_t {

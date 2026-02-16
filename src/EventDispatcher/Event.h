@@ -48,6 +48,7 @@
 #define CONFIG_TOPIC_SWITCHES 115                 // "s"
 #define CONFIG_TOPIC_TRIGGER 116                  // "t"
 #define CONFIG_TOPIC_SWITCH_MATRIX 120            // "x"
+#define CONFIG_TOPIC_SWITCH_CHAIN 121             // "y"
 
 #define CONFIG_TOPIC_HOLD_POWER_ACTIVATION_TIME 65  // "A"
 #define CONFIG_TOPIC_DURATION 65                    // "A"
@@ -76,6 +77,7 @@
 #define CONFIG_TOPIC_LIGHT_UP 85                    // "U"
 #define CONFIG_TOPIC_ACTIVE_LOW 86                  // "V"
 #define CONFIG_TOPIC_POWER 87                       // "W"
+#define CONFIG_TOPIC_NEXT_BOARD 88                  // "X"
 #define CONFIG_TOPIC_TYPE 89                        // "Y"
 #define CONFIG_TOPIC_EFFECT 89                      // "Y"
 #define CONFIG_TOPIC_MODE 90                        // "Z"

@@ -40,6 +40,7 @@ class EventDispatcher {
 
   void setCrossLinkSerial(HardwareSerial& reference);
   void setDebug(bool enabled);
+  void setNextSwitchBoard(byte boardId);
 
   void addListener(EventListener* eventListener, char sourceId);
 
@@ -61,8 +62,10 @@ class EventDispatcher {
   size_t getV2PayloadBytes(ppuc::v2::FrameType frameType);
   bool processV2Frame(const byte* frame, size_t payloadBytes);
   void sendSwitchStateFrame(byte nextBoard);
+  void sendSwitchNoChangeFrame(byte nextBoard);
   void applyOutputStates(const byte* coils, size_t coilBytes, const byte* lamps,
                          size_t lampBytes);
+  void applySwitchStates(const byte* switches, size_t switchBytes);
   void updateSwitchBitmap(Event* event);
   int16_t findMappedIndex(const uint16_t* table, uint16_t count,
                           uint16_t number);
@@ -109,11 +112,15 @@ class EventDispatcher {
   uint32_t v2RxDmaRestarts = 0;
   uint32_t v2RxDmaTimeouts = 0;
   uint32_t v2TxFrames = 0;
+  uint32_t v2SwitchNoChangeTx = 0;
   uint32_t v2TxFallback = 0;
+  bool switchDirty = false;
+  bool applyingRemoteSwitchState = false;
 
   bool rs485 = false;
   uint8_t rs485Pin = 0;
   byte board = 255;
+  byte nextSwitchBoard = ppuc::v2::kNoBoard;
   uint32_t lastPoll;
   bool running = false;
 

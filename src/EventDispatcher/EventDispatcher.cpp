@@ -41,6 +41,10 @@ void EventDispatcher::setCrossLinkSerial(HardwareSerial &reference) {
 
 void EventDispatcher::setDebug(bool enabled) { debugEnabled = enabled; }
 
+void EventDispatcher::setNextSwitchBoard(byte boardId) {
+  nextSwitchBoard = boardId;
+}
+
 void EventDispatcher::addListener(EventListener *eventListener) {
   addListener(eventListener, EVENT_SOURCE_ANY);
 }
@@ -153,6 +157,10 @@ size_t EventDispatcher::getV2PayloadBytes(ppuc::v2::FrameType frameType) {
     case ppuc::v2::kFrameOutputState:
       return ppuc::v2::BitsToBytes(runtimeConfig.coilBits) +
              ppuc::v2::BitsToBytes(runtimeConfig.lampBits);
+    case ppuc::v2::kFrameSwitchState:
+      return ppuc::v2::BitsToBytes(runtimeConfig.switchBits);
+    case ppuc::v2::kFrameSwitchNoChange:
+      return 0;
     case ppuc::v2::kFrameHeartbeat:
     case ppuc::v2::kFrameError:
     case ppuc::v2::kFrameReset:
@@ -226,8 +234,23 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
     const size_t lampBytes = ppuc::v2::BitsToBytes(runtimeConfig.lampBits);
     applyOutputStates(&frame[4], coilBytes, &frame[4 + coilBytes], lampBytes);
     if (frame[2] == board) {
-      sendSwitchStateFrame((byte)((board + 1) % ppuc::v2::kMaxBoards));
+      if (switchDirty) {
+        sendSwitchStateFrame(nextSwitchBoard);
+        switchDirty = false;
+      } else {
+        sendSwitchNoChangeFrame(nextSwitchBoard);
+      }
     }
+    return true;
+  }
+
+  if (frameType == ppuc::v2::kFrameSwitchState) {
+    const size_t switchBytes = ppuc::v2::BitsToBytes(runtimeConfig.switchBits);
+    applySwitchStates(&frame[4], switchBytes);
+    return true;
+  }
+
+  if (frameType == ppuc::v2::kFrameSwitchNoChange) {
     return true;
   }
 
@@ -405,6 +428,9 @@ void EventDispatcher::updateSwitchBitmap(Event *event) {
 
   ppuc::v2::SetBitmapBit(switchStates, (uint16_t)mappedIndex,
                          event->value != 0);
+  if (!applyingRemoteSwitchState) {
+    switchDirty = true;
+  }
 }
 
 void EventDispatcher::applyOutputStates(const byte *coils, size_t coilBytes,
@@ -435,6 +461,24 @@ void EventDispatcher::applyOutputStates(const byte *coils, size_t coilBytes,
     }
   }
   memcpy(outputLamps, lamps, lampBytes);
+}
+
+void EventDispatcher::applySwitchStates(const byte* switches,
+                                        size_t switchBytes) {
+  // Global switch state is board-to-board on the RS485 bus. CPU/libppuc never
+  // broadcasts switch states. Every board consumes incoming switch frames and
+  // emits local switch events for fast-flip/effect listeners.
+  applyingRemoteSwitchState = true;
+  for (uint16_t n = 0; n < runtimeConfig.switchBits; ++n) {
+    bool oldState = ppuc::v2::GetBitmapBit(switchStates, n);
+    bool newState = ppuc::v2::GetBitmapBit(switches, n);
+    if (oldState != newState) {
+      dispatch(new Event(EVENT_SOURCE_SWITCH, switchIndexToNumber[n],
+                         newState ? 1 : 0, true));
+    }
+  }
+  applyingRemoteSwitchState = false;
+  memcpy(switchStates, switches, switchBytes);
 }
 
 void EventDispatcher::sendSwitchStateFrame(byte nextBoard) {
@@ -472,6 +516,31 @@ void EventDispatcher::sendSwitchStateFrame(byte nextBoard) {
   lastPoll = millis();
 }
 
+void EventDispatcher::sendSwitchNoChangeFrame(byte nextBoard) {
+  byte* frame = v2DmaTxBuffer;
+  frame[0] = ppuc::v2::kSyncByte;
+  frame[1] = ppuc::v2::ComposeTypeAndFlags(ppuc::v2::kFrameSwitchNoChange,
+                                           ppuc::v2::kFlagNone);
+  frame[2] = nextBoard;
+  frame[3] = txSequence++;
+  uint16_t crc = ppuc::v2::Crc16Ccitt(frame, ppuc::v2::kHeaderBytes);
+  frame[4] = highByte(crc);
+  frame[5] = lowByte(crc);
+
+  if (!v2UartDmaActive || !sendV2FrameUartDma(frame, ppuc::v2::kResetFrameBytes)) {
+    v2TxFallback++;
+    digitalWrite(rs485Pin, HIGH);  // Write.
+    delayMicroseconds(RS485_MODE_SWITCH_DELAY);
+    hwSerial->write(frame, ppuc::v2::kResetFrameBytes);
+    hwSerial->flush();
+    digitalWrite(rs485Pin, LOW);  // Read.
+    delayMicroseconds(RS485_MODE_SWITCH_DELAY);
+  }
+
+  v2SwitchNoChangeTx++;
+  lastPoll = millis();
+}
+
 bool EventDispatcher::handleV2Frame() {
   if (hwSerial->available() < (int)ppuc::v2::kHeaderBytes) {
     return false;
@@ -490,7 +559,8 @@ bool EventDispatcher::handleV2Frame() {
   if (frameType != ppuc::v2::kFrameHeartbeat &&
       frameType != ppuc::v2::kFrameError &&
       frameType != ppuc::v2::kFrameReset && payloadBytes == 0 &&
-      frameType != ppuc::v2::kFrameOutputState) {
+      frameType != ppuc::v2::kFrameOutputState &&
+      frameType != ppuc::v2::kFrameSwitchNoChange) {
     return false;
   }
 
@@ -572,6 +642,8 @@ void EventDispatcher::update() {
     Serial.print(v2RxDmaTimeouts);
     Serial.print(" tx=");
     Serial.print(v2TxFrames);
+    Serial.print(" tx_nochange=");
+    Serial.print(v2SwitchNoChangeTx);
     Serial.print(" tx_fallback=");
     Serial.println(v2TxFallback);
     rp2040.resumeOtherCore();

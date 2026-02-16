@@ -117,6 +117,12 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
         }
         break;
 
+      case CONFIG_TOPIC_SWITCH_CHAIN:
+        if (event->key == CONFIG_TOPIC_NEXT_BOARD) {
+          _eventDispatcher->setNextSwitchBoard((byte)event->value);
+        }
+        break;
+
       case CONFIG_TOPIC_SWITCHES:
         switch (event->key) {
           case CONFIG_TOPIC_PORT:
