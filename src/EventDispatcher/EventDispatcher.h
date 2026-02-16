@@ -12,6 +12,7 @@
 
 #include <queue>
 
+#include "hardware/dma.h"
 #include "Event.h"
 #include "EventListener.h"
 #include "MultiCoreCrossLink.h"
@@ -38,6 +39,7 @@ class EventDispatcher {
   MultiCoreCrossLink* getMultiCoreCrossLink();
 
   void setCrossLinkSerial(HardwareSerial& reference);
+  void setDebug(bool enabled);
 
   void addListener(EventListener* eventListener, char sourceId);
 
@@ -53,6 +55,12 @@ class EventDispatcher {
   bool readBytes(byte* buffer, size_t len);
   bool handleLegacyFrame();
   bool handleV2Frame();
+  bool startV2UartDmaTransport();
+  void stopV2UartDmaTransport();
+  void serviceV2UartDmaRx();
+  bool sendV2FrameUartDma(const byte* frame, size_t frameBytes);
+  size_t getV2PayloadBytes(ppuc::v2::FrameType frameType);
+  bool processV2Frame(const byte* frame, size_t payloadBytes);
   void sendSwitchStateFrame(byte nextBoard);
   void applyOutputStates(const byte* coils, size_t coilBytes, const byte* lamps,
                          size_t lampBytes);
@@ -73,6 +81,10 @@ class EventDispatcher {
   byte msg[12];
   byte v2Buffer[ppuc::v2::kHeaderBytes + ppuc::v2::kMaxCoilBytes +
                 ppuc::v2::kMaxLampBytes + ppuc::v2::kCrcBytes];
+  byte v2DmaRxBuffer[ppuc::v2::kHeaderBytes + ppuc::v2::kMaxCoilBytes +
+                     ppuc::v2::kMaxLampBytes + ppuc::v2::kCrcBytes];
+  byte v2DmaTxBuffer[ppuc::v2::kHeaderBytes + ppuc::v2::kMaxSwitchBytes +
+                     ppuc::v2::kCrcBytes];
   byte outputCoils[ppuc::v2::kMaxCoilBytes] = {0};
   byte outputLamps[ppuc::v2::kMaxLampBytes] = {0};
   byte switchStates[ppuc::v2::kMaxSwitchBytes] = {0};
@@ -81,6 +93,24 @@ class EventDispatcher {
   uint16_t switchIndexToNumber[ppuc::v2::kMaxSwitchBits];
   byte txSequence = 0;
   ppuc::v2::RuntimeConfig runtimeConfig;
+  bool v2UartDmaActive = false;
+  enum V2RxState { V2_RX_IDLE = 0, V2_RX_HEADER, V2_RX_BODY };
+  V2RxState v2RxState = V2_RX_IDLE;
+  size_t v2RxPayloadBytes = 0;
+  uint32_t v2RxStateStartUs = 0;
+  int v2RxDmaChannel = -1;
+  int v2TxDmaChannel = -1;
+  bool debugEnabled = false;
+  uint32_t debugLastPrintMs = 0;
+  uint32_t v2CutoverOk = 0;
+  uint32_t v2CutoverFail = 0;
+  uint32_t v2RxFrames = 0;
+  uint32_t v2RxCrcFail = 0;
+  uint32_t v2RxSyncFail = 0;
+  uint32_t v2RxDmaRestarts = 0;
+  uint32_t v2RxDmaTimeouts = 0;
+  uint32_t v2TxFrames = 0;
+  uint32_t v2TxFallback = 0;
 
   bool rs485 = false;
   uint8_t rs485Pin = 0;

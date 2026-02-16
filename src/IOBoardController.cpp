@@ -23,6 +23,7 @@ IOBoardController::IOBoardController(int cT) {
     }
 
     _eventDispatcher->setBoard(boardId);
+    _eventDispatcher->setDebug(m_debug);
     _eventDispatcher->setRS485ModePin(RS485_MODE_PIN);
     _eventDispatcher->setCrossLinkSerial(Serial1);
     _multiCoreCrossLink = new MultiCoreCrossLink();

@@ -40,6 +40,8 @@ enum FrameType : uint8_t {
   kFrameError = 0x04,
   kFrameSetup = 0x05,
   kFrameMapping = 0x06,
+  kFrameReset = 0x07,
+  kFrameConfig = 0x08,
 };
 
 enum MappingDomain : uint8_t {
@@ -75,6 +77,14 @@ struct MappingPayload {
   uint16_t number;
 };
 
+struct ConfigPayload {
+  uint8_t boardId;
+  uint8_t topic;
+  uint8_t index;
+  uint8_t key;
+  uint32_t value;
+};
+
 struct OutputPayload {
   // Only first BitsToBytes(coilBits/lampBits) bytes are used at runtime.
   uint8_t coils[kMaxCoilBytes];
@@ -98,6 +108,12 @@ struct MappingFrame {
   uint16_t crc;
 };
 
+struct ConfigFrame {
+  FrameHeader header;
+  ConfigPayload payload;
+  uint16_t crc;
+};
+
 struct OutputStateFrame {
   FrameHeader header;
   OutputPayload payload;
@@ -112,10 +128,13 @@ struct SwitchStateFrame {
 
 constexpr size_t kSetupPayloadBytes = sizeof(SetupPayload);
 constexpr size_t kMappingPayloadBytes = sizeof(MappingPayload);
+constexpr size_t kConfigPayloadBytes = sizeof(ConfigPayload);
 constexpr size_t kOutputPayloadBytes = sizeof(OutputPayload);
 constexpr size_t kSwitchPayloadBytes = sizeof(SwitchPayload);
+constexpr size_t kResetFrameBytes = kHeaderBytes + kCrcBytes;
 constexpr size_t kSetupFrameBytes = sizeof(SetupFrame);
 constexpr size_t kMappingFrameBytes = sizeof(MappingFrame);
+constexpr size_t kConfigFrameBytes = sizeof(ConfigFrame);
 constexpr size_t kOutputFrameBytes = sizeof(OutputStateFrame);
 constexpr size_t kSwitchFrameBytes = sizeof(SwitchStateFrame);
 
