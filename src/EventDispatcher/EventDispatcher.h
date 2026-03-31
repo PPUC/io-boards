@@ -64,7 +64,7 @@ class EventDispatcher {
   void sendSwitchStateFrame(byte nextBoard);
   void sendSwitchNoChangeFrame(byte nextBoard);
   void applyOutputStates(const byte* coils, size_t coilBytes, const byte* lamps,
-                         size_t lampBytes);
+                         size_t lampBytes, const byte* giLevels);
   void applySwitchStates(const byte* switches, size_t switchBytes);
   void updateSwitchBitmap(Event* event);
   int16_t findMappedIndex(const uint16_t* table, uint16_t count,
@@ -82,13 +82,16 @@ class EventDispatcher {
 
   byte msg[12];
   byte v2Buffer[ppuc::v2::kHeaderBytes + ppuc::v2::kMaxCoilBytes +
-                ppuc::v2::kMaxLampBytes + ppuc::v2::kCrcBytes];
+                ppuc::v2::kMaxLampBytes + ppuc::v2::kGiBytes +
+                ppuc::v2::kCrcBytes];
   byte v2DmaRxBuffer[ppuc::v2::kHeaderBytes + ppuc::v2::kMaxCoilBytes +
-                     ppuc::v2::kMaxLampBytes + ppuc::v2::kCrcBytes];
+                     ppuc::v2::kMaxLampBytes + ppuc::v2::kGiBytes +
+                     ppuc::v2::kCrcBytes];
   byte v2DmaTxBuffer[ppuc::v2::kHeaderBytes + ppuc::v2::kMaxSwitchBytes +
                      ppuc::v2::kCrcBytes];
   byte outputCoils[ppuc::v2::kMaxCoilBytes] = {0};
   byte outputLamps[ppuc::v2::kMaxLampBytes] = {0};
+  byte outputGi[ppuc::v2::kGiStrings] = {0};
   byte switchStates[ppuc::v2::kMaxSwitchBytes] = {0};
   uint16_t coilIndexToNumber[ppuc::v2::kMaxCoilBits];
   uint16_t lampIndexToNumber[ppuc::v2::kMaxLampBits];

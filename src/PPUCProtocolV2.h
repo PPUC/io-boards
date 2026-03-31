@@ -11,13 +11,16 @@ constexpr uint32_t kBaudRate = 250000;
 constexpr uint8_t kSyncByte = 0xA5;
 constexpr uint8_t kNoBoard = 0xFF;
 constexpr uint8_t kMaxBoards = 8;
+constexpr uint8_t kGiStrings = 5;
+constexpr uint8_t kMaxGiLevel = 8;
+constexpr uint8_t kGiLevelBits = 4;
 
 // Bitmaps are indexed by global device number: bit N => device number N.
 // Runtime counts are configured per game and announced with SetupFrame.
 constexpr uint16_t kDefaultCoilBits = 24;
 constexpr uint16_t kDefaultLampBits = 64;
 constexpr uint16_t kDefaultSwitchBits = 64;
-constexpr uint16_t kMaxCoilBits = 256;
+constexpr uint16_t kMaxCoilBits = 64;
 constexpr uint16_t kMaxLampBits = 256;
 constexpr uint16_t kMaxSwitchBits = 256;
 
@@ -29,6 +32,7 @@ constexpr size_t kDefaultSwitchBytes = BitsToBytes(kDefaultSwitchBits);
 constexpr size_t kMaxCoilBytes = BitsToBytes(kMaxCoilBits);
 constexpr size_t kMaxLampBytes = BitsToBytes(kMaxLampBits);
 constexpr size_t kMaxSwitchBytes = BitsToBytes(kMaxSwitchBits);
+constexpr size_t kGiBytes = (kGiStrings * kGiLevelBits + 7u) / 8u;
 
 constexpr size_t kHeaderBytes = 4;
 constexpr size_t kCrcBytes = 2;
@@ -90,6 +94,7 @@ struct OutputPayload {
   // Only first BitsToBytes(coilBits/lampBits) bytes are used at runtime.
   uint8_t coils[kMaxCoilBytes];
   uint8_t lamps[kMaxLampBytes];
+  uint8_t gi[kGiBytes];
 };
 
 struct SwitchPayload {
@@ -152,7 +157,7 @@ inline bool IsValidRuntimeConfig(const RuntimeConfig& cfg) {
 }
 
 inline size_t OutputPayloadBytes(const RuntimeConfig& cfg) {
-  return BitsToBytes(cfg.coilBits) + BitsToBytes(cfg.lampBits);
+  return BitsToBytes(cfg.coilBits) + BitsToBytes(cfg.lampBits) + kGiBytes;
 }
 
 inline size_t SwitchPayloadBytes(const RuntimeConfig& cfg) {
@@ -212,6 +217,30 @@ inline bool GetBitmapBit(const uint8_t* bitmap, uint16_t number) {
   const uint16_t byteIndex = number / 8u;
   const uint8_t bitMask = static_cast<uint8_t>(1u << (number % 8u));
   return (bitmap[byteIndex] & bitMask) != 0;
+}
+
+inline uint8_t ClampGiLevel(uint8_t level) {
+  return level > kMaxGiLevel ? kMaxGiLevel : level;
+}
+
+inline void SetPackedNibble(uint8_t* data, uint8_t index, uint8_t value) {
+  const uint8_t clampedValue = static_cast<uint8_t>(value & 0x0F);
+  const uint8_t byteIndex = index / 2u;
+  if ((index & 1u) == 0) {
+    data[byteIndex] =
+        static_cast<uint8_t>((data[byteIndex] & 0x0F) | (clampedValue << 4));
+  } else {
+    data[byteIndex] =
+        static_cast<uint8_t>((data[byteIndex] & 0xF0) | clampedValue);
+  }
+}
+
+inline uint8_t GetPackedNibble(const uint8_t* data, uint8_t index) {
+  const uint8_t byteIndex = index / 2u;
+  if ((index & 1u) == 0) {
+    return static_cast<uint8_t>((data[byteIndex] >> 4) & 0x0F);
+  }
+  return static_cast<uint8_t>(data[byteIndex] & 0x0F);
 }
 
 }  // namespace v2

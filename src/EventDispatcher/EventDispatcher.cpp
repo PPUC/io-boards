@@ -155,8 +155,7 @@ size_t EventDispatcher::getV2PayloadBytes(ppuc::v2::FrameType frameType) {
     case ppuc::v2::kFrameConfig:
       return ppuc::v2::kConfigPayloadBytes;
     case ppuc::v2::kFrameOutputState:
-      return ppuc::v2::BitsToBytes(runtimeConfig.coilBits) +
-             ppuc::v2::BitsToBytes(runtimeConfig.lampBits);
+      return ppuc::v2::OutputPayloadBytes(runtimeConfig);
     case ppuc::v2::kFrameSwitchState:
       return ppuc::v2::BitsToBytes(runtimeConfig.switchBits);
     case ppuc::v2::kFrameSwitchNoChange:
@@ -191,6 +190,7 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
       runtimeConfig = newConfig;
       memset(outputCoils, 0, sizeof(outputCoils));
       memset(outputLamps, 0, sizeof(outputLamps));
+      memset(outputGi, 0, sizeof(outputGi));
       memset(switchStates, 0, sizeof(switchStates));
       for (uint16_t i = 0; i < runtimeConfig.coilBits; ++i) {
         coilIndexToNumber[i] = i;
@@ -232,7 +232,8 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
   if (frameType == ppuc::v2::kFrameOutputState) {
     const size_t coilBytes = ppuc::v2::BitsToBytes(runtimeConfig.coilBits);
     const size_t lampBytes = ppuc::v2::BitsToBytes(runtimeConfig.lampBits);
-    applyOutputStates(&frame[4], coilBytes, &frame[4 + coilBytes], lampBytes);
+    applyOutputStates(&frame[4], coilBytes, &frame[4 + coilBytes], lampBytes,
+                      &frame[4 + coilBytes + lampBytes]);
     if (frame[2] == board) {
       if (switchDirty) {
         sendSwitchStateFrame(nextSwitchBoard);
@@ -434,7 +435,8 @@ void EventDispatcher::updateSwitchBitmap(Event *event) {
 }
 
 void EventDispatcher::applyOutputStates(const byte *coils, size_t coilBytes,
-                                        const byte *lamps, size_t lampBytes) {
+                                        const byte *lamps, size_t lampBytes,
+                                        const byte* giLevels) {
   // V2 output frames carry full RAM snapshots. To preserve existing
   // EventListener behavior, we synthesize legacy events only for changed bits
   // (edge detection old snapshot -> new snapshot). This keeps the rest of the
@@ -461,6 +463,16 @@ void EventDispatcher::applyOutputStates(const byte *coils, size_t coilBytes,
     }
   }
   memcpy(outputLamps, lamps, lampBytes);
+
+  for (uint8_t giString = 0; giString < ppuc::v2::kGiStrings; ++giString) {
+    const uint8_t newLevel = ppuc::v2::ClampGiLevel(
+        ppuc::v2::GetPackedNibble(giLevels, giString));
+    if (outputGi[giString] != newLevel) {
+      callListeners(new Event(EVENT_SOURCE_GI, giString + 1, newLevel), true,
+                    false);
+      outputGi[giString] = newLevel;
+    }
+  }
 }
 
 void EventDispatcher::applySwitchStates(const byte* switches,
