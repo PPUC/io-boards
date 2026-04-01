@@ -6,7 +6,7 @@
 namespace ppuc {
 namespace v2 {
 
-constexpr uint32_t kBaudRate = 250000;
+constexpr uint32_t kBaudRate = 115200;
 
 constexpr uint8_t kSyncByte = 0xA5;
 constexpr uint8_t kNoBoard = 0xFF;

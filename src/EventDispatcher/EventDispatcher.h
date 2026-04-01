@@ -114,11 +114,15 @@ class EventDispatcher {
   uint32_t v2RxSyncFail = 0;
   uint32_t v2RxDmaRestarts = 0;
   uint32_t v2RxDmaTimeouts = 0;
+  uint32_t v2RawBytes = 0;
+  uint32_t v2RawA5 = 0;
+  uint32_t v2RawFF = 0;
   uint32_t v2TxFrames = 0;
   uint32_t v2SwitchNoChangeTx = 0;
   uint32_t v2TxFallback = 0;
   bool switchDirty = false;
   bool applyingRemoteSwitchState = false;
+  bool v2RuntimeInitialized = false;
 
   bool rs485 = false;
   uint8_t rs485Pin = 0;

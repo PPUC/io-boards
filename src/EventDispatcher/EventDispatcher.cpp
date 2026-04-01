@@ -201,6 +201,15 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
       for (uint16_t i = 0; i < runtimeConfig.switchBits; ++i) {
         switchIndexToNumber[i] = i;
       }
+      if (!v2RuntimeInitialized) {
+        // The v2 host no longer relies on legacy serial control events for
+        // startup. Once setup arrives, all config frames have already been
+        // applied, so we can enable runtime processing and start switch input
+        // capture locally.
+        dispatch(new Event(EVENT_RUN, 1, 1));
+        dispatch(new Event(EVENT_READ_SWITCHES));
+        v2RuntimeInitialized = true;
+      }
       if (!v2UartDmaActive) {
         if (startV2UartDmaTransport()) {
           v2CutoverOk++;
@@ -256,6 +265,7 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
   }
 
   if (frameType == ppuc::v2::kFrameReset) {
+    v2RuntimeInitialized = false;
     dispatch(new Event(EVENT_RESET));
     return true;
   }
@@ -607,6 +617,14 @@ void EventDispatcher::update() {
       // - fault path: continue operating if UART DMA transport cannot start
       while (hwSerial->available() > 0) {
         int firstByte = hwSerial->peek();
+        if (firstByte >= 0) {
+          v2RawBytes++;
+          if (firstByte == ppuc::v2::kSyncByte) {
+            v2RawA5++;
+          } else if (firstByte == 0xFF) {
+            v2RawFF++;
+          }
+        }
         if (firstByte == ppuc::v2::kSyncByte) {
           if (!handleV2Frame()) {
             break;
@@ -652,6 +670,12 @@ void EventDispatcher::update() {
     Serial.print(v2RxDmaRestarts);
     Serial.print(" rx_dma_timeout=");
     Serial.print(v2RxDmaTimeouts);
+    Serial.print(" raw=");
+    Serial.print(v2RawBytes);
+    Serial.print(" raw_a5=");
+    Serial.print(v2RawA5);
+    Serial.print(" raw_ff=");
+    Serial.print(v2RawFF);
     Serial.print(" tx=");
     Serial.print(v2TxFrames);
     Serial.print(" tx_nochange=");
