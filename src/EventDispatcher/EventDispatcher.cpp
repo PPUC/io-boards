@@ -6,6 +6,15 @@
 namespace {
 constexpr uint32_t kV2RxTimeoutUs = 8000;
 constexpr bool kEnableV2UartDmaRx = false;
+constexpr uint32_t kSerialBaudRate = ppuc::v2::kBaudRate;
+
+uint32_t FrameWireTimeUs(size_t frameBytes) {
+  // Approximate 8N1 UART wire time. Add a small guard so we can safely switch
+  // RS485 direction back to RX without relying on HardwareSerial::flush(),
+  // which appears to hang in the board-to-host switch reply path.
+  const uint32_t bits = static_cast<uint32_t>(frameBytes) * 10;
+  return (bits * 1000000u) / kSerialBaudRate + 200;
+}
 }
 
 EventDispatcher::EventDispatcher() {
@@ -246,9 +255,10 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
       frameType == ppuc::v2::kFrameOutputState ||
       frameType == ppuc::v2::kFrameHeartbeat ||
       frameType == ppuc::v2::kFrameError || frameType == ppuc::v2::kFrameReset;
+  const bool hostOutputFrame = frameType == ppuc::v2::kFrameOutputState;
 
   auto noteHostSequence = [&]() {
-    if (!hostOriginated) {
+    if (!hostOutputFrame) {
       return;
     }
     if (lastHostSequenceValid &&
@@ -268,7 +278,6 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
         word(frame[payloadOffset + 4], frame[payloadOffset + 5]);
     if (ppuc::v2::IsValidRuntimeConfig(newConfig)) {
       resetSessionState(incomingEpoch, newConfig);
-      noteHostSequence();
       if (!v2RuntimeInitialized) {
         // The v2 host no longer relies on legacy serial control events for
         // startup. Once setup arrives, all config frames have already been
@@ -369,10 +378,26 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
     const size_t switchBytes = ppuc::v2::BitsToBytes(runtimeConfig.switchBits);
     applySwitchStates(&frame[payloadOffset + ppuc::v2::kSwitchStatusBytes],
                       switchBytes);
+    if (frame[2] == board) {
+      if (switchDirty) {
+        sendSwitchStateFrame(nextSwitchBoard);
+        switchDirty = false;
+      } else {
+        sendSwitchNoChangeFrame(nextSwitchBoard);
+      }
+    }
     return true;
   }
 
   if (frameType == ppuc::v2::kFrameSwitchNoChange) {
+    if (runtimeConfigValid && incomingEpoch == currentEpoch && frame[2] == board) {
+      if (switchDirty) {
+        sendSwitchStateFrame(nextSwitchBoard);
+        switchDirty = false;
+      } else {
+        sendSwitchNoChangeFrame(nextSwitchBoard);
+      }
+    }
     return true;
   }
 
@@ -642,7 +667,7 @@ void EventDispatcher::sendSwitchStateFrame(byte nextBoard) {
     digitalWrite(rs485Pin, HIGH);  // Write.
     delayMicroseconds(RS485_MODE_SWITCH_DELAY);
     hwSerial->write(frame, frameBytes);
-    hwSerial->flush();
+    delayMicroseconds(FrameWireTimeUs(frameBytes));
     digitalWrite(rs485Pin, LOW);  // Read.
     delayMicroseconds(RS485_MODE_SWITCH_DELAY);
   }
@@ -674,7 +699,8 @@ void EventDispatcher::sendSwitchNoChangeFrame(byte nextBoard) {
     digitalWrite(rs485Pin, HIGH);  // Write.
     delayMicroseconds(RS485_MODE_SWITCH_DELAY);
     hwSerial->write(frame, ppuc::v2::SwitchNoChangeFrameBytes());
-    hwSerial->flush();
+    delayMicroseconds(
+        FrameWireTimeUs(ppuc::v2::SwitchNoChangeFrameBytes()));
     digitalWrite(rs485Pin, LOW);  // Read.
     delayMicroseconds(RS485_MODE_SWITCH_DELAY);
   }

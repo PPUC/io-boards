@@ -191,6 +191,19 @@ This keeps GI separate from lamps, which matters because one addressable LED str
 
 These counters are the fastest way to diagnose whether the issue is framing, CRC, DMA startup, or token flow.
 
+## Confirmed Multi-Board Runtime Finding
+
+- Real-machine testing showed that host-side V2 switch-chain timing affects visible lamp animation quality, not only switch test.
+- After loosening `libppuc` switch-reply timing and making resync less aggressive, the lamp attract-mode animation became visibly correct and much faster.
+- Treat the board firmware and host timing together as one system. If switch-chain timing is too aggressive, the host can churn sessions often enough to disturb normal output updates.
+- For larger games with more boards, expect the timing sweet spot to move. Do not assume a single fixed timeout is ideal for every cabinet.
+
+Firmware-side implications:
+
+- Board-to-host switch reply fallback TX timing is sensitive.
+- The fallback switch reply path currently avoids `HardwareSerial::flush()` and uses a bounded wire-time delay before switching RS485 back to RX.
+- Keep that behavior unless there is a proven replacement, because earlier `flush()` behavior was correlated with board freezes during switch reply.
+
 ## Known Gaps And Risks
 
 - The `v2` protocol path exists on this branch but has not been validated end-to-end against the intended `libppuc` `v2` counterpart.
@@ -200,6 +213,7 @@ These counters are the fastest way to diagnose whether the issue is framing, CRC
 - `kFlagDelta` is defined but not used; all practical state transfer is keyframe/full-snapshot based.
 - The frame format has no sender board ID, so switch-chain validation relies on token order (`nextBoard`) rather than explicit sender identity.
 - GI strings are fixed-size in the runtime payload rather than dynamically mapped like coils, lamps, and switches.
+- The 16-switch PIO reader has special handling for the last four stateful inputs. Regressions there are easy to miss because the other 12 inputs can still appear healthy.
 
 ## Next Bring-Up Focus
 
@@ -215,3 +229,7 @@ When resuming work on `v2`, start here:
    - switch reply
 4. Use USB debug mode on one board and inspect `V2DBG` counters while driving known switch transitions.
 5. Only after single-board traffic is stable, test multi-board token passing via `nextBoard`.
+6. If the last four dedicated switch inputs on IO_16_8_1 stop reporting, inspect both:
+   - `src/IODevices/Switches.cpp` registration/range checks
+   - the 16-switch PIO stateful-pin reset path for GPIO 15-18
+7. If multi-board switch traffic mostly works but runtime animation degrades, coordinate timing changes with `libppuc` before changing board protocol logic.
