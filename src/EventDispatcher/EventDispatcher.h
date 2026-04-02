@@ -68,6 +68,9 @@ class EventDispatcher {
                          size_t lampBytes, const byte* giLevels);
   void applySwitchStates(const byte* switches, size_t switchBytes);
   void updateSwitchBitmap(Event* event);
+  void resetSessionState(uint8_t newEpoch, const ppuc::v2::RuntimeConfig& cfg);
+  uint8_t currentStatusFlags() const;
+  void clearReportedStatusFlags();
   int16_t findMappedIndex(const uint16_t* table, uint16_t count,
                           uint16_t number);
 
@@ -88,8 +91,8 @@ class EventDispatcher {
   byte v2DmaRxBuffer[ppuc::v2::kHeaderBytes + ppuc::v2::kMaxCoilBytes +
                      ppuc::v2::kMaxLampBytes + ppuc::v2::kGiBytes +
                      ppuc::v2::kCrcBytes];
-  byte v2DmaTxBuffer[ppuc::v2::kHeaderBytes + ppuc::v2::kMaxSwitchBytes +
-                     ppuc::v2::kCrcBytes];
+  byte v2DmaTxBuffer[ppuc::v2::kHeaderBytes + ppuc::v2::kSwitchStatusBytes +
+                     ppuc::v2::kMaxSwitchBytes + ppuc::v2::kCrcBytes];
   byte outputCoils[ppuc::v2::kMaxCoilBytes] = {0};
   byte outputLamps[ppuc::v2::kMaxLampBytes] = {0};
   byte outputGi[ppuc::v2::kGiStrings] = {0};
@@ -123,8 +126,18 @@ class EventDispatcher {
   uint32_t v2SwitchNoChangeTx = 0;
   uint32_t v2TxFallback = 0;
   bool switchDirty = false;
+  bool switchOverflow = false;
   bool applyingRemoteSwitchState = false;
   bool v2RuntimeInitialized = false;
+  bool runtimeConfigValid = false;
+  bool mappingComplete = false;
+  uint16_t expectedMappingFrames = 0;
+  uint16_t receivedMappingFrames = 0;
+  uint8_t currentEpoch = 0;
+  uint8_t lastHostSequenceSeen = 0;
+  bool lastHostSequenceValid = false;
+  bool sequenceGapDetected = false;
+  bool parserResynced = false;
 
   bool rs485 = false;
   uint8_t rs485Pin = 0;

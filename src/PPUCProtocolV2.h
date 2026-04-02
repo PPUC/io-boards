@@ -34,7 +34,7 @@ constexpr size_t kMaxLampBytes = BitsToBytes(kMaxLampBits);
 constexpr size_t kMaxSwitchBytes = BitsToBytes(kMaxSwitchBits);
 constexpr size_t kGiBytes = (kGiStrings * kGiLevelBits + 7u) / 8u;
 
-constexpr size_t kHeaderBytes = 4;
+constexpr size_t kHeaderBytes = 5;
 constexpr size_t kCrcBytes = 2;
 
 enum FrameType : uint8_t {
@@ -62,11 +62,21 @@ enum FrameFlag : uint8_t {
   kFlagError = 0x80,
 };
 
+enum SwitchStatusFlag : uint8_t {
+  kStatusInSync = 0x01,
+  kStatusNeedsSetup = 0x02,
+  kStatusMappingIncomplete = 0x04,
+  kStatusSequenceGap = 0x08,
+  kStatusParserResynced = 0x10,
+  kStatusSwitchOverflow = 0x20,
+};
+
 struct FrameHeader {
   uint8_t sync;
   uint8_t typeAndFlags;
   uint8_t nextBoard;
   uint8_t sequence;
+  uint8_t epoch;
 };
 
 struct SetupPayload {
@@ -98,6 +108,10 @@ struct OutputPayload {
 };
 
 struct SwitchPayload {
+  uint8_t epochSeen;
+  uint8_t lastHostSequenceSeen;
+  uint8_t statusFlags;
+  uint8_t reserved;
   // Only first BitsToBytes(switchBits) bytes are used at runtime.
   uint8_t switches[kMaxSwitchBytes];
 };
@@ -137,6 +151,7 @@ constexpr size_t kMappingPayloadBytes = sizeof(MappingPayload);
 constexpr size_t kConfigPayloadBytes = sizeof(ConfigPayload);
 constexpr size_t kOutputPayloadBytes = sizeof(OutputPayload);
 constexpr size_t kSwitchPayloadBytes = sizeof(SwitchPayload);
+constexpr size_t kSwitchStatusBytes = 4;
 constexpr size_t kResetFrameBytes = kHeaderBytes + kCrcBytes;
 constexpr size_t kSetupFrameBytes = sizeof(SetupFrame);
 constexpr size_t kMappingFrameBytes = sizeof(MappingFrame);
@@ -161,7 +176,13 @@ inline size_t OutputPayloadBytes(const RuntimeConfig& cfg) {
 }
 
 inline size_t SwitchPayloadBytes(const RuntimeConfig& cfg) {
-  return BitsToBytes(cfg.switchBits);
+  return kSwitchStatusBytes + BitsToBytes(cfg.switchBits);
+}
+
+inline size_t SwitchNoChangePayloadBytes() { return kSwitchStatusBytes; }
+
+inline size_t SwitchNoChangeFrameBytes() {
+  return kHeaderBytes + SwitchNoChangePayloadBytes() + kCrcBytes;
 }
 
 inline size_t OutputFrameBytes(const RuntimeConfig& cfg) {

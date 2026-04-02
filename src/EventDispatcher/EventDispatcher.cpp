@@ -158,9 +158,9 @@ size_t EventDispatcher::getV2PayloadBytes(ppuc::v2::FrameType frameType) {
     case ppuc::v2::kFrameOutputState:
       return ppuc::v2::OutputPayloadBytes(runtimeConfig);
     case ppuc::v2::kFrameSwitchState:
-      return ppuc::v2::BitsToBytes(runtimeConfig.switchBits);
+      return ppuc::v2::SwitchPayloadBytes(runtimeConfig);
     case ppuc::v2::kFrameSwitchNoChange:
-      return 0;
+      return ppuc::v2::SwitchNoChangePayloadBytes();
     case ppuc::v2::kFrameHeartbeat:
     case ppuc::v2::kFrameError:
     case ppuc::v2::kFrameReset:
@@ -170,38 +170,105 @@ size_t EventDispatcher::getV2PayloadBytes(ppuc::v2::FrameType frameType) {
   }
 }
 
+void EventDispatcher::resetSessionState(
+    uint8_t newEpoch, const ppuc::v2::RuntimeConfig& cfg) {
+  currentEpoch = newEpoch;
+  runtimeConfig = cfg;
+  runtimeConfigValid = true;
+  expectedMappingFrames = static_cast<uint16_t>(cfg.coilBits + cfg.lampBits +
+                                                cfg.switchBits);
+  receivedMappingFrames = 0;
+  mappingComplete = expectedMappingFrames == 0;
+  lastHostSequenceSeen = 0;
+  lastHostSequenceValid = false;
+  sequenceGapDetected = false;
+  parserResynced = false;
+
+  for (uint16_t i = 0; i < runtimeConfig.coilBits; ++i) {
+    coilIndexToNumber[i] = i;
+  }
+  for (uint16_t i = 0; i < runtimeConfig.lampBits; ++i) {
+    lampIndexToNumber[i] = i;
+  }
+  for (uint16_t i = 0; i < runtimeConfig.switchBits; ++i) {
+    switchIndexToNumber[i] = i;
+  }
+}
+
+uint8_t EventDispatcher::currentStatusFlags() const {
+  uint8_t flags = 0;
+  if (runtimeConfigValid && mappingComplete) {
+    flags |= ppuc::v2::kStatusInSync;
+  }
+  if (!runtimeConfigValid) {
+    flags |= ppuc::v2::kStatusNeedsSetup;
+  }
+  if (runtimeConfigValid && !mappingComplete) {
+    flags |= ppuc::v2::kStatusMappingIncomplete;
+  }
+  if (sequenceGapDetected) {
+    flags |= ppuc::v2::kStatusSequenceGap;
+  }
+  if (parserResynced) {
+    flags |= ppuc::v2::kStatusParserResynced;
+  }
+  if (switchOverflow) {
+    flags |= ppuc::v2::kStatusSwitchOverflow;
+  }
+  return flags;
+}
+
+void EventDispatcher::clearReportedStatusFlags() {
+  sequenceGapDetected = false;
+  parserResynced = false;
+  switchOverflow = false;
+}
+
 bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
   const ppuc::v2::FrameType frameType = ppuc::v2::ExtractType(frame[1]);
+  const uint8_t incomingSequence = frame[3];
+  const uint8_t incomingEpoch = frame[4];
+  const size_t payloadOffset = ppuc::v2::kHeaderBytes;
   const size_t crcOffset = ppuc::v2::kHeaderBytes + payloadBytes;
   uint16_t receivedCrc = word(frame[crcOffset], frame[crcOffset + 1]);
   uint16_t expectedCrc =
       ppuc::v2::Crc16Ccitt(frame, ppuc::v2::kHeaderBytes + payloadBytes);
   if (receivedCrc != expectedCrc) {
     v2RxCrcFail++;
+    parserResynced = true;
     return false;
   }
   v2RxFrames++;
 
+  const bool hostOriginated =
+      frameType == ppuc::v2::kFrameSetup || frameType == ppuc::v2::kFrameMapping ||
+      frameType == ppuc::v2::kFrameConfig ||
+      frameType == ppuc::v2::kFrameOutputState ||
+      frameType == ppuc::v2::kFrameHeartbeat ||
+      frameType == ppuc::v2::kFrameError || frameType == ppuc::v2::kFrameReset;
+
+  auto noteHostSequence = [&]() {
+    if (!hostOriginated) {
+      return;
+    }
+    if (lastHostSequenceValid &&
+        static_cast<uint8_t>(lastHostSequenceSeen + 1) != incomingSequence) {
+      sequenceGapDetected = true;
+    }
+    lastHostSequenceSeen = incomingSequence;
+    lastHostSequenceValid = true;
+  };
+
   if (frameType == ppuc::v2::kFrameSetup) {
     ppuc::v2::RuntimeConfig newConfig;
-    newConfig.coilBits = word(frame[4], frame[5]);
-    newConfig.lampBits = word(frame[6], frame[7]);
-    newConfig.switchBits = word(frame[8], frame[9]);
+    newConfig.coilBits = word(frame[payloadOffset], frame[payloadOffset + 1]);
+    newConfig.lampBits =
+        word(frame[payloadOffset + 2], frame[payloadOffset + 3]);
+    newConfig.switchBits =
+        word(frame[payloadOffset + 4], frame[payloadOffset + 5]);
     if (ppuc::v2::IsValidRuntimeConfig(newConfig)) {
-      runtimeConfig = newConfig;
-      memset(outputCoils, 0, sizeof(outputCoils));
-      memset(outputLamps, 0, sizeof(outputLamps));
-      memset(outputGi, 0, sizeof(outputGi));
-      memset(switchStates, 0, sizeof(switchStates));
-      for (uint16_t i = 0; i < runtimeConfig.coilBits; ++i) {
-        coilIndexToNumber[i] = i;
-      }
-      for (uint16_t i = 0; i < runtimeConfig.lampBits; ++i) {
-        lampIndexToNumber[i] = i;
-      }
-      for (uint16_t i = 0; i < runtimeConfig.switchBits; ++i) {
-        switchIndexToNumber[i] = i;
-      }
+      resetSessionState(incomingEpoch, newConfig);
+      noteHostSequence();
       if (!v2RuntimeInitialized) {
         // The v2 host no longer relies on legacy serial control events for
         // startup. Once setup arrives, all config frames have already been
@@ -222,10 +289,42 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
     return true;
   }
 
+  if (frameType == ppuc::v2::kFrameReset) {
+    runtimeConfigValid = false;
+    mappingComplete = false;
+    expectedMappingFrames = 0;
+    receivedMappingFrames = 0;
+    v2RuntimeInitialized = false;
+    lastHostSequenceValid = false;
+    sequenceGapDetected = false;
+    parserResynced = false;
+    noteHostSequence();
+    dispatch(new Event(EVENT_RESET));
+    return true;
+  }
+
+  if (hostOriginated && incomingEpoch != currentEpoch) {
+    sequenceGapDetected = true;
+    if (frameType == ppuc::v2::kFrameConfig) {
+      // Board-local config is session-independent and may arrive before setup.
+    } else {
+      return true;
+    }
+  }
+
+  if (hostOriginated) {
+    noteHostSequence();
+  }
+
   if (frameType == ppuc::v2::kFrameMapping) {
-    const uint8_t domain = frame[4];
-    const uint16_t index = word(frame[6], frame[7]);
-    const uint16_t number = word(frame[8], frame[9]);
+    if (!runtimeConfigValid || incomingEpoch != currentEpoch) {
+      return true;
+    }
+    const uint8_t domain = frame[payloadOffset];
+    const uint16_t index =
+        word(frame[payloadOffset + 2], frame[payloadOffset + 3]);
+    const uint16_t number =
+        word(frame[payloadOffset + 4], frame[payloadOffset + 5]);
 
     if (domain == ppuc::v2::kDomainCoil && index < runtimeConfig.coilBits) {
       coilIndexToNumber[index] = number;
@@ -236,14 +335,22 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
                index < runtimeConfig.switchBits) {
       switchIndexToNumber[index] = number;
     }
+    if (receivedMappingFrames < expectedMappingFrames) {
+      receivedMappingFrames++;
+    }
+    mappingComplete = receivedMappingFrames >= expectedMappingFrames;
     return true;
   }
 
   if (frameType == ppuc::v2::kFrameOutputState) {
+    if (!runtimeConfigValid || incomingEpoch != currentEpoch) {
+      return true;
+    }
     const size_t coilBytes = ppuc::v2::BitsToBytes(runtimeConfig.coilBits);
     const size_t lampBytes = ppuc::v2::BitsToBytes(runtimeConfig.lampBits);
-    applyOutputStates(&frame[4], coilBytes, &frame[4 + coilBytes], lampBytes,
-                      &frame[4 + coilBytes + lampBytes]);
+    applyOutputStates(&frame[payloadOffset], coilBytes,
+                      &frame[payloadOffset + coilBytes], lampBytes,
+                      &frame[payloadOffset + coilBytes + lampBytes]);
     if (frame[2] == board) {
       if (switchDirty) {
         sendSwitchStateFrame(nextSwitchBoard);
@@ -256,8 +363,12 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
   }
 
   if (frameType == ppuc::v2::kFrameSwitchState) {
+    if (!runtimeConfigValid || incomingEpoch != currentEpoch) {
+      return true;
+    }
     const size_t switchBytes = ppuc::v2::BitsToBytes(runtimeConfig.switchBits);
-    applySwitchStates(&frame[4], switchBytes);
+    applySwitchStates(&frame[payloadOffset + ppuc::v2::kSwitchStatusBytes],
+                      switchBytes);
     return true;
   }
 
@@ -265,19 +376,14 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
     return true;
   }
 
-  if (frameType == ppuc::v2::kFrameReset) {
-    v2RuntimeInitialized = false;
-    dispatch(new Event(EVENT_RESET));
-    return true;
-  }
-
   if (frameType == ppuc::v2::kFrameConfig) {
     callListeners(
-        new ConfigEvent(frame[4], frame[5], frame[6], frame[7],
-                        (((uint32_t)frame[8]) << 24) |
-                            (((uint32_t)frame[9]) << 16) |
-                            (((uint32_t)frame[10]) << 8) |
-                            ((uint32_t)frame[11])),
+        new ConfigEvent(frame[payloadOffset], frame[payloadOffset + 1],
+                        frame[payloadOffset + 2], frame[payloadOffset + 3],
+                        (((uint32_t)frame[payloadOffset + 4]) << 24) |
+                            (((uint32_t)frame[payloadOffset + 5]) << 16) |
+                            (((uint32_t)frame[payloadOffset + 6]) << 8) |
+                            ((uint32_t)frame[payloadOffset + 7])),
         true);
     return true;
   }
@@ -379,6 +485,7 @@ void EventDispatcher::serviceV2UartDmaRx() {
   if (v2RxState == V2_RX_HEADER) {
     if (v2DmaRxBuffer[0] != ppuc::v2::kSyncByte) {
       v2RxSyncFail++;
+      parserResynced = true;
       v2RxState = V2_RX_IDLE;
       return;
     }
@@ -508,8 +615,9 @@ void EventDispatcher::sendSwitchStateFrame(byte nextBoard) {
   // (header.nextBoard in output frame). This board answers once and then
   // returns RS485 direction to RX mode.
   const size_t switchBytes = ppuc::v2::BitsToBytes(runtimeConfig.switchBits);
+  const size_t payloadBytes = ppuc::v2::kSwitchStatusBytes + switchBytes;
   const size_t frameBytes =
-      ppuc::v2::kHeaderBytes + switchBytes + ppuc::v2::kCrcBytes;
+      ppuc::v2::kHeaderBytes + payloadBytes + ppuc::v2::kCrcBytes;
 
   byte* frame = v2DmaTxBuffer;
   frame[0] = ppuc::v2::kSyncByte;
@@ -517,12 +625,17 @@ void EventDispatcher::sendSwitchStateFrame(byte nextBoard) {
                                            ppuc::v2::kFlagKeyframe);
   frame[2] = nextBoard;
   frame[3] = txSequence++;
-  memcpy(&frame[4], switchStates, switchBytes);
+  frame[4] = currentEpoch;
+  frame[5] = currentEpoch;
+  frame[6] = lastHostSequenceSeen;
+  frame[7] = currentStatusFlags();
+  frame[8] = 0;
+  memcpy(&frame[9], switchStates, switchBytes);
 
   uint16_t crc =
-      ppuc::v2::Crc16Ccitt(frame, ppuc::v2::kHeaderBytes + switchBytes);
-  frame[4 + switchBytes] = highByte(crc);
-  frame[5 + switchBytes] = lowByte(crc);
+      ppuc::v2::Crc16Ccitt(frame, ppuc::v2::kHeaderBytes + payloadBytes);
+  frame[9 + switchBytes] = highByte(crc);
+  frame[10 + switchBytes] = lowByte(crc);
 
   if (!v2UartDmaActive || !sendV2FrameUartDma(frame, frameBytes)) {
     v2TxFallback++;
@@ -534,6 +647,7 @@ void EventDispatcher::sendSwitchStateFrame(byte nextBoard) {
     delayMicroseconds(RS485_MODE_SWITCH_DELAY);
   }
 
+  clearReportedStatusFlags();
   lastPoll = millis();
 }
 
@@ -544,20 +658,28 @@ void EventDispatcher::sendSwitchNoChangeFrame(byte nextBoard) {
                                            ppuc::v2::kFlagNone);
   frame[2] = nextBoard;
   frame[3] = txSequence++;
-  uint16_t crc = ppuc::v2::Crc16Ccitt(frame, ppuc::v2::kHeaderBytes);
-  frame[4] = highByte(crc);
-  frame[5] = lowByte(crc);
+  frame[4] = currentEpoch;
+  frame[5] = currentEpoch;
+  frame[6] = lastHostSequenceSeen;
+  frame[7] = currentStatusFlags();
+  frame[8] = 0;
+  uint16_t crc = ppuc::v2::Crc16Ccitt(
+      frame, ppuc::v2::kHeaderBytes + ppuc::v2::SwitchNoChangePayloadBytes());
+  frame[9] = highByte(crc);
+  frame[10] = lowByte(crc);
 
-  if (!v2UartDmaActive || !sendV2FrameUartDma(frame, ppuc::v2::kResetFrameBytes)) {
+  if (!v2UartDmaActive ||
+      !sendV2FrameUartDma(frame, ppuc::v2::SwitchNoChangeFrameBytes())) {
     v2TxFallback++;
     digitalWrite(rs485Pin, HIGH);  // Write.
     delayMicroseconds(RS485_MODE_SWITCH_DELAY);
-    hwSerial->write(frame, ppuc::v2::kResetFrameBytes);
+    hwSerial->write(frame, ppuc::v2::SwitchNoChangeFrameBytes());
     hwSerial->flush();
     digitalWrite(rs485Pin, LOW);  // Read.
     delayMicroseconds(RS485_MODE_SWITCH_DELAY);
   }
 
+  clearReportedStatusFlags();
   v2SwitchNoChangeTx++;
   lastPoll = millis();
 }
@@ -633,6 +755,7 @@ void EventDispatcher::update() {
           }
         } else {
           // Desync/noise, consume one byte and continue.
+          parserResynced = true;
           hwSerial->read();
         }
       }
