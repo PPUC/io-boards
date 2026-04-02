@@ -15,10 +15,11 @@ void CombinedGiAndLightMatrixWS2812FXDevice::off() {
 void CombinedGiAndLightMatrixWS2812FXDevice::handleEvent(Event* event) {
   if (!effectRunning) {
     if (event->sourceId == EVENT_SOURCE_GI) {
-      uint8_t giString = event->eventId - 1;
-      if (giString >= NUM_GI_STRINGS) {
+      const uint8_t giIndex = event->eventId - 1;
+      if (giIndex >= NUM_GI_STRINGS) {
         return;
       }
+      const uint8_t giStringNumber = event->eventId;
       // Brightness is a value between 0 and 8. Convert it into a value from 0
       // to 255.
       uint8_t giBrightness = 0;
@@ -47,22 +48,25 @@ void CombinedGiAndLightMatrixWS2812FXDevice::handleEvent(Event* event) {
           break;
       }
 
-      if (targetGIBrightness[giString] != giBrightness) {
-        if ((targetGIBrightness[giString] < giBrightness && msHeatUp == 0) ||
-            (targetGIBrightness[giString] > giBrightness && msAfterGlow == 0)) {
-          for (auto& led : getGILEDsByNumber(giString)) {
+      if (targetGIBrightness[giIndex] != giBrightness) {
+        if ((targetGIBrightness[giIndex] < giBrightness && msHeatUp == 0) ||
+            (targetGIBrightness[giIndex] > giBrightness && msAfterGlow == 0)) {
+          for (auto& led : getGILEDsByNumber(giStringNumber)) {
             ws2812FX->setPixelColor(
                 led->position,
                 getDimmedPixelColor(led->color, giBrightness));
           }
         } else {
-          for (auto& led : getGILEDsByNumber(giString)) {
-            intializeNewLEDState(led, targetGIBrightness[giString] > giBrightness);
+          for (auto& led : getGILEDsByNumber(giStringNumber)) {
+            // Treat increasing GI brightness like "on" and decreasing
+            // brightness like "off" so heat-up/afterglow follow the actual
+            // transition direction on mixed GI/lamp strings.
+            intializeNewLEDState(led, targetGIBrightness[giIndex] < giBrightness);
           }
         }
 
-        sourceGIBrightness[giString] = targetGIBrightness[giString];
-        targetGIBrightness[giString] = giBrightness;
+        sourceGIBrightness[giIndex] = targetGIBrightness[giIndex];
+        targetGIBrightness[giIndex] = giBrightness;
       }
     } else if (event->sourceId == EVENT_SOURCE_LIGHT) {
       uint8_t number = event->eventId;
@@ -129,19 +133,20 @@ void CombinedGiAndLightMatrixWS2812FXDevice::intializeNewLEDState(LED* led,
 }
 
 void CombinedGiAndLightMatrixWS2812FXDevice::updateAfterGlow() {
-  for (uint8_t giString = 0; giString < NUM_GI_STRINGS; giString++) {
-    uint8_t glowBrightness = targetGIBrightness[giString];
+  for (uint8_t giIndex = 0; giIndex < NUM_GI_STRINGS; giIndex++) {
+    uint8_t glowBrightness = targetGIBrightness[giIndex];
+    const uint8_t giStringNumber = giIndex + 1;
 
-    for (auto& led : getChangingGILEDsByNumber(giString)) {
+    for (auto& led : getChangingGILEDsByNumber(giStringNumber)) {
       if (led->heatUp > 0) {
         if ((millis() - led->heatUp) >= msHeatUp) {
           led->heatUp = 0;
         } else {
           float diff =
-              targetGIBrightness[giString] - sourceGIBrightness[giString];
+              targetGIBrightness[giIndex] - sourceGIBrightness[giIndex];
           float mult = diff / 255;
           glowBrightness =
-              sourceGIBrightness[giString] +
+              sourceGIBrightness[giIndex] +
               (wavePWMHeatUp->getExponentialValue(millis() - led->heatUp) *
                mult);
         }
@@ -150,10 +155,10 @@ void CombinedGiAndLightMatrixWS2812FXDevice::updateAfterGlow() {
           led->afterGlow = 0;
         } else {
           float diff =
-              sourceGIBrightness[giString] - targetGIBrightness[giString];
+              sourceGIBrightness[giIndex] - targetGIBrightness[giIndex];
           float mult = diff / 255;
           glowBrightness =
-              targetGIBrightness[giString] +
+              targetGIBrightness[giIndex] +
               (wavePWMAfterGlow->getExponentialValue(
                    millis() - led->afterGlow + msAfterGlow) *
                mult);
