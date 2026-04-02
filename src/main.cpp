@@ -10,6 +10,8 @@
 #include "PPUC.h"
 #include "PPUCProtocolV2.h"
 #include "RPi_Pico_TimerInterrupt.h"
+#include "hardware/gpio.h"
+#include "hardware/uart.h"
 
 IOBoardController ioBoardController(CONTROLLER_16_8_1);
 
@@ -20,6 +22,8 @@ RPI_PICO_Timer ITimer(1);
 
 volatile uint32_t watchdog_ms = millis();
 volatile uint32_t lastPoll_ms = millis();
+uint32_t led_heartbeat_ms = 0;
+bool led_heartbeat_state = false;
 
 // Turn off all High Power Outputs in case the main loop has not finished in 1
 // second (or 2 seconds in edge cases).
@@ -30,6 +34,21 @@ bool watchdog(struct repeating_timer *t) {
   }
 
   return true;
+}
+
+void updateBuiltinLedHeartbeat() {
+  const bool fastBlink =
+      ioBoardController.eventDispatcher()->sawRs485Activity() ||
+      uart_is_readable(uart1);
+  const uint32_t intervalMs = fastBlink ? 120 : 800;
+  const uint32_t now = millis();
+  if ((now - led_heartbeat_ms) < intervalMs) {
+    return;
+  }
+
+  led_heartbeat_ms = now;
+  led_heartbeat_state = !led_heartbeat_state;
+  digitalWrite(LED_BUILTIN, led_heartbeat_state ? HIGH : LOW);
 }
 
 bool usb_debugging = false;
@@ -45,12 +64,20 @@ void setup() {
   // Overclock according to Raspberry Pi Pico SDK recommendations.
   set_sys_clock_khz(SYS_CLK_KHZ, true);
 
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, LOW);
+
   // RS485 connection.
   Serial1.end();  // Deactivete UART to empty TX FIFO after reboot
   delay(5);
   pinMode(RS485_MODE_PIN, OUTPUT);
   digitalWrite(RS485_MODE_PIN, LOW);  // Read mode
   delay(5);
+  // Configure UART1 on GPIO 0 and 1 explicitly seems to fix some strange connection issues.
+  gpio_set_function(0, GPIO_FUNC_UART);
+  gpio_set_function(1, GPIO_FUNC_UART);
+  Serial1.setTX(0);
+  Serial1.setRX(1);
   Serial1.begin(ppuc::v2::kBaudRate);
   // Empty RX FIFO after reboot
   while (Serial1.available()) {
@@ -60,7 +87,6 @@ void setup() {
   usb_debugging = ioBoardController.isDebug();
 
   if (usb_debugging) {
-    pinMode(LED_BUILTIN, OUTPUT);
     Serial.begin(115200);
     delay(100);
     // Wait for a serial connection of a debugger via USB CDC.
@@ -98,8 +124,8 @@ void setup1() {
   }
 
   if (usb_debugging) {
-    delay(10);
-    effectsController.eventDispatcher()->addListener(new CrossLinkDebugger());
+    //delay(10);
+    //effectsController.eventDispatcher()->addListener(new CrossLinkDebugger());
   }
 
   effectsController.eventDispatcher()->setMultiCoreCrossLink(
@@ -110,6 +136,7 @@ void setup1() {
 
 void loop() {
   watchdog_ms = millis();
+  updateBuiltinLedHeartbeat();
   ioBoardController.update();
   lastPoll_ms = ioBoardController.eventDispatcher()->getLastPoll();
 }

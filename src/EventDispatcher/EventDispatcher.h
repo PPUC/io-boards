@@ -51,6 +51,7 @@ class EventDispatcher {
   void update();
 
   uint32_t getLastPoll();
+  bool sawRs485Activity() const;
 
  private:
   bool readBytes(byte* buffer, size_t len);
@@ -117,6 +118,7 @@ class EventDispatcher {
   uint32_t v2RawBytes = 0;
   uint32_t v2RawA5 = 0;
   uint32_t v2RawFF = 0;
+  bool m_sawRs485Activity = false;
   uint32_t v2TxFrames = 0;
   uint32_t v2SwitchNoChangeTx = 0;
   uint32_t v2TxFallback = 0;

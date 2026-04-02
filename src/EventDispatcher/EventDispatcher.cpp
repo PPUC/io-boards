@@ -5,6 +5,7 @@
 
 namespace {
 constexpr uint32_t kV2RxTimeoutUs = 8000;
+constexpr bool kEnableV2UartDmaRx = false;
 }
 
 EventDispatcher::EventDispatcher() {
@@ -285,6 +286,10 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
 }
 
 bool EventDispatcher::startV2UartDmaTransport() {
+  if (!kEnableV2UartDmaRx) {
+    return false;
+  }
+
   if (v2UartDmaActive) {
     return true;
   }
@@ -301,6 +306,7 @@ bool EventDispatcher::startV2UartDmaTransport() {
   }
   v2RxDmaChannel = rxDma;
   v2TxDmaChannel = txDma;
+
   v2UartDmaActive = true;
   v2RxState = V2_RX_IDLE;
   v2RxPayloadBytes = 0;
@@ -363,17 +369,10 @@ void EventDispatcher::serviceV2UartDmaRx() {
     dma_channel_configure(v2RxDmaChannel, &rxConfig, v2DmaRxBuffer,
                           &uart1_hw->dr, ppuc::v2::kHeaderBytes, true);
     v2RxState = V2_RX_HEADER;
-    v2RxStateStartUs = micros();
-    v2RxDmaRestarts++;
     return;
   }
 
   if (v2RxState == V2_RX_HEADER && dma_channel_is_busy(v2RxDmaChannel)) {
-    if ((micros() - v2RxStateStartUs) > kV2RxTimeoutUs) {
-      dma_channel_abort(v2RxDmaChannel);
-      v2RxState = V2_RX_IDLE;
-      v2RxDmaTimeouts++;
-    }
     return;
   }
 
@@ -612,6 +611,9 @@ void EventDispatcher::update() {
     if (v2UartDmaActive) {
       serviceV2UartDmaRx();
     } else {
+      if (hwSerial->available() > 0) {
+        m_sawRs485Activity = true;
+      }
       // Fallback parser is still needed for V2 bootstrap and fault handling:
       // - bootstrap: receive initial V2 setup frame before DMA cutover
       // - fault path: continue operating if UART DMA transport cannot start
@@ -691,3 +693,5 @@ uint32_t EventDispatcher::getLastPoll() {
 
   return millis();
 }
+
+bool EventDispatcher::sawRs485Activity() const { return m_sawRs485Activity; }
