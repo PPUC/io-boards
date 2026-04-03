@@ -55,6 +55,7 @@ class EventDispatcher {
 
  private:
   bool readBytes(byte* buffer, size_t len);
+  size_t discardUntilNextV2Sync();
   bool handleV2Frame();
   bool startV2UartDmaTransport();
   void stopV2UartDmaTransport();
@@ -124,8 +125,13 @@ class EventDispatcher {
   uint32_t v2RawFF = 0;
   bool m_sawRs485Activity = false;
   uint32_t v2TxFrames = 0;
+  uint32_t v2SwitchStateTx = 0;
   uint32_t v2SwitchNoChangeTx = 0;
   uint32_t v2TxFallback = 0;
+  uint8_t v2SwitchStateDebugPrints = 0;
+  uint8_t v2RxErrorDebugPrints = 0;
+  uint8_t lastSwitchReplyToken = ppuc::v2::kNoBoard;
+  uint8_t lastSwitchReplyNextBoard = ppuc::v2::kNoBoard;
   bool switchDirty = false;
   bool switchOverflow = false;
   bool applyingRemoteSwitchState = false;

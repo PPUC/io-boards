@@ -7,6 +7,7 @@ namespace {
 constexpr uint32_t kV2RxTimeoutUs = 8000;
 constexpr bool kEnableV2UartDmaRx = false;
 constexpr uint32_t kSerialBaudRate = ppuc::v2::kBaudRate;
+constexpr uint32_t kV2InterBoardReplyGapUs = 3000;
 
 uint32_t FrameWireTimeUs(size_t frameBytes) {
   // Approximate 8N1 UART wire time. Add a small guard so we can safely switch
@@ -14,6 +15,20 @@ uint32_t FrameWireTimeUs(size_t frameBytes) {
   // which appears to hang in the board-to-host switch reply path.
   const uint32_t bits = static_cast<uint32_t>(frameBytes) * 10;
   return (bits * 1000000u) / kSerialBaudRate + 200;
+}
+
+void PrintHexBytes(Stream& serial, const uint8_t* buffer, size_t size,
+                   size_t maxBytes) {
+  const size_t count = size < maxBytes ? size : maxBytes;
+  for (size_t i = 0; i < count; ++i) {
+    if (i > 0) {
+      serial.print(' ');
+    }
+    if (buffer[i] < 0x10) {
+      serial.print('0');
+    }
+    serial.print(buffer[i], HEX);
+  }
 }
 }
 
@@ -143,6 +158,15 @@ bool EventDispatcher::readBytes(byte *buffer, size_t len) {
   return true;
 }
 
+size_t EventDispatcher::discardUntilNextV2Sync() {
+  size_t discarded = 0;
+  while (hwSerial->available() > 0 && hwSerial->peek() != ppuc::v2::kSyncByte) {
+    hwSerial->read();
+    ++discarded;
+  }
+  return discarded;
+}
+
 size_t EventDispatcher::getV2PayloadBytes(ppuc::v2::FrameType frameType) {
   switch (frameType) {
     case ppuc::v2::kFrameSetup:
@@ -234,6 +258,50 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
   if (receivedCrc != expectedCrc) {
     v2RxCrcFail++;
     parserResynced = true;
+    if (debugEnabled && Serial && v2RxErrorDebugPrints < 6) {
+      rp2040.idleOtherCore();
+      Serial.print("V2RXERR board=");
+      Serial.print(board);
+      Serial.print(" kind=crc type=0x");
+      if (static_cast<uint8_t>(frameType) < 0x10) {
+        Serial.print('0');
+      }
+      Serial.print(static_cast<uint8_t>(frameType), HEX);
+      Serial.print(" seq=");
+      Serial.print(incomingSequence);
+      Serial.print(" epoch=");
+      Serial.print(incomingEpoch);
+      Serial.print(" got=0x");
+      if ((receivedCrc >> 12) == 0) {
+        Serial.print('0');
+      }
+      if ((receivedCrc >> 8) == 0) {
+        Serial.print('0');
+      }
+      if ((receivedCrc >> 4) == 0) {
+        Serial.print('0');
+      }
+      Serial.print(receivedCrc, HEX);
+      Serial.print(" expected=0x");
+      if ((expectedCrc >> 12) == 0) {
+        Serial.print('0');
+      }
+      if ((expectedCrc >> 8) == 0) {
+        Serial.print('0');
+      }
+      if ((expectedCrc >> 4) == 0) {
+        Serial.print('0');
+      }
+      Serial.print(expectedCrc, HEX);
+      Serial.print(" bytes=");
+      PrintHexBytes(Serial, frame,
+                    ppuc::v2::kHeaderBytes + payloadBytes +
+                        ppuc::v2::kCrcBytes,
+                    16);
+      Serial.println();
+      rp2040.resumeOtherCore();
+      ++v2RxErrorDebugPrints;
+    }
     if (!transportErrorLatched) {
       dispatch(new Event(EVENT_ERROR, 1, board));
       transportErrorLatched = true;
@@ -376,6 +444,7 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
     applySwitchStates(&frame[payloadOffset + ppuc::v2::kSwitchStatusBytes],
                       switchBytes);
     if (frame[2] == board) {
+      delayMicroseconds(kV2InterBoardReplyGapUs);
       if (switchDirty) {
         sendSwitchStateFrame(nextSwitchBoard);
         switchDirty = false;
@@ -388,6 +457,7 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
 
   if (frameType == ppuc::v2::kFrameSwitchNoChange) {
     if (runtimeConfigValid && incomingEpoch == currentEpoch && frame[2] == board) {
+      delayMicroseconds(kV2InterBoardReplyGapUs);
       if (switchDirty) {
         sendSwitchStateFrame(nextSwitchBoard);
         switchDirty = false;
@@ -699,6 +769,40 @@ void EventDispatcher::sendSwitchStateFrame(byte nextBoard) {
   frame[9 + switchBytes] = highByte(crc);
   frame[10 + switchBytes] = lowByte(crc);
 
+  if (debugEnabled && Serial && v2SwitchStateDebugPrints < 3) {
+    rp2040.idleOtherCore();
+    Serial.print("V2STATE board=");
+    Serial.print(board);
+    Serial.print(" token=");
+    Serial.print(board);
+    Serial.print(" next=");
+    Serial.print(nextBoard);
+    Serial.print(" epoch=");
+    Serial.print(currentEpoch);
+    Serial.print(" host_seq=");
+    Serial.print(lastHostSequenceSeen);
+    Serial.print(" tx_seq=");
+    Serial.print(frame[3]);
+    Serial.print(" flags=0x");
+    if (frame[7] < 0x10) {
+      Serial.print('0');
+    }
+    Serial.print(frame[7], HEX);
+    Serial.print(" switches=");
+    for (size_t i = 0; i < switchBytes; ++i) {
+      if (i > 0) {
+        Serial.print(' ');
+      }
+      if (switchStates[i] < 0x10) {
+        Serial.print('0');
+      }
+      Serial.print(switchStates[i], HEX);
+    }
+    Serial.println();
+    rp2040.resumeOtherCore();
+    ++v2SwitchStateDebugPrints;
+  }
+
   if (!v2UartDmaActive || !sendV2FrameUartDma(frame, frameBytes)) {
     v2TxFallback++;
     digitalWrite(rs485Pin, HIGH);  // Write.
@@ -709,6 +813,9 @@ void EventDispatcher::sendSwitchStateFrame(byte nextBoard) {
     delayMicroseconds(RS485_MODE_SWITCH_DELAY);
   }
 
+  v2SwitchStateTx++;
+  lastSwitchReplyToken = board;
+  lastSwitchReplyNextBoard = nextBoard;
   clearReportedStatusFlags();
   lastPoll = millis();
 }
@@ -742,6 +849,8 @@ void EventDispatcher::sendSwitchNoChangeFrame(byte nextBoard) {
     delayMicroseconds(RS485_MODE_SWITCH_DELAY);
   }
 
+  lastSwitchReplyToken = board;
+  lastSwitchReplyNextBoard = nextBoard;
   clearReportedStatusFlags();
   v2SwitchNoChangeTx++;
   lastPoll = millis();
@@ -757,7 +866,9 @@ bool EventDispatcher::handleV2Frame() {
   }
 
   if (!readBytes(v2Buffer, ppuc::v2::kHeaderBytes)) {
-    return false;
+    parserResynced = true;
+    discardUntilNextV2Sync();
+    return true;
   }
 
   ppuc::v2::FrameType frameType = ppuc::v2::ExtractType(v2Buffer[1]);
@@ -767,12 +878,16 @@ bool EventDispatcher::handleV2Frame() {
       frameType != ppuc::v2::kFrameReset && payloadBytes == 0 &&
       frameType != ppuc::v2::kFrameOutputState &&
       frameType != ppuc::v2::kFrameSwitchNoChange) {
-    return false;
+    parserResynced = true;
+    discardUntilNextV2Sync();
+    return true;
   }
 
   if (!readBytes(&v2Buffer[ppuc::v2::kHeaderBytes],
                  payloadBytes + ppuc::v2::kCrcBytes)) {
-    return false;
+    parserResynced = true;
+    discardUntilNextV2Sync();
+    return true;
   }
 
   return processV2Frame(v2Buffer, payloadBytes);
@@ -817,9 +932,23 @@ void EventDispatcher::update() {
             break;
           }
         } else {
-          // Desync/noise, consume one byte and continue.
+          // Desync/noise, discard bytes until the next sync instead of walking
+          // one byte at a time through what is often mid-frame payload.
+          if (debugEnabled && Serial && v2RxErrorDebugPrints < 6) {
+            rp2040.idleOtherCore();
+            Serial.print("V2RXERR board=");
+            Serial.print(board);
+            Serial.print(" kind=desync byte=0x");
+            if (firstByte < 0x10) {
+              Serial.print('0');
+            }
+            Serial.print(firstByte, HEX);
+            Serial.println();
+            rp2040.resumeOtherCore();
+            ++v2RxErrorDebugPrints;
+          }
           parserResynced = true;
-          hwSerial->read();
+          discardUntilNextV2Sync();
         }
       }
     }
@@ -866,10 +995,16 @@ void EventDispatcher::update() {
     Serial.print(v2RawFF);
     Serial.print(" tx=");
     Serial.print(v2TxFrames);
+    Serial.print(" tx_state=");
+    Serial.print(v2SwitchStateTx);
     Serial.print(" tx_nochange=");
     Serial.print(v2SwitchNoChangeTx);
     Serial.print(" tx_fallback=");
-    Serial.println(v2TxFallback);
+    Serial.print(v2TxFallback);
+    Serial.print(" last_token=");
+    Serial.print(lastSwitchReplyToken);
+    Serial.print(" last_next=");
+    Serial.println(lastSwitchReplyNextBoard);
     rp2040.resumeOtherCore();
   }
 }
