@@ -120,6 +120,8 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
       case CONFIG_TOPIC_SWITCH_CHAIN:
         if (event->key == CONFIG_TOPIC_NEXT_BOARD) {
           _eventDispatcher->setNextSwitchBoard((byte)event->value);
+        } else if (event->key == CONFIG_TOPIC_SWITCH_REPLY_DELAY_US) {
+          _eventDispatcher->setSwitchReplyDelayUs(event->value);
         }
         break;
 

@@ -22,8 +22,8 @@ RPI_PICO_Timer ITimer(1);
 
 volatile uint32_t watchdog_ms = millis();
 volatile uint32_t lastPoll_ms = millis();
-uint32_t led_wait_ms = 0;
-bool led_wait_state = true;
+uint32_t led_heartbeat_ms = 0;
+bool led_heartbeat_state = false;
 
 // Turn off all High Power Outputs in case the main loop has not finished in 1
 // second (or 2 seconds in edge cases).
@@ -36,20 +36,23 @@ bool watchdog(struct repeating_timer *t) {
   return true;
 }
 
-bool usb_debugging = false;
-bool core_0_initialized = false;
-
-void updateBuiltinLedWaitPattern() {
+void updateBuiltinLedHeartbeat() {
+  const bool fastBlink =
+      ioBoardController.eventDispatcher()->sawRs485Activity() ||
+      uart_is_readable(uart1);
+  const uint32_t intervalMs = fastBlink ? 120 : 800;
   const uint32_t now = millis();
-  const uint32_t intervalMs = led_wait_state ? 1000 : 100;
-  if ((now - led_wait_ms) < intervalMs) {
+  if ((now - led_heartbeat_ms) < intervalMs) {
     return;
   }
 
-  led_wait_ms = now;
-  led_wait_state = !led_wait_state;
-  digitalWrite(LED_BUILTIN, led_wait_state ? HIGH : LOW);
+  led_heartbeat_ms = now;
+  led_heartbeat_state = !led_heartbeat_state;
+  digitalWrite(LED_BUILTIN, led_heartbeat_state ? HIGH : LOW);
 }
+
+bool usb_debugging = false;
+bool core_0_initialized = false;
 
 // Each controller will be bound to its own core and has it's own
 // EventDispatcher. Only the EventDispatcher of IOBoardController
@@ -62,9 +65,7 @@ void setup() {
   set_sys_clock_khz(SYS_CLK_KHZ, true);
 
   pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, HIGH);
-  led_wait_ms = millis();
-  led_wait_state = true;
+  digitalWrite(LED_BUILTIN, LOW);
 
   // RS485 connection.
   Serial1.end();  // Deactivete UART to empty TX FIFO after reboot
@@ -135,7 +136,7 @@ void setup1() {
 
 void loop() {
   watchdog_ms = millis();
-  updateBuiltinLedWaitPattern();
+  updateBuiltinLedHeartbeat();
   ioBoardController.update();
   lastPoll_ms = ioBoardController.eventDispatcher()->getLastPoll();
 }

@@ -41,6 +41,7 @@ class EventDispatcher {
   void setCrossLinkSerial(HardwareSerial& reference);
   void setDebug(bool enabled);
   void setNextSwitchBoard(byte boardId);
+  void setSwitchReplyDelayUs(uint32_t delayUs);
 
   void addListener(EventListener* eventListener, char sourceId);
 
@@ -55,7 +56,6 @@ class EventDispatcher {
 
  private:
   bool readBytes(byte* buffer, size_t len);
-  size_t discardUntilNextV2Sync();
   bool handleV2Frame();
   bool startV2UartDmaTransport();
   void stopV2UartDmaTransport();
@@ -63,8 +63,6 @@ class EventDispatcher {
   bool sendV2FrameUartDma(const byte* frame, size_t frameBytes);
   size_t getV2PayloadBytes(ppuc::v2::FrameType frameType);
   bool processV2Frame(const byte* frame, size_t payloadBytes);
-  void sendConfigAckFrame(uint8_t boardId, uint8_t topic, uint8_t index,
-                          uint8_t key, uint8_t status);
   void sendSwitchStateFrame(byte nextBoard);
   void sendSwitchNoChangeFrame(byte nextBoard);
   void applyOutputStates(const byte* coils, size_t coilBytes, const byte* lamps,
@@ -77,7 +75,7 @@ class EventDispatcher {
   int16_t findMappedIndex(const uint16_t* table, uint16_t count,
                           uint16_t number);
 
-  void callListeners(Event* event, bool sendToOtherCore);
+  void callListeners(Event* event, bool sendToOtherCore, bool sendToRS485);
 
   void callListeners(ConfigEvent* event, bool sendToOtherCore);
 
@@ -87,6 +85,7 @@ class EventDispatcher {
   char eventListenerFilters[MAX_EVENT_LISTENERS];
   int numListeners = -1;
 
+  byte msg[12];
   byte v2Buffer[ppuc::v2::kHeaderBytes + ppuc::v2::kMaxCoilBytes +
                 ppuc::v2::kMaxLampBytes + ppuc::v2::kGiBytes +
                 ppuc::v2::kCrcBytes];
@@ -125,13 +124,8 @@ class EventDispatcher {
   uint32_t v2RawFF = 0;
   bool m_sawRs485Activity = false;
   uint32_t v2TxFrames = 0;
-  uint32_t v2SwitchStateTx = 0;
   uint32_t v2SwitchNoChangeTx = 0;
   uint32_t v2TxFallback = 0;
-  uint8_t v2SwitchStateDebugPrints = 0;
-  uint8_t v2RxErrorDebugPrints = 0;
-  uint8_t lastSwitchReplyToken = ppuc::v2::kNoBoard;
-  uint8_t lastSwitchReplyNextBoard = ppuc::v2::kNoBoard;
   bool switchDirty = false;
   bool switchOverflow = false;
   bool applyingRemoteSwitchState = false;
@@ -145,12 +139,12 @@ class EventDispatcher {
   bool lastHostSequenceValid = false;
   bool sequenceGapDetected = false;
   bool parserResynced = false;
-  bool transportErrorLatched = false;
 
   bool rs485 = false;
   uint8_t rs485Pin = 0;
   byte board = 255;
   byte nextSwitchBoard = ppuc::v2::kNoBoard;
+  uint32_t switchReplyDelayUs = 0;
   uint32_t lastPoll;
   bool running = false;
 

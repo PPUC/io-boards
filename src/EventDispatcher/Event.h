@@ -83,6 +83,7 @@
 #define CONFIG_TOPIC_MODE 90                        // "Z"
 #define CONFIG_TOPIC_PRIORITY 91                    //
 #define CONFIG_TOPIC_REPEAT 92                      //
+#define CONFIG_TOPIC_SWITCH_REPLY_DELAY_US 93       //
 #define CONFIG_TOPIC_NULL 99                        // NULL
 
 #define PWM_TYPE_SOLENOID 1  // Coil
