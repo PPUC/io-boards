@@ -88,8 +88,7 @@ void EventDispatcher::dispatch(Event *event) {
   }
 }
 
-void EventDispatcher::callListeners(Event *event, bool sendToOtherCore,
-                                    bool sendToRS485) {
+void EventDispatcher::callListeners(Event *event, bool sendToOtherCore) {
   if (!event->localFast) {
     for (byte i = 0; i <= numListeners; i++) {
       if (event->sourceId == eventListenerFilters[i] ||
@@ -97,18 +96,6 @@ void EventDispatcher::callListeners(Event *event, bool sendToOtherCore,
         eventListeners[i]->handleEvent(event);
       }
     }
-  }
-
-  if (rs485 && sendToRS485) {
-    msg[0] = 0b11111111;
-    msg[1] = event->sourceId;
-    msg[2] = highByte(event->eventId);
-    msg[3] = lowByte(event->eventId);
-    msg[4] = event->value;
-    msg[5] = 0b10101010;
-    msg[6] = 0b01010101;
-
-    hwSerial->write(msg, 7);
   }
 
   if (multiCore && sendToOtherCore && event->sourceId != EVENT_NULL) {
@@ -164,6 +151,8 @@ size_t EventDispatcher::getV2PayloadBytes(ppuc::v2::FrameType frameType) {
       return ppuc::v2::kMappingPayloadBytes;
     case ppuc::v2::kFrameConfig:
       return ppuc::v2::kConfigPayloadBytes;
+    case ppuc::v2::kFrameConfigAck:
+      return ppuc::v2::kConfigAckPayloadBytes;
     case ppuc::v2::kFrameOutputState:
       return ppuc::v2::OutputPayloadBytes(runtimeConfig);
     case ppuc::v2::kFrameSwitchState:
@@ -402,18 +391,59 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
   }
 
   if (frameType == ppuc::v2::kFrameConfig) {
+    const uint8_t boardId = frame[payloadOffset];
+    const uint8_t topic = frame[payloadOffset + 1];
+    const uint8_t index = frame[payloadOffset + 2];
+    const uint8_t key = frame[payloadOffset + 3];
     callListeners(
-        new ConfigEvent(frame[payloadOffset], frame[payloadOffset + 1],
-                        frame[payloadOffset + 2], frame[payloadOffset + 3],
+        new ConfigEvent(boardId, topic, index, key,
                         (((uint32_t)frame[payloadOffset + 4]) << 24) |
                             (((uint32_t)frame[payloadOffset + 5]) << 16) |
                             (((uint32_t)frame[payloadOffset + 6]) << 8) |
                             ((uint32_t)frame[payloadOffset + 7])),
         true);
+    if (boardId == board) {
+      sendConfigAckFrame(boardId, topic, index, key,
+                         ppuc::v2::kConfigAckAccepted);
+    }
     return true;
   }
 
   return true;
+}
+
+void EventDispatcher::sendConfigAckFrame(uint8_t boardId, uint8_t topic,
+                                         uint8_t index, uint8_t key,
+                                         uint8_t status) {
+  byte frame[ppuc::v2::kConfigAckFrameBytes];
+  frame[0] = ppuc::v2::kSyncByte;
+  frame[1] = ppuc::v2::ComposeTypeAndFlags(ppuc::v2::kFrameConfigAck,
+                                           ppuc::v2::kFlagNone);
+  frame[2] = ppuc::v2::kNoBoard;
+  frame[3] = txSequence++;
+  frame[4] = currentEpoch;
+  frame[5] = boardId;
+  frame[6] = topic;
+  frame[7] = index;
+  frame[8] = key;
+  frame[9] = status;
+  frame[10] = 0;
+  frame[11] = 0;
+  frame[12] = 0;
+
+  uint16_t crc = ppuc::v2::Crc16Ccitt(
+      frame, ppuc::v2::kHeaderBytes + ppuc::v2::kConfigAckPayloadBytes);
+  frame[13] = highByte(crc);
+  frame[14] = lowByte(crc);
+
+  if (!v2UartDmaActive || !sendV2FrameUartDma(frame, sizeof(frame))) {
+    digitalWrite(rs485Pin, HIGH);  // Write.
+    delayMicroseconds(RS485_MODE_SWITCH_DELAY);
+    hwSerial->write(frame, sizeof(frame));
+    delayMicroseconds(FrameWireTimeUs(sizeof(frame)));
+    digitalWrite(rs485Pin, LOW);  // Read.
+    delayMicroseconds(RS485_MODE_SWITCH_DELAY);
+  }
 }
 
 bool EventDispatcher::startV2UartDmaTransport() {
@@ -589,7 +619,7 @@ void EventDispatcher::applyOutputStates(const byte *coils, size_t coilBytes,
       callListeners(
           new Event(EVENT_SOURCE_SOLENOID, coilIndexToNumber[n],
                     newState ? 1 : 0),
-          true, false);
+          true);
     }
   }
   memcpy(outputCoils, coils, coilBytes);
@@ -600,7 +630,7 @@ void EventDispatcher::applyOutputStates(const byte *coils, size_t coilBytes,
     if (oldState != newState) {
       callListeners(
           new Event(EVENT_SOURCE_LIGHT, lampIndexToNumber[n], newState ? 1 : 0),
-          true, false);
+          true);
     }
   }
   memcpy(outputLamps, lamps, lampBytes);
@@ -609,8 +639,7 @@ void EventDispatcher::applyOutputStates(const byte *coils, size_t coilBytes,
     const uint8_t newLevel = ppuc::v2::ClampGiLevel(
         ppuc::v2::GetPackedNibble(giLevels, giString));
     if (outputGi[giString] != newLevel) {
-      callListeners(new Event(EVENT_SOURCE_GI, giString + 1, newLevel), true,
-                    false);
+      callListeners(new Event(EVENT_SOURCE_GI, giString + 1, newLevel), true);
       outputGi[giString] = newLevel;
     }
   }
@@ -747,13 +776,13 @@ void EventDispatcher::update() {
     while (!eventQueue.empty()) {
       Event *e = eventQueue.front();
       eventQueue.pop();
-      callListeners(e, true, false);
+      callListeners(e, true);
     }
   } else {
     while (!eventQueue.empty()) {
       Event *e = eventQueue.front();
       eventQueue.pop();
-      callListeners(e, true, false);
+      callListeners(e, true);
     }
 
     if (v2UartDmaActive) {
@@ -791,7 +820,7 @@ void EventDispatcher::update() {
   if (multiCoreCrossLink) {
     if (multiCoreCrossLink->eventAvailable()) {
       Event *event = multiCoreCrossLink->popEvent();
-      callListeners(event, false, false);
+      callListeners(event, false);
     }
 
     if (multiCoreCrossLink->configEventAvailable()) {

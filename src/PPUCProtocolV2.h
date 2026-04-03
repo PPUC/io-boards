@@ -47,6 +47,7 @@ enum FrameType : uint8_t {
   kFrameReset = 0x07,
   kFrameConfig = 0x08,
   kFrameSwitchNoChange = 0x09,
+  kFrameConfigAck = 0x0A,
 };
 
 enum MappingDomain : uint8_t {
@@ -69,6 +70,11 @@ enum SwitchStatusFlag : uint8_t {
   kStatusSequenceGap = 0x08,
   kStatusParserResynced = 0x10,
   kStatusSwitchOverflow = 0x20,
+};
+
+enum ConfigAckStatus : uint8_t {
+  kConfigAckAccepted = 0x00,
+  kConfigAckRejected = 0x01,
 };
 
 struct FrameHeader {
@@ -98,6 +104,15 @@ struct ConfigPayload {
   uint8_t index;
   uint8_t key;
   uint32_t value;
+};
+
+struct ConfigAckPayload {
+  uint8_t boardId;
+  uint8_t topic;
+  uint8_t index;
+  uint8_t key;
+  uint8_t status;
+  uint8_t reserved[3];
 };
 
 struct OutputPayload {
@@ -134,6 +149,12 @@ struct ConfigFrame {
   uint16_t crc;
 };
 
+struct ConfigAckFrame {
+  FrameHeader header;
+  ConfigAckPayload payload;
+  uint16_t crc;
+};
+
 struct OutputStateFrame {
   FrameHeader header;
   OutputPayload payload;
@@ -149,15 +170,17 @@ struct SwitchStateFrame {
 constexpr size_t kSetupPayloadBytes = sizeof(SetupPayload);
 constexpr size_t kMappingPayloadBytes = sizeof(MappingPayload);
 constexpr size_t kConfigPayloadBytes = sizeof(ConfigPayload);
+constexpr size_t kConfigAckPayloadBytes = sizeof(ConfigAckPayload);
 constexpr size_t kOutputPayloadBytes = sizeof(OutputPayload);
 constexpr size_t kSwitchPayloadBytes = sizeof(SwitchPayload);
 constexpr size_t kSwitchStatusBytes = 4;
 constexpr size_t kResetFrameBytes = kHeaderBytes + kCrcBytes;
-constexpr size_t kSetupFrameBytes = sizeof(SetupFrame);
-constexpr size_t kMappingFrameBytes = sizeof(MappingFrame);
-constexpr size_t kConfigFrameBytes = sizeof(ConfigFrame);
-constexpr size_t kOutputFrameBytes = sizeof(OutputStateFrame);
-constexpr size_t kSwitchFrameBytes = sizeof(SwitchStateFrame);
+constexpr size_t kSetupFrameBytes = kHeaderBytes + kSetupPayloadBytes + kCrcBytes;
+constexpr size_t kMappingFrameBytes = kHeaderBytes + kMappingPayloadBytes + kCrcBytes;
+constexpr size_t kConfigFrameBytes = kHeaderBytes + kConfigPayloadBytes + kCrcBytes;
+constexpr size_t kConfigAckFrameBytes = kHeaderBytes + kConfigAckPayloadBytes + kCrcBytes;
+constexpr size_t kOutputFrameBytes = kHeaderBytes + kOutputPayloadBytes + kCrcBytes;
+constexpr size_t kSwitchFrameBytes = kHeaderBytes + kSwitchPayloadBytes + kCrcBytes;
 
 struct RuntimeConfig {
   uint16_t coilBits = kDefaultCoilBits;

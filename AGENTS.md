@@ -233,3 +233,23 @@ When resuming work on `v2`, start here:
    - `src/IODevices/Switches.cpp` registration/range checks
    - the 16-switch PIO stateful-pin reset path for GPIO 15-18
 7. If multi-board switch traffic mostly works but runtime animation degrades, coordinate timing changes with `libppuc` before changing board protocol logic.
+
+## Current Freeze Status
+
+- Runtime freezes are still observed after tens of seconds or minutes even when startup and short tests look healthy.
+- Host-side timing and resync tuning change the symptom, but do not eliminate it consistently.
+- Do not assume this is purely a host issue.
+- The board-side switch-chain path remains a prime suspect:
+  - receiving the switch token
+  - deciding whether to reply
+  - transmitting `SwitchState` / `SwitchNoChange`
+  - forwarding to the next board
+- The next focused debugging pass should add board-side counters or sticky flags for switch-token RX and switch-reply TX so freezes can be localized to board vs host.
+
+## Virtual Board Notes
+
+- The first implementation slice of virtual missing boards is host-side only in `libppuc`.
+- No firmware changes are required yet for that slice.
+- Real boards remain authoritative for physically present switches.
+- Missing configured switch boards may later be virtualized by the host, with all of their switches initialized open.
+- Firmware should not assume host-side virtualized switches already appear as full synthetic switch-chain participants on the wire; that part is still future work.
