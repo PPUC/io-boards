@@ -40,7 +40,7 @@ Main files:
 - Preserve the current event-driven architecture. Most device logic still expects legacy `Event` / `ConfigEvent` objects even on `v2`.
 - When changing protocol code, inspect both `src/PPUCProtocolV2.h` and `src/EventDispatcher/EventDispatcher.cpp`.
 - The firmware currently bridges `v2` bitmap frames back into legacy events for listeners. Do not remove that compatibility layer without updating the rest of the firmware.
-- The intended host-side counterpart is `../libppuc`. For `v2` protocol work, verify both repos together because startup still mixes legacy packets with `v2` steady-state frames.
+- The intended host-side counterpart is `../libppuc`. For `v2` protocol work, verify both repos together because the wire protocol is now `v2` only.
 
 ## V2 Communication Protocol
 
@@ -80,6 +80,7 @@ Important constants:
 - `kFrameReset (0x07)`: resets boards
 - `kFrameConfig (0x08)`: carries legacy config tuples `(boardId, topic, index, key, value)`
 - `kFrameSwitchNoChange (0x09)`: token response when no switch bitmap changed
+- `kFrameConfigAck (0x0A)`: addressed-board acknowledgment for config frames
 
 Defined flags:
 
@@ -116,17 +117,18 @@ This is the compatibility strategy:
 
 The verified `v2` flow between `libppuc` and the boards is:
 
-1. Host resets and probes boards using legacy packets first.
+1. Host resets boards with `ResetFrame`.
 2. Host sends `ConfigFrame`s to register board-local hardware behavior.
-3. Host sends `SetupFrame`.
-4. Host sends `MappingFrame`s.
-5. Host repeatedly sends `OutputStateFrame`s containing the full coil/lamp snapshot.
-6. `header.nextBoard` in an output frame acts as the poll token.
-7. If `nextBoard == this boardId`, the board replies once:
+3. The addressed board acknowledges accepted config with `ConfigAck`.
+4. Host sends `SetupFrame`.
+5. Host sends `MappingFrame`s.
+6. Host repeatedly sends `OutputStateFrame`s containing the full coil/lamp snapshot.
+7. `header.nextBoard` in an output frame acts as the poll token.
+8. If `nextBoard == this boardId`, the board replies once:
    - `SwitchStateFrame` if any switch changed since the last reply
    - `SwitchNoChangeFrame` otherwise
-8. The reply includes the next board token in its own `header.nextBoard`.
-9. The host continues reading chained replies until `nextBoard == kNoBoard`.
+9. The reply includes the next board token in its own `header.nextBoard`.
+10. The host continues reading chained replies until `nextBoard == kNoBoard`.
 
 Important implementation detail:
 
@@ -197,6 +199,9 @@ These counters are the fastest way to diagnose whether the issue is framing, CRC
 - After loosening `libppuc` switch-reply timing and making resync less aggressive, the lamp attract-mode animation became visibly correct and much faster.
 - Treat the board firmware and host timing together as one system. If switch-chain timing is too aggressive, the host can churn sessions often enough to disturb normal output updates.
 - For larger games with more boards, expect the timing sweet spot to move. Do not assume a single fixed timeout is ideal for every cabinet.
+- Latest real-machine result: Time Warp attract mode ran for `1h40m4s` with no communication error messages from the host.
+- Treat the current non-DMA firmware path plus present host timing as the strongest known-good multi-board runtime baseline so far.
+- Do not change switch-reply timing or fallback TX behavior casually while the remaining work is focused on coil test and virtualized cabinet switches.
 
 Firmware-side implications:
 
@@ -249,7 +254,7 @@ When resuming work on `v2`, start here:
 ## Virtual Board Notes
 
 - The first implementation slice of virtual missing boards is host-side only in `libppuc`.
-- No firmware changes are required yet for that slice.
 - Real boards remain authoritative for physically present switches.
 - Missing configured switch boards may later be virtualized by the host, with all of their switches initialized open.
-- Firmware should not assume host-side virtualized switches already appear as full synthetic switch-chain participants on the wire; that part is still future work.
+- Missing configured switch boards are now synthesized by the host as ordinary `SwitchState` / `SwitchNoChange` frames in the logical switch chain.
+- Firmware should treat those frames exactly like frames from a real board; it must not care whether the sender was physical or virtual.

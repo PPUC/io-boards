@@ -19,6 +19,7 @@
 #include "EffectDevices/WavePWMDevice.h"
 #include "Effects/Effect.h"
 #include "Effects/EffectContainer.h"
+#include "Effects/FastLedBlinkEffect.h"
 #include "Effects/ImpulsePWMEffect.h"
 #include "Effects/LedBlinkEffect.h"
 #include "Effects/LedOnEffect.h"
@@ -64,6 +65,10 @@ class EffectsController : public EventListener {
       _ledBuiltInDevice = new LedBuiltInDevice();
       _ledBuiltInDevice->on();
 
+      addEffect(new FastLedBlinkEffect(), _ledBuiltInDevice,
+                new Event(EVENT_ERROR), 3, -1, -1);
+      addEffect(new LedOnEffect(), _ledBuiltInDevice, new Event(EVENT_NO_ERROR),
+                4, 0, -1);
       addEffect(new LedBlinkEffect(), _ledBuiltInDevice, new Event(EVENT_RUN),
                 1,   // priority
                 -1,  // repeat

@@ -234,9 +234,17 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
   if (receivedCrc != expectedCrc) {
     v2RxCrcFail++;
     parserResynced = true;
+    if (!transportErrorLatched) {
+      dispatch(new Event(EVENT_ERROR, 1, board));
+      transportErrorLatched = true;
+    }
     return false;
   }
   v2RxFrames++;
+  if (transportErrorLatched) {
+    dispatch(new Event(EVENT_NO_ERROR, 1, board));
+    transportErrorLatched = false;
+  }
 
   const bool hostOriginated =
       frameType == ppuc::v2::kFrameSetup || frameType == ppuc::v2::kFrameMapping ||

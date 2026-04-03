@@ -139,6 +139,7 @@ class EventDispatcher {
   bool lastHostSequenceValid = false;
   bool sequenceGapDetected = false;
   bool parserResynced = false;
+  bool transportErrorLatched = false;
 
   bool rs485 = false;
   uint8_t rs485Pin = 0;
