@@ -63,6 +63,8 @@ class EventDispatcher {
   bool sendV2FrameUartDma(const byte* frame, size_t frameBytes);
   size_t getV2PayloadBytes(ppuc::v2::FrameType frameType);
   bool processV2Frame(const byte* frame, size_t payloadBytes);
+  void sendConfigAckFrame(uint8_t boardId, uint8_t topic, uint8_t index,
+                          uint8_t key, uint8_t status);
   void sendSwitchStateFrame(byte nextBoard);
   void sendSwitchNoChangeFrame(byte nextBoard);
   void applyOutputStates(const byte* coils, size_t coilBytes, const byte* lamps,
@@ -75,7 +77,7 @@ class EventDispatcher {
   int16_t findMappedIndex(const uint16_t* table, uint16_t count,
                           uint16_t number);
 
-  void callListeners(Event* event, bool sendToOtherCore, bool sendToRS485);
+  void callListeners(Event* event, bool sendToOtherCore);
 
   void callListeners(ConfigEvent* event, bool sendToOtherCore);
 
@@ -85,7 +87,6 @@ class EventDispatcher {
   char eventListenerFilters[MAX_EVENT_LISTENERS];
   int numListeners = -1;
 
-  byte msg[12];
   byte v2Buffer[ppuc::v2::kHeaderBytes + ppuc::v2::kMaxCoilBytes +
                 ppuc::v2::kMaxLampBytes + ppuc::v2::kGiBytes +
                 ppuc::v2::kCrcBytes];
