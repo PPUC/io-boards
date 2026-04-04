@@ -1,8 +1,29 @@
 #include "IOBoardController.h"
 
 #include "EventDispatcher/CrossLinkDebugger.h"
+#include "hardware/watchdog.h"
 
 #define SWITCH_DEBOUNCE 10
+
+namespace {
+constexpr uint8_t kBoardSelectorSamples = 8;
+constexpr uint32_t kBoardSelectorSampleDelayMs = 2;
+
+uint8_t decodeBoardSelectorValue(int raw) {
+  return static_cast<uint8_t>(16 - static_cast<int>((raw + 29.23) / 58.46));
+}
+
+[[noreturn]] void performBoardReboot() {
+  Serial1.end();
+  delay(5);
+  pinMode(RS485_MODE_PIN, OUTPUT);
+  digitalWrite(RS485_MODE_PIN, LOW);
+  delay(5);
+  watchdog_reboot(0, 0, 0);
+  while (true) {
+  }
+}
+}
 
 IOBoardController::IOBoardController(int cT) {
   _eventDispatcher = new EventDispatcher();
@@ -12,15 +33,54 @@ IOBoardController::IOBoardController(int cT) {
   _eventDispatcher->addListener(this, EVENT_RESET);
 
   controllerType = cT;
+  _pwmDevices = nullptr;
+  _switches = nullptr;
+  _switchMatrix = nullptr;
+  _multiCoreCrossLink = nullptr;
+  boardId = 255;
+}
+
+int IOBoardController::readBoardSelectorRaw() const {
+  uint8_t votes[16] = {0};
+  for (uint8_t i = 0; i < kBoardSelectorSamples; ++i) {
+    const uint8_t decoded = decodeBoardSelectorValue(analogRead(28));
+    if (decoded < 16) {
+      votes[decoded]++;
+    }
+    delay(kBoardSelectorSampleDelayMs);
+  }
+
+  uint8_t bestValue = 0;
+  uint8_t bestVotes = 0;
+  for (uint8_t value = 0; value < 16; ++value) {
+    if (votes[value] > bestVotes) {
+      bestVotes = votes[value];
+      bestValue = value;
+    }
+  }
+
+  return bestValue;
+}
+
+void IOBoardController::initializeBoardIdentity() {
+  // Let the board-id resistor ladder settle after power-on or reboot before
+  // deriving board/debug mode from the ADC reading.
+  delay(2);
+
+  boardId = static_cast<byte>(readBoardSelectorRaw());
+  m_debug = (boardId & 0b1000) != 0;
+  if (m_debug) {
+    boardId -= 8;
+  }
+}
+
+void IOBoardController::begin() {
+  if (m_initialized) {
+    return;
+  }
 
   if (controllerType == CONTROLLER_16_8_1) {
-    // Read bordID. Ideal value at 10bit resolution: (DIP+1)*1023*2/35 -> 58.46
-    // to 935.3
-    boardId = 16 - ((int)((analogRead(28) + 29.23) / 58.46));
-    m_debug = (boardId & 0b1000) != 0;
-    if (m_debug) {
-      boardId -= 8;
-    }
+    initializeBoardIdentity();
 
     _eventDispatcher->setBoard(boardId);
     _eventDispatcher->setDebug(m_debug);
@@ -34,6 +94,7 @@ IOBoardController::IOBoardController(int cT) {
     // Adjust PWM properties if needed.
     analogWriteFreq(500);
     analogWriteResolution(8);
+    m_initialized = true;
   }
 }
 
@@ -56,7 +117,7 @@ void IOBoardController::update() {
 
   if (resetTimer > 0 && resetTimer < millis()) {
     if (!m_debug) {
-      rp2040.reboot();
+      performBoardReboot();
     } else {
       resetTimer = 0;
       CrossLinkDebugger::debug(

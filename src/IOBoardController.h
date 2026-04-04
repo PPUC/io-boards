@@ -17,6 +17,7 @@
 class IOBoardController : public EventListener {
  public:
   IOBoardController(int controllerType);
+  void begin();
 
   PwmDevices *pwmDevices();
 
@@ -33,8 +34,12 @@ class IOBoardController : public EventListener {
   void update();
 
   bool isDebug() { return m_debug; }
+  bool isInitialized() const { return m_initialized; }
 
  private:
+  int readBoardSelectorRaw() const;
+  void initializeBoardIdentity();
+
   PwmDevices *_pwmDevices;
   Switches *_switches;
   SwitchMatrix *_switchMatrix;
@@ -44,6 +49,7 @@ class IOBoardController : public EventListener {
   bool activeSwitches = false;
   bool activeSwitchMatrix = false;
   bool m_debug = false;
+  bool m_initialized = false;
 
   int controllerType;
   byte boardId;

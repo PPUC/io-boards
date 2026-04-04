@@ -18,6 +18,7 @@ uint32_t FrameWireTimeUs(size_t frameBytes) {
 }
 
 EventDispatcher::EventDispatcher() {
+  lastPoll = 0;
   for (uint16_t i = 0; i < ppuc::v2::kMaxCoilBits; ++i) {
     coilIndexToNumber[i] = i;
   }

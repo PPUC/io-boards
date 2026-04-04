@@ -61,6 +61,8 @@ void setup() {
   // Overclock according to Raspberry Pi Pico SDK recommendations.
   set_sys_clock_khz(SYS_CLK_KHZ, true);
 
+  ioBoardController.begin();
+
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
   led_wait_ms = millis();
@@ -121,6 +123,8 @@ void setup() {
 void setup1() {
   while (!core_0_initialized) {
   }
+
+  effectsController.begin();
 
   if (usb_debugging) {
     //delay(10);

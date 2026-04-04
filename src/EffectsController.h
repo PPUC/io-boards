@@ -56,11 +56,15 @@ class EffectsController : public EventListener {
     effectsControllerInstance = this;
     _eventDispatcher = new EventDispatcher();
     _eventDispatcher->addListener(this);
+  }
+
+  void begin() {
+    if (initialized) {
+      return;
+    }
 
     if (controllerType == CONTROLLER_16_8_1) {
-      // Read bordID. Ideal value at 10bit resolution: (DIP+1)*1023*2/35
-      // -> 58.46 to 935.3
-      boardId = (16 - ((int)((analogRead(28) + 29.23) / 58.46))) & 0b0111;
+      boardId = static_cast<byte>(readBoardId());
 
       _ledBuiltInDevice = new LedBuiltInDevice();
       _ledBuiltInDevice->on();
@@ -74,6 +78,7 @@ class EffectsController : public EventListener {
                 -1,  // repeat
                 0    // mode
       );
+      initialized = true;
     } else {
       Serial.print("Unsupported Effects Controller: ");
       Serial.println(controllerType);
@@ -125,12 +130,36 @@ class EffectsController : public EventListener {
   void handleEvent(ConfigEvent* event);
 
  private:
+  int readBoardId() const {
+    delay(2);
+    uint8_t votes[8] = {0};
+    for (uint8_t i = 0; i < 8; ++i) {
+      const int raw = analogRead(28);
+      const uint8_t decoded =
+          static_cast<uint8_t>((16 - static_cast<int>((raw + 29.23) / 58.46)) &
+                               0b0111);
+      votes[decoded]++;
+      delay(2);
+    }
+
+    uint8_t bestValue = 0;
+    uint8_t bestVotes = 0;
+    for (uint8_t value = 0; value < 8; ++value) {
+      if (votes[value] > bestVotes) {
+        bestVotes = votes[value];
+        bestValue = value;
+      }
+    }
+
+    return bestValue;
+  }
+
   EventDispatcher* _eventDispatcher;
-  LedBuiltInDevice* _ledBuiltInDevice;
-  NullDevice* _nullDevice;
-  WavePWMDevice* _shakerPWMDevice;
-  WavePWMDevice* _ledPWMDevice;
-  RgbStripDevice* _rgbStripeDevice;
+  LedBuiltInDevice* _ledBuiltInDevice = nullptr;
+  NullDevice* _nullDevice = nullptr;
+  WavePWMDevice* _shakerPWMDevice = nullptr;
+  WavePWMDevice* _ledPWMDevice = nullptr;
+  RgbStripDevice* _rgbStripeDevice = nullptr;
   WS2812FXDevice* ws2812FXDevices[PPUC_MAX_WS2812FX_DEVICES][10];
   int ws2812FXDeviceCounters[PPUC_MAX_WS2812FX_DEVICES] = {0};
   bool ws2812FXstates[PPUC_MAX_WS2812FX_DEVICES] = {0};
@@ -144,6 +173,7 @@ class EffectsController : public EventListener {
   byte platform;
   byte controllerType;
   byte boardId = 255;
+  bool initialized = false;
   byte config_port = 0;
   byte config_values[9] = {0};
   neoPixelType config_neoPixelType = 0;
