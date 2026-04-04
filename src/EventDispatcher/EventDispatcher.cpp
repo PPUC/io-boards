@@ -301,6 +301,7 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
   }
 
   if (frameType == ppuc::v2::kFrameReset) {
+    stopV2UartDmaTransport();
     runtimeConfigValid = false;
     mappingComplete = false;
     expectedMappingFrames = 0;
@@ -309,6 +310,10 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
     lastHostSequenceValid = false;
     sequenceGapDetected = false;
     parserResynced = false;
+    transportErrorLatched = false;
+    switchDirty = false;
+    applyingRemoteSwitchState = false;
+    nextSwitchBoard = ppuc::v2::kNoBoard;
     noteHostSequence();
     dispatch(new Event(EVENT_RESET));
     return true;
@@ -357,19 +362,12 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
     if (!runtimeConfigValid || incomingEpoch != currentEpoch) {
       return true;
     }
+    forwardSwitchTokenIfSelected(frame[2]);
     const size_t coilBytes = ppuc::v2::BitsToBytes(runtimeConfig.coilBits);
     const size_t lampBytes = ppuc::v2::BitsToBytes(runtimeConfig.lampBits);
     applyOutputStates(&frame[payloadOffset], coilBytes,
                       &frame[payloadOffset + coilBytes], lampBytes,
                       &frame[payloadOffset + coilBytes + lampBytes]);
-    if (frame[2] == board) {
-      if (switchDirty) {
-        sendSwitchStateFrame(nextSwitchBoard);
-        switchDirty = false;
-      } else {
-        sendSwitchNoChangeFrame(nextSwitchBoard);
-      }
-    }
     return true;
   }
 
@@ -377,28 +375,16 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
     if (!runtimeConfigValid || incomingEpoch != currentEpoch) {
       return true;
     }
+    forwardSwitchTokenIfSelected(frame[2]);
     const size_t switchBytes = ppuc::v2::BitsToBytes(runtimeConfig.switchBits);
     applySwitchStates(&frame[payloadOffset + ppuc::v2::kSwitchStatusBytes],
                       switchBytes);
-    if (frame[2] == board) {
-      if (switchDirty) {
-        sendSwitchStateFrame(nextSwitchBoard);
-        switchDirty = false;
-      } else {
-        sendSwitchNoChangeFrame(nextSwitchBoard);
-      }
-    }
     return true;
   }
 
   if (frameType == ppuc::v2::kFrameSwitchNoChange) {
-    if (runtimeConfigValid && incomingEpoch == currentEpoch && frame[2] == board) {
-      if (switchDirty) {
-        sendSwitchStateFrame(nextSwitchBoard);
-        switchDirty = false;
-      } else {
-        sendSwitchNoChangeFrame(nextSwitchBoard);
-      }
+    if (runtimeConfigValid && incomingEpoch == currentEpoch) {
+      forwardSwitchTokenIfSelected(frame[2]);
     }
     return true;
   }
@@ -682,6 +668,22 @@ void EventDispatcher::applySwitchStates(const byte* switches,
   }
   applyingRemoteSwitchState = false;
   memcpy(switchStates, switches, switchBytes);
+}
+
+void EventDispatcher::forwardSwitchTokenIfSelected(uint8_t selectedBoard) {
+  if (selectedBoard != board) {
+    return;
+  }
+
+  // Forward the token before running the heavier output/switch fanout logic on
+  // core 0. Config ACKs are already fast; runtime replies need the same low
+  // latency so switch polling does not depend on lamp/effect processing time.
+  if (switchDirty) {
+    sendSwitchStateFrame(nextSwitchBoard);
+    switchDirty = false;
+  } else {
+    sendSwitchNoChangeFrame(nextSwitchBoard);
+  }
 }
 
 void EventDispatcher::sendSwitchStateFrame(byte nextBoard) {
