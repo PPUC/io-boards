@@ -29,7 +29,9 @@ Main files:
 ## Build And Validation
 
 - Default build target: `platformio.ini` env `IO_16_8_1`.
-- Baud rate for the new protocol is `250000` (`ppuc::v2::kBaudRate`), not the legacy `115200`.
+- Baud rate for the current `v2` protocol is `115200` (`ppuc::v2::kBaudRate`).
+- Planned follow-up: migrate the runtime baseline to `250000` once restart and
+  reset behavior are trustworthy again.
 - When validating protocol work, prefer firmware-level checks first:
   - `pio run`
   - targeted inspection of `EventDispatcher` debug counters over USB debug mode
@@ -49,9 +51,10 @@ Compared to `main`, branch `v2` replaces the old 7-byte event packets with frame
 ### Transport
 
 - RS485 UART on `Serial1`
-- Baud: `250000`
+- Baud: `115200`
+- Planned target baud after the current bring-up phase: `250000`
 - Sync byte: `0xA5`
-- Header size: 4 bytes
+- Header size: 5 bytes
 - CRC: 16-bit CCITT over header + payload
 
 Frame header layout:
@@ -60,6 +63,7 @@ Frame header layout:
 2. `typeAndFlags`
 3. `nextBoard`
 4. `sequence`
+5. `epoch`
 
 Important constants:
 
@@ -202,6 +206,10 @@ These counters are the fastest way to diagnose whether the issue is framing, CRC
 - Latest real-machine result: Time Warp attract mode ran for `1h40m4s` with no communication error messages from the host.
 - Treat the current non-DMA firmware path plus present host timing as the strongest known-good multi-board runtime baseline so far.
 - Do not change switch-reply timing or fallback TX behavior casually while the remaining work is focused on coil test and virtualized cabinet switches.
+- A later firmware change also improved the board-side runtime path by
+  forwarding the switch token before heavier output/switch fanout work on core
+  0. That reduced the reply-delay margin needed on real hardware
+  substantially.
 
 Firmware-side implications:
 
@@ -211,8 +219,10 @@ Firmware-side implications:
 
 ## Known Gaps And Risks
 
-- The `v2` protocol path exists on this branch but has not been validated end-to-end against the intended `libppuc` `v2` counterpart.
-- `libppuc v2` is now available locally and confirms the current startup sequence is mixed legacy plus `v2`, not pure `v2` from power-on.
+- The `v2` protocol path is now validated enough for normal startup/runtime on
+  the good boards, but reset/restart recovery is still not robust.
+- Startup on the wire is now `v2` only; the remaining legacy boundary is
+  internal event bridging inside firmware.
 - `kFrameHeartbeat` and `kFrameError` are defined but effectively placeholders in the current firmware.
 - Sequence numbers are generated and parsed but are not yet used for replay detection, loss handling, or synchronization checks.
 - `kFlagDelta` is defined but not used; all practical state transfer is keyframe/full-snapshot based.
@@ -224,32 +234,16 @@ Firmware-side implications:
 
 When resuming work on `v2`, start here:
 
-1. Verify the exact frame order and field encoding used by the `libppuc` `v2` branch.
-2. Confirm endian consistency for all 16-bit and 32-bit payload fields.
-3. Exercise a single-board loop first:
-   - setup
-   - mappings
-   - config
-   - output frame
-   - switch reply
-4. Use USB debug mode on one board and inspect `V2DBG` counters while driving known switch transitions.
-5. Only after single-board traffic is stable, test multi-board token passing via `nextBoard`.
-6. If the last four dedicated switch inputs on IO_16_8_1 stop reporting, inspect both:
+1. Re-test restart/reset recovery first. The main unresolved issue is still
+   that some boards can wedge across host restarts.
+2. Use USB debug mode on one board and inspect `V2DBG` counters while driving
+   known restart and switch-poll scenarios.
+3. If the last four dedicated switch inputs on IO_16_8_1 stop reporting,
+   inspect both:
    - `src/IODevices/Switches.cpp` registration/range checks
    - the 16-switch PIO stateful-pin reset path for GPIO 15-18
-7. If multi-board switch traffic mostly works but runtime animation degrades, coordinate timing changes with `libppuc` before changing board protocol logic.
-
-## Current Freeze Status
-
-- Runtime freezes are still observed after tens of seconds or minutes even when startup and short tests look healthy.
-- Host-side timing and resync tuning change the symptom, but do not eliminate it consistently.
-- Do not assume this is purely a host issue.
-- The board-side switch-chain path remains a prime suspect:
-  - receiving the switch token
-  - deciding whether to reply
-  - transmitting `SwitchState` / `SwitchNoChange`
-  - forwarding to the next board
-- The next focused debugging pass should add board-side counters or sticky flags for switch-token RX and switch-reply TX so freezes can be localized to board vs host.
+4. If runtime animation or switch latency regresses again, coordinate timing
+   changes with `libppuc` before changing board protocol logic.
 
 ## Virtual Board Notes
 

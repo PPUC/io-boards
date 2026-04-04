@@ -1,6 +1,8 @@
 #include "IOBoardController.h"
 
 #include "EventDispatcher/CrossLinkDebugger.h"
+#include "pico/multicore.h"
+#include "hardware/sync.h"
 #include "hardware/watchdog.h"
 
 #define SWITCH_DEBOUNCE 10
@@ -14,11 +16,22 @@ uint8_t decodeBoardSelectorValue(int raw) {
 }
 
 [[noreturn]] void performBoardReboot() {
+  // Stop the second core first so the chip does not reboot with core 1 still
+  // executing stale firmware state while core 0 is tearing down UART/RS485.
+  multicore_reset_core1();
+  delay(1);
+
   Serial1.end();
   delay(5);
   pinMode(RS485_MODE_PIN, OUTPUT);
   digitalWrite(RS485_MODE_PIN, LOW);
   delay(5);
+
+  // Reset can be triggered while UART RX/TX state is still active. Disable
+  // interrupts and give the serial hardware a brief moment to settle before
+  // arming the watchdog reboot.
+  (void)save_and_disable_interrupts();
+  busy_wait_us_32(10000);
   watchdog_reboot(0, 0, 0);
   while (true) {
   }
