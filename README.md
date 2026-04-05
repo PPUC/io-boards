@@ -15,7 +15,7 @@ For homebrew machines there will be additional software to act as "CPU", running
 communicating with the controllers. (WIP)
 
 A special variation of that "CPU" will be suitable as replacement for a broken CPU of an existing machine.
-The development happens as part of the [PinMAME project](https://github.com/vpinball/pinmame/tree/master/src/ppuc).
+The development happens as part of the [PinMAME project](https://github.com/mkalkbrenner/pinmame/tree/master/src/ppuc).
 
 ## Motivation
 

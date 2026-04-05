@@ -1,11 +1,8 @@
 #include "EventDispatcher.h"
 
-#include "hardware/uart.h"
 #include <string.h>
 
 namespace {
-constexpr uint32_t kV2RxTimeoutUs = 8000;
-constexpr bool kEnableV2UartDmaRx = false;
 constexpr uint32_t kSerialBaudRate = ppuc::v2::kBaudRate;
 
 uint32_t FrameWireTimeUs(size_t frameBytes) {
@@ -289,19 +286,11 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
         dispatch(new Event(EVENT_READ_SWITCHES));
         v2RuntimeInitialized = true;
       }
-      if (!v2UartDmaActive) {
-        if (startV2UartDmaTransport()) {
-          v2CutoverOk++;
-        } else {
-          v2CutoverFail++;
-        }
-      }
     }
     return true;
   }
 
   if (frameType == ppuc::v2::kFrameReset) {
-    stopV2UartDmaTransport();
     runtimeConfigValid = false;
     mappingComplete = false;
     expectedMappingFrames = 0;
@@ -435,153 +424,12 @@ void EventDispatcher::sendConfigAckFrame(uint8_t boardId, uint8_t topic,
   frame[13] = highByte(crc);
   frame[14] = lowByte(crc);
 
-  if (!v2UartDmaActive || !sendV2FrameUartDma(frame, sizeof(frame))) {
-    digitalWrite(rs485Pin, HIGH);  // Write.
-    delayMicroseconds(RS485_MODE_SWITCH_DELAY);
-    hwSerial->write(frame, sizeof(frame));
-    delayMicroseconds(FrameWireTimeUs(sizeof(frame)));
-    digitalWrite(rs485Pin, LOW);  // Read.
-    delayMicroseconds(RS485_MODE_SWITCH_DELAY);
-  }
-}
-
-bool EventDispatcher::startV2UartDmaTransport() {
-  if (!kEnableV2UartDmaRx) {
-    return false;
-  }
-
-  if (v2UartDmaActive) {
-    return true;
-  }
-
-  int rxDma = dma_claim_unused_channel(false);
-  if (rxDma < 0) {
-    return false;
-  }
-
-  int txDma = dma_claim_unused_channel(false);
-  if (txDma < 0) {
-    dma_channel_unclaim(rxDma);
-    return false;
-  }
-  v2RxDmaChannel = rxDma;
-  v2TxDmaChannel = txDma;
-
-  v2UartDmaActive = true;
-  v2RxState = V2_RX_IDLE;
-  v2RxPayloadBytes = 0;
-  v2RxStateStartUs = micros();
-
-  return true;
-}
-
-void EventDispatcher::stopV2UartDmaTransport() {
-  if (!v2UartDmaActive) {
-    return;
-  }
-
-  dma_channel_abort(v2RxDmaChannel);
-  dma_channel_abort(v2TxDmaChannel);
-  dma_channel_unclaim(v2RxDmaChannel);
-  dma_channel_unclaim(v2TxDmaChannel);
-
-  v2UartDmaActive = false;
-  v2RxState = V2_RX_IDLE;
-  v2RxDmaChannel = -1;
-  v2TxDmaChannel = -1;
-}
-
-bool EventDispatcher::sendV2FrameUartDma(const byte* frame, size_t frameBytes) {
-  if (!v2UartDmaActive || !frame || frameBytes == 0) {
-    return false;
-  }
-
-  memcpy(v2DmaTxBuffer, frame, frameBytes);
-  dma_channel_config txConfig = dma_channel_get_default_config(v2TxDmaChannel);
-  channel_config_set_transfer_data_size(&txConfig, DMA_SIZE_8);
-  channel_config_set_dreq(&txConfig, uart_get_dreq(uart1, true));
-  channel_config_set_read_increment(&txConfig, true);
-  channel_config_set_write_increment(&txConfig, false);
-
-  const uint32_t derivedPostTxSettleUs = switchReplyDelayUs / 4u;
-  // Keep the post-TX settle tied to the configured pre-reply delay, but cap it
-  // so a large experimental value does not stall core 0 for an excessive time
-  // after every reply.
-  const uint32_t postTxSettleUs =
-      derivedPostTxSettleUs > 2000u ? 2000u : derivedPostTxSettleUs;
   digitalWrite(rs485Pin, HIGH);  // Write.
   delayMicroseconds(RS485_MODE_SWITCH_DELAY);
-  dma_channel_configure(v2TxDmaChannel, &txConfig, &uart1_hw->dr,
-                        v2DmaTxBuffer, frameBytes, true);
-  dma_channel_wait_for_finish_blocking(v2TxDmaChannel);
-  uart_tx_wait_blocking(uart1);
+  hwSerial->write(frame, sizeof(frame));
+  delayMicroseconds(FrameWireTimeUs(sizeof(frame)));
   digitalWrite(rs485Pin, LOW);  // Read.
   delayMicroseconds(RS485_MODE_SWITCH_DELAY);
-  if (postTxSettleUs > 0) {
-    delayMicroseconds(postTxSettleUs);
-  }
-  v2TxFrames++;
-  return true;
-}
-
-void EventDispatcher::serviceV2UartDmaRx() {
-  if (!v2UartDmaActive) {
-    return;
-  }
-
-  if (v2RxState == V2_RX_IDLE) {
-    dma_channel_config rxConfig = dma_channel_get_default_config(v2RxDmaChannel);
-    channel_config_set_transfer_data_size(&rxConfig, DMA_SIZE_8);
-    channel_config_set_dreq(&rxConfig, uart_get_dreq(uart1, false));
-    channel_config_set_read_increment(&rxConfig, false);
-    channel_config_set_write_increment(&rxConfig, true);
-    dma_channel_configure(v2RxDmaChannel, &rxConfig, v2DmaRxBuffer,
-                          &uart1_hw->dr, ppuc::v2::kHeaderBytes, true);
-    v2RxState = V2_RX_HEADER;
-    return;
-  }
-
-  if (v2RxState == V2_RX_HEADER && dma_channel_is_busy(v2RxDmaChannel)) {
-    return;
-  }
-
-  if (v2RxState == V2_RX_HEADER) {
-    if (v2DmaRxBuffer[0] != ppuc::v2::kSyncByte) {
-      v2RxSyncFail++;
-      parserResynced = true;
-      v2RxState = V2_RX_IDLE;
-      return;
-    }
-    ppuc::v2::FrameType frameType = ppuc::v2::ExtractType(v2DmaRxBuffer[1]);
-    v2RxPayloadBytes = getV2PayloadBytes(frameType);
-
-    dma_channel_config rxConfig = dma_channel_get_default_config(v2RxDmaChannel);
-    channel_config_set_transfer_data_size(&rxConfig, DMA_SIZE_8);
-    channel_config_set_dreq(&rxConfig, uart_get_dreq(uart1, false));
-    channel_config_set_read_increment(&rxConfig, false);
-    channel_config_set_write_increment(&rxConfig, true);
-    dma_channel_configure(v2RxDmaChannel, &rxConfig,
-                          &v2DmaRxBuffer[ppuc::v2::kHeaderBytes],
-                          &uart1_hw->dr,
-                          v2RxPayloadBytes + ppuc::v2::kCrcBytes, true);
-    v2RxState = V2_RX_BODY;
-    v2RxStateStartUs = micros();
-    return;
-  }
-
-  if (v2RxState == V2_RX_BODY && dma_channel_is_busy(v2RxDmaChannel)) {
-    if ((micros() - v2RxStateStartUs) > kV2RxTimeoutUs) {
-      dma_channel_abort(v2RxDmaChannel);
-      v2RxState = V2_RX_IDLE;
-      v2RxDmaTimeouts++;
-    }
-    return;
-  }
-
-  if (v2RxState == V2_RX_BODY) {
-    processV2Frame(v2DmaRxBuffer, v2RxPayloadBytes);
-    v2RxState = V2_RX_IDLE;
-  }
 }
 
 int16_t EventDispatcher::findMappedIndex(const uint16_t* table, uint16_t count,
@@ -696,7 +544,7 @@ void EventDispatcher::sendSwitchStateFrame(byte nextBoard) {
   const size_t frameBytes =
       ppuc::v2::kHeaderBytes + payloadBytes + ppuc::v2::kCrcBytes;
 
-  byte* frame = v2DmaTxBuffer;
+  byte* frame = v2TxBuffer;
   frame[0] = ppuc::v2::kSyncByte;
   frame[1] = ppuc::v2::ComposeTypeAndFlags(ppuc::v2::kFrameSwitchState,
                                            ppuc::v2::kFlagKeyframe);
@@ -724,25 +572,23 @@ void EventDispatcher::sendSwitchStateFrame(byte nextBoard) {
     delayMicroseconds(switchReplyDelayUs);
   }
 
-  if (!v2UartDmaActive || !sendV2FrameUartDma(frame, frameBytes)) {
-    v2TxFallback++;
-    digitalWrite(rs485Pin, HIGH);  // Write.
-    delayMicroseconds(RS485_MODE_SWITCH_DELAY);
-    hwSerial->write(frame, frameBytes);
-    delayMicroseconds(FrameWireTimeUs(frameBytes));
-    digitalWrite(rs485Pin, LOW);  // Read.
-    delayMicroseconds(RS485_MODE_SWITCH_DELAY);
-    if (postTxSettleUs > 0) {
-      delayMicroseconds(postTxSettleUs);
-    }
+  digitalWrite(rs485Pin, HIGH);  // Write.
+  delayMicroseconds(RS485_MODE_SWITCH_DELAY);
+  hwSerial->write(frame, frameBytes);
+  delayMicroseconds(FrameWireTimeUs(frameBytes));
+  digitalWrite(rs485Pin, LOW);  // Read.
+  delayMicroseconds(RS485_MODE_SWITCH_DELAY);
+  if (postTxSettleUs > 0) {
+    delayMicroseconds(postTxSettleUs);
   }
 
+  v2TxFrames++;
   clearReportedStatusFlags();
   lastPoll = millis();
 }
 
 void EventDispatcher::sendSwitchNoChangeFrame(byte nextBoard) {
-  byte* frame = v2DmaTxBuffer;
+  byte* frame = v2TxBuffer;
   frame[0] = ppuc::v2::kSyncByte;
   frame[1] = ppuc::v2::ComposeTypeAndFlags(ppuc::v2::kFrameSwitchNoChange,
                                            ppuc::v2::kFlagNone);
@@ -768,22 +614,18 @@ void EventDispatcher::sendSwitchNoChangeFrame(byte nextBoard) {
     delayMicroseconds(switchReplyDelayUs);
   }
 
-  if (!v2UartDmaActive ||
-      !sendV2FrameUartDma(frame, ppuc::v2::SwitchNoChangeFrameBytes())) {
-    v2TxFallback++;
-    digitalWrite(rs485Pin, HIGH);  // Write.
-    delayMicroseconds(RS485_MODE_SWITCH_DELAY);
-    hwSerial->write(frame, ppuc::v2::SwitchNoChangeFrameBytes());
-    delayMicroseconds(
-        FrameWireTimeUs(ppuc::v2::SwitchNoChangeFrameBytes()));
-    digitalWrite(rs485Pin, LOW);  // Read.
-    delayMicroseconds(RS485_MODE_SWITCH_DELAY);
-    if (postTxSettleUs > 0) {
-      delayMicroseconds(postTxSettleUs);
-    }
+  digitalWrite(rs485Pin, HIGH);  // Write.
+  delayMicroseconds(RS485_MODE_SWITCH_DELAY);
+  hwSerial->write(frame, ppuc::v2::SwitchNoChangeFrameBytes());
+  delayMicroseconds(FrameWireTimeUs(ppuc::v2::SwitchNoChangeFrameBytes()));
+  digitalWrite(rs485Pin, LOW);  // Read.
+  delayMicroseconds(RS485_MODE_SWITCH_DELAY);
+  if (postTxSettleUs > 0) {
+    delayMicroseconds(postTxSettleUs);
   }
 
   clearReportedStatusFlags();
+  v2TxFrames++;
   v2SwitchNoChangeTx++;
   lastPoll = millis();
 }
@@ -834,34 +676,27 @@ void EventDispatcher::update() {
       callListeners(e, true);
     }
 
-    if (v2UartDmaActive) {
-      serviceV2UartDmaRx();
-    } else {
-      if (hwSerial->available() > 0) {
-        m_sawRs485Activity = true;
-      }
-      // Fallback parser is still needed for V2 bootstrap and fault handling:
-      // - bootstrap: receive initial V2 setup frame before DMA cutover
-      // - fault path: continue operating if UART DMA transport cannot start
-      while (hwSerial->available() > 0) {
-        int firstByte = hwSerial->peek();
-        if (firstByte >= 0) {
-          v2RawBytes++;
-          if (firstByte == ppuc::v2::kSyncByte) {
-            v2RawA5++;
-          } else if (firstByte == 0xFF) {
-            v2RawFF++;
-          }
-        }
+    if (hwSerial->available() > 0) {
+      m_sawRs485Activity = true;
+    }
+    while (hwSerial->available() > 0) {
+      int firstByte = hwSerial->peek();
+      if (firstByte >= 0) {
+        v2RawBytes++;
         if (firstByte == ppuc::v2::kSyncByte) {
-          if (!handleV2Frame()) {
-            break;
-          }
-        } else {
-          // Desync/noise, consume one byte and continue.
-          parserResynced = true;
-          hwSerial->read();
+          v2RawA5++;
+        } else if (firstByte == 0xFF) {
+          v2RawFF++;
         }
+      }
+      if (firstByte == ppuc::v2::kSyncByte) {
+        if (!handleV2Frame()) {
+          break;
+        }
+      } else {
+        // Desync/noise, consume one byte and continue.
+        parserResynced = true;
+        hwSerial->read();
       }
     }
   }
@@ -883,22 +718,10 @@ void EventDispatcher::update() {
     rp2040.idleOtherCore();
     Serial.print("V2DBG board=");
     Serial.print(board);
-    Serial.print(" active=");
-    Serial.print(v2UartDmaActive ? 1 : 0);
-    Serial.print(" cutover_ok=");
-    Serial.print(v2CutoverOk);
-    Serial.print(" cutover_fail=");
-    Serial.print(v2CutoverFail);
     Serial.print(" rx=");
     Serial.print(v2RxFrames);
     Serial.print(" rx_crc_fail=");
     Serial.print(v2RxCrcFail);
-    Serial.print(" rx_sync_fail=");
-    Serial.print(v2RxSyncFail);
-    Serial.print(" rx_dma_restart=");
-    Serial.print(v2RxDmaRestarts);
-    Serial.print(" rx_dma_timeout=");
-    Serial.print(v2RxDmaTimeouts);
     Serial.print(" raw=");
     Serial.print(v2RawBytes);
     Serial.print(" raw_a5=");
@@ -908,9 +731,7 @@ void EventDispatcher::update() {
     Serial.print(" tx=");
     Serial.print(v2TxFrames);
     Serial.print(" tx_nochange=");
-    Serial.print(v2SwitchNoChangeTx);
-    Serial.print(" tx_fallback=");
-    Serial.println(v2TxFallback);
+    Serial.println(v2SwitchNoChangeTx);
     rp2040.resumeOtherCore();
   }
 }
