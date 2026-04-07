@@ -52,9 +52,14 @@ class PwmDevices : public HighPowerOffAware {
   uint32_t activated[MAX_PWM_OUTPUTS] = {0};
   byte currentPower[MAX_PWM_OUTPUTS] = {0};
   bool scheduled[MAX_PWM_OUTPUTS] = {0};
+  bool fastSwitchClosed[MAX_PWM_OUTPUTS] = {0};
+  bool fastSwitchManagedActive[MAX_PWM_OUTPUTS] = {0};
+  bool fastSwitchWaitForRelease[MAX_PWM_OUTPUTS] = {0};
   byte last = 0;
 
   void updateSolenoidOrFlasher(bool targetState, byte i);
+  void handleFastSwitchEvent(bool switchClosed, byte i);
+  void deactivateOutput(byte i);
 };
 
 #endif

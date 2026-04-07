@@ -236,6 +236,37 @@ Firmware-side implications:
 - GI strings are fixed-size in the runtime payload rather than dynamically mapped like coils, lamps, and switches.
 - The 16-switch PIO reader has special handling for the last four stateful inputs. Regressions there are easy to miss because the other 12 inputs can still appear healthy.
 
+## Fast-Flip Safety
+
+- Fast-switch driven solenoids need explicit board-local safety behavior.
+- Real-machine testing exposed a dangerous failure mode:
+  - a stuck fast-flip switch on a kicker or jet bumper can repeatedly refire
+    the coil
+  - this can overheat the coil badly enough to risk hardware damage if cabinet
+    power is not cut quickly
+- This safety must live in firmware, not only in the host:
+  - fast-flip reactions are board-local and latency-sensitive
+  - the board must stay safe even if the host is busy, delayed, or temporarily
+    disconnected
+
+Current intended firmware semantics in `src/IODevices/PwmDevices.*`:
+
+- A fast-switch solenoid with `MinPulseTime` ignores switch toggles during that
+  protected pulse window after activation.
+- If the fast switch opens during `MinPulseTime`, the coil is not turned off
+  immediately; it is turned off once the minimum pulse has elapsed.
+- A fast-switch solenoid with `MaxPulseTime` is forced off when that limit is
+  reached, even if the switch is still closed.
+- After such a max-pulse timeout, the coil must not refire until the switch has
+  opened again and then closed again.
+- This logic is keyed by logical switch number, so fast switches may still live
+  on other physical boards; the safety behavior is not limited to same-board
+  switch/coil pairs.
+
+When changing fast-switch, PWM, or switch-event logic, preserve these safety
+properties unless the replacement behavior is clearly safer and has been
+validated on real hardware.
+
 ## Next Bring-Up Focus
 
 When resuming work on `v2`, start here:

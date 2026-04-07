@@ -33,6 +33,9 @@ void PwmDevices::registerSolenoid(byte p, byte n, byte pow, uint16_t minPT,
   activated[index] = 0;
   currentPower[index] = 0;
   scheduled[index] = false;
+  fastSwitchClosed[index] = false;
+  fastSwitchManagedActive[index] = false;
+  fastSwitchWaitForRelease[index] = false;
 
   pinMode(p, OUTPUT);
   analogWrite(p, 0);
@@ -57,6 +60,9 @@ void PwmDevices::registerFlasher(byte p, byte n, byte pow) {
   activated[index] = 0;
   currentPower[index] = 0;
   scheduled[index] = false;
+  fastSwitchClosed[index] = false;
+  fastSwitchManagedActive[index] = false;
+  fastSwitchWaitForRelease[index] = false;
 
   pinMode(p, OUTPUT);
   analogWrite(p, 0);
@@ -81,6 +87,9 @@ void PwmDevices::registerLamp(byte p, byte n, byte pow) {
   activated[index] = 0;
   currentPower[index] = 0;
   scheduled[index] = false;
+  fastSwitchClosed[index] = false;
+  fastSwitchManagedActive[index] = false;
+  fastSwitchWaitForRelease[index] = false;
 
   pinMode(p, OUTPUT);
   analogWrite(p, 0);
@@ -93,6 +102,7 @@ void PwmDevices::off() {
     activated[i] = 0;
     currentPower[i] = 0;
     scheduled[i] = 0;
+    fastSwitchManagedActive[i] = false;
   }
 }
 
@@ -112,9 +122,21 @@ void PwmDevices::reset() {
     activated[i] = 0;
     currentPower[i] = 0;
     scheduled[i] = 0;
+    fastSwitchClosed[i] = false;
+    fastSwitchManagedActive[i] = false;
+    fastSwitchWaitForRelease[i] = false;
   }
 
   last = 0;
+}
+
+void PwmDevices::deactivateOutput(byte i) {
+  analogWrite(port[i], 0);
+  activated[i] = 0;
+  currentPower[i] = 0;
+  holdPower[i] = 0;
+  scheduled[i] = false;
+  fastSwitchManagedActive[i] = false;
 }
 
 void PwmDevices::update() {
@@ -125,19 +147,36 @@ void PwmDevices::update() {
     if (activated[i] > 0) {
       // The output is active.
       uint32_t timePassed = _ms - activated[i];
-      if ((scheduled[i] && (minPulseTime[i] > 0) &&
-           (timePassed > minPulseTime[i])) ||
-          ((maxPulseTime[i] > 0) && (timePassed > maxPulseTime[i]))) {
+      const bool minPulseElapsed =
+          (minPulseTime[i] == 0) || (timePassed > minPulseTime[i]);
+      if ((maxPulseTime[i] > 0) && (timePassed > maxPulseTime[i])) {
+        // Enforce the maximum pulse time even if the fast-flip switch remains
+        // closed. A new physical release/close cycle is required to fire
+        // again.
+        if (fastSwitchManagedActive[i] && fastSwitchClosed[i]) {
+          fastSwitchWaitForRelease[i] = true;
+        }
+        deactivateOutput(i);
+        CrossLinkDebugger::debug(
+            "Performed max pulse deactivation of PWM device on port %d after "
+            "%dms",
+            port[i], timePassed);
+      } else if (scheduled[i] && minPulseElapsed) {
         // Deactivate the output if it is scheduled for delayed deactivation and
-        // the minimum pulse time is reached. Deactivate the output if the
-        // maximum pulse time is reached.
-        analogWrite(port[i], 0);
-        activated[i] = 0;
-        holdPower[i] = 0;
-        scheduled[i] = false;
+        // the minimum pulse time is reached.
+        deactivateOutput(i);
         CrossLinkDebugger::debug(
             "Performed scheduled deactivation of PWM device on port %d after "
             "%dms",
+            port[i], timePassed);
+      } else if (fastSwitchManagedActive[i] && minPulseElapsed &&
+                 !fastSwitchClosed[i]) {
+        // Ignore fast-switch toggles during the minimum pulse time, then honor
+        // the latest open state once the minimum pulse has elapsed.
+        deactivateOutput(i);
+        CrossLinkDebugger::debug(
+            "Performed min pulse guarded deactivation of PWM device on port %d "
+            "after %dms",
             port[i], timePassed);
       } else if ((holdPowerActivationTime[i] > 0) &&
                  (currentPower[i] > holdPower[i]) &&
@@ -164,6 +203,8 @@ void PwmDevices::updateSolenoidOrFlasher(bool targetState, byte i) {
     // Rememebr when it got activated.
     activated[i] = _ms;
     currentPower[i] = power[i];
+    scheduled[i] = false;
+    fastSwitchManagedActive[i] = false;
     CrossLinkDebugger::debug("Activated PWM device on port %d with power %d",
                              port[i], power[i]);
   } else if (!targetState && activated[i] > 0) {
@@ -178,12 +219,53 @@ void PwmDevices::updateSolenoidOrFlasher(bool targetState, byte i) {
                              port[i]);
     } else {
       // Deactivate the output.
-      analogWrite(port[i], 0);
-      // Mark the output as deactivated.
-      activated[i] = 0;
-      currentPower[i] = 0;
+      deactivateOutput(i);
       CrossLinkDebugger::debug("Deactivated PWM device on port %d", port[i]);
     }
+  }
+}
+
+void PwmDevices::handleFastSwitchEvent(bool switchClosed, byte i) {
+  fastSwitchClosed[i] = switchClosed;
+
+  if (!switchClosed) {
+    // Re-arm after the stuck/held switch has been released.
+    fastSwitchWaitForRelease[i] = false;
+
+    if (activated[i] == 0 || !fastSwitchManagedActive[i]) {
+      return;
+    }
+
+    const uint32_t timePassed = _ms - activated[i];
+    if ((minPulseTime[i] > 0) && (timePassed <= minPulseTime[i])) {
+      // Ignore toggles during the minimum pulse time. The update loop will
+      // turn the output off once the minimum pulse has elapsed.
+      return;
+    }
+
+    deactivateOutput(i);
+    CrossLinkDebugger::debug(
+        "Deactivated fast-switch PWM device on port %d after switch release",
+        port[i]);
+    return;
+  }
+
+  if (fastSwitchWaitForRelease[i]) {
+    CrossLinkDebugger::debug(
+        "Ignored fast-switch activation on port %d until switch release",
+        port[i]);
+    return;
+  }
+
+  if (activated[i] == 0) {
+    analogWrite(port[i], power[i]);
+    activated[i] = _ms;
+    currentPower[i] = power[i];
+    scheduled[i] = false;
+    fastSwitchManagedActive[i] = true;
+    CrossLinkDebugger::debug(
+        "Activated fast-switch PWM device on port %d with power %d", port[i],
+        power[i]);
   }
 }
 
@@ -209,7 +291,7 @@ void PwmDevices::handleEvent(Event *event) {
         for (byte i = 0; i < last; i++) {
           if (type[i] == PWM_TYPE_SOLENOID &&
               fastSwitch[i] == (byte)event->eventId) {
-            updateSolenoidOrFlasher((bool)event->value, i);
+            handleFastSwitchEvent((bool)event->value, i);
           }
         }
         break;
@@ -231,8 +313,9 @@ void PwmDevices::handleEvent(Event *event) {
       // Deactivate the output.
       analogWrite(port[i], 0);
       // Mark the output as deactivated.
-      activated[i] = 0;
-      currentPower[i] = 0;
+      deactivateOutput(i);
+      fastSwitchWaitForRelease[i] = false;
+      fastSwitchClosed[i] = false;
       powerOn = false;
       CrossLinkDebugger::debug("Deactivated PWM device on port %d", port[i]);
     }
