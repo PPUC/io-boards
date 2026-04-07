@@ -141,17 +141,17 @@ class CombinedGiAndLightMatrixWS2812FXDevice : public WS2812FXDevice,
   void off();
 
   void assignLedToGiString(uint8_t number, int16_t led, uint32_t color = 0) {
-    giLEDs.emplace_back(number, led, color);
+    updateOrAppendLed(giLEDs, number, led, color);
     rebuildGIIndex();
   }
 
   void assignLedToLightMatrix(uint8_t number, int16_t led, uint32_t color = 0) {
-    lightMatrixLEDs.emplace_back(number, led, color);
+    updateOrAppendLed(lightMatrixLEDs, number, led, color);
     rebuildLightMatrixIndex();
   }
 
   void assignLedToFlasher(uint8_t number, int16_t led, uint32_t color = 0) {
-    flasherLEDs.emplace_back(number, led, color);
+    updateOrAppendLed(flasherLEDs, number, led, color);
     rebuildFlasherIndex();
   }
 
@@ -227,6 +227,18 @@ class CombinedGiAndLightMatrixWS2812FXDevice : public WS2812FXDevice,
   uint8_t targetGIBrightness[NUM_GI_STRINGS] = {0};
 
   void intializeNewLEDState(LED* led, bool on);
+  void updateOrAppendLed(std::vector<LED>& leds, uint8_t number, uint16_t led,
+                         uint32_t color) {
+    auto existing = std::find_if(
+        leds.begin(), leds.end(), [number, led](const LED& entry) {
+          return entry.number == number && entry.position == led;
+        });
+    if (existing != leds.end()) {
+      existing->color = color;
+      return;
+    }
+    leds.emplace_back(number, led, color);
+  }
 
   void rebuildGIIndex() {
     giIndex.clear();

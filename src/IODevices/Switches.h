@@ -55,6 +55,15 @@ class Switches : public EventListener {
   }
 
  private:
+  int findRegisteredSwitch(byte p, byte n) const {
+    for (int i = 0; i <= last; i++) {
+      if (port[i] == p || number[i] == n) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
   byte boardId;
 
   bool running = false;

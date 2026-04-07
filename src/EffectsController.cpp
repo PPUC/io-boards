@@ -71,6 +71,31 @@ WS2812FXDevice *EffectsController::ws2812FXDevice(int port, int number) {
   return ws2812FXDevices[--port][number];
 }
 
+int EffectsController::findEffectContainer(
+    const EffectContainer *candidate) const {
+  if (!candidate || !candidate->event) {
+    return -1;
+  }
+
+  for (int i = 0; i <= stackCounter; i++) {
+    const EffectContainer *existing = stackEffectContainers[i];
+    if (!existing || !existing->event) {
+      continue;
+    }
+    if (existing->device == candidate->device &&
+        existing->event->sourceId == candidate->event->sourceId &&
+        existing->event->eventId == candidate->event->eventId &&
+        existing->event->value == candidate->event->value &&
+        existing->priority == candidate->priority &&
+        existing->repeat == candidate->repeat &&
+        existing->mode == candidate->mode) {
+      return i;
+    }
+  }
+
+  return -1;
+}
+
 void EffectsController::addEffect(Effect *effect, EffectDevice *device,
                                   Event *event, int priority, int repeat,
                                   int mode) {
@@ -80,6 +105,12 @@ void EffectsController::addEffect(Effect *effect, EffectDevice *device,
 void EffectsController::addEffect(EffectContainer *container) {
   container->effect->setEventDispatcher(this->eventDispatcher());
   container->effect->setDevice(container->device);
+  const int existingIndex = findEffectContainer(container);
+  if (existingIndex >= 0) {
+    delete stackEffectContainers[existingIndex];
+    stackEffectContainers[existingIndex] = container;
+    return;
+  }
   stackEffectContainers[++stackCounter] = container;
 }
 
@@ -389,6 +420,9 @@ void EffectsController::handleEvent(ConfigEvent *event) {
           case CONFIG_TOPIC_TYPE:
             switch (event->value) {
               case PWM_TYPE_SHAKER:  // Shaker
+                if (_shakerPWMDevice) {
+                  delete _shakerPWMDevice;
+                }
                 _shakerPWMDevice = new WavePWMDevice(
                     config_values[0], config_values[1], _eventDispatcher);
                 _shakerPWMDevice->off();

@@ -130,6 +130,8 @@ class EffectsController : public EventListener {
   void handleEvent(ConfigEvent* event);
 
  private:
+  int findEffectContainer(const EffectContainer* candidate) const;
+
   int readBoardId() const {
     delay(2);
     uint8_t votes[8] = {0};

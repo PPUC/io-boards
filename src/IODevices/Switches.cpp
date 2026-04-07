@@ -8,12 +8,19 @@ Switches* Switches::instance = nullptr;
 
 void Switches::registerSwitch(byte p, byte n, uint8_t debounceTimeMs) {
   const int pinIndex = static_cast<int>(p) - SWITCHES_BASE_PIN;
-  if (last < (numSwitches - 1) && pinIndex >= 0 && pinIndex < numSwitches) {
-    port[++last] = p;
-    number[last] = n;
-    debounceSetting[last] = debounceTimeMs;
-    active = true;
+  if (pinIndex < 0 || pinIndex >= numSwitches) {
+    return;
   }
+
+  int index = findRegisteredSwitch(p, n);
+  if (index < 0) {
+    if (last >= (numSwitches - 1)) return;
+    index = ++last;
+  }
+  port[index] = p;
+  number[index] = n;
+  debounceSetting[index] = debounceTimeMs;
+  active = true;
 }
 
 void Switches::handleSwitchChanges(uint32_t raw) {

@@ -2,47 +2,88 @@
 
 #include "EventDispatcher/CrossLinkDebugger.h"
 
+int PwmDevices::findRegisteredOutput(byte outputType, byte p, byte n) const {
+  for (byte i = 0; i < last; i++) {
+    if (type[i] != outputType) continue;
+    if (port[i] == p || number[i] == n) {
+      return i;
+    }
+  }
+  return -1;
+}
+
 void PwmDevices::registerSolenoid(byte p, byte n, byte pow, uint16_t minPT,
                                   uint16_t maxPT, byte hP, uint16_t hPAT,
                                   byte fS) {
-  if (last < MAX_PWM_OUTPUTS) {
-    port[last] = p;
-    number[last] = n;
-    power[last] = pow;
-    minPulseTime[last] = minPT;
-    maxPulseTime[last] = maxPT;
-    holdPower[last] = hP;
-    holdPowerActivationTime[last] = hPAT;
-    fastSwitch[last] = fS;
-
-    pinMode(p, OUTPUT);
-    analogWrite(p, 0);
-    type[last++] = PWM_TYPE_SOLENOID;
+  int index = findRegisteredOutput(PWM_TYPE_SOLENOID, p, n);
+  if (index < 0) {
+    if (last >= MAX_PWM_OUTPUTS) return;
+    index = last++;
   }
+
+  port[index] = p;
+  number[index] = n;
+  power[index] = pow;
+  minPulseTime[index] = minPT;
+  maxPulseTime[index] = maxPT;
+  holdPower[index] = hP;
+  holdPowerActivationTime[index] = hPAT;
+  fastSwitch[index] = fS;
+  type[index] = PWM_TYPE_SOLENOID;
+  activated[index] = 0;
+  currentPower[index] = 0;
+  scheduled[index] = false;
+
+  pinMode(p, OUTPUT);
+  analogWrite(p, 0);
 }
 
 void PwmDevices::registerFlasher(byte p, byte n, byte pow) {
-  if (last < MAX_PWM_OUTPUTS) {
-    port[last] = p;
-    number[last] = n;
-    power[last] = pow;
-
-    pinMode(p, OUTPUT);
-    analogWrite(p, 0);
-    type[last++] = PWM_TYPE_FLASHER;
+  int index = findRegisteredOutput(PWM_TYPE_FLASHER, p, n);
+  if (index < 0) {
+    if (last >= MAX_PWM_OUTPUTS) return;
+    index = last++;
   }
+
+  port[index] = p;
+  number[index] = n;
+  power[index] = pow;
+  minPulseTime[index] = 0;
+  maxPulseTime[index] = 0;
+  holdPower[index] = 0;
+  holdPowerActivationTime[index] = 0;
+  fastSwitch[index] = 0;
+  type[index] = PWM_TYPE_FLASHER;
+  activated[index] = 0;
+  currentPower[index] = 0;
+  scheduled[index] = false;
+
+  pinMode(p, OUTPUT);
+  analogWrite(p, 0);
 }
 
 void PwmDevices::registerLamp(byte p, byte n, byte pow) {
-  if (last < MAX_PWM_OUTPUTS) {
-    port[last] = p;
-    number[last] = n;
-    power[last] = pow;
-
-    pinMode(p, OUTPUT);
-    analogWrite(p, 0);
-    type[last++] = PWM_TYPE_LAMP;
+  int index = findRegisteredOutput(PWM_TYPE_LAMP, p, n);
+  if (index < 0) {
+    if (last >= MAX_PWM_OUTPUTS) return;
+    index = last++;
   }
+
+  port[index] = p;
+  number[index] = n;
+  power[index] = pow;
+  minPulseTime[index] = 0;
+  maxPulseTime[index] = 0;
+  holdPower[index] = 0;
+  holdPowerActivationTime[index] = 0;
+  fastSwitch[index] = 0;
+  type[index] = PWM_TYPE_LAMP;
+  activated[index] = 0;
+  currentPower[index] = 0;
+  scheduled[index] = false;
+
+  pinMode(p, OUTPUT);
+  analogWrite(p, 0);
 }
 
 void PwmDevices::off() {

@@ -36,6 +36,8 @@ class PwmDevices : public HighPowerOffAware {
   void handleEvent(Event *event);
 
  private:
+  int findRegisteredOutput(byte outputType, byte p, byte n) const;
+
   uint32_t _ms;
 
   byte port[MAX_PWM_OUTPUTS] = {0};
