@@ -123,6 +123,7 @@ class CombinedGiAndLightMatrixWS2812FXDevice : public WS2812FXDevice,
                                          int lastSegment,
                                          EventDispatcher* eventDispatcher)
       : WS2812FXDevice(ws2812FX, firstLED, lastLED, firstSegment, lastSegment) {
+    this->eventDispatcher = eventDispatcher;
     wavePWMHeatUp = new WavePWM();
     wavePWMAfterGlow = new WavePWM();
     afterGlowSupport = true;
@@ -132,7 +133,10 @@ class CombinedGiAndLightMatrixWS2812FXDevice : public WS2812FXDevice,
     eventDispatcher->addListener(this, EVENT_SOURCE_LIGHT);
   }
 
-  ~CombinedGiAndLightMatrixWS2812FXDevice() {
+  ~CombinedGiAndLightMatrixWS2812FXDevice() override {
+    if (eventDispatcher) {
+      eventDispatcher->removeListener(this);
+    }
     delete wavePWMHeatUp;
     delete wavePWMAfterGlow;
   }
@@ -217,6 +221,7 @@ class CombinedGiAndLightMatrixWS2812FXDevice : public WS2812FXDevice,
   std::vector<LED> giLEDs;
   std::vector<LED> lightMatrixLEDs;
   std::vector<LED> flasherLEDs;
+  EventDispatcher* eventDispatcher = nullptr;
 
   // Indexes for fast lookup by number
   std::unordered_map<uint8_t, std::vector<LED*>> giIndex;

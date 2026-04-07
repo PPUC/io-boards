@@ -48,6 +48,16 @@ class MultiCoreCrossLink {
     queue_add_blocking(&_eventQueue[get_core_num() ^ 1], &queuedEvent);
   }
 
+  bool tryPushEvent(Event *event) {
+    QueuedEvent queuedEvent;
+    queuedEvent.sourceId = event->sourceId;
+    queuedEvent.eventId = event->eventId;
+    queuedEvent.value = event->value;
+    queuedEvent.localFast = event->localFast;
+
+    return queue_try_add(&_eventQueue[get_core_num() ^ 1], &queuedEvent);
+  }
+
   Event *popEvent() {
     QueuedEvent queuedEvent;
     queue_remove_blocking(&_eventQueue[get_core_num()], &queuedEvent);

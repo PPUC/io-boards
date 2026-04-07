@@ -9,6 +9,72 @@
 
 SwitchMatrix* SwitchMatrix::instance = nullptr;
 
+void SwitchMatrix::stopReader() {
+  if (!running) {
+    return;
+  }
+
+  pio_sm_set_enabled(pio, sm_columns, false);
+  pio_sm_set_enabled(pio, sm_rows, false);
+  pio_set_irq0_source_enabled(pio, pis_interrupt0, false);
+  irq_set_enabled(PIO0_IRQ_0, false);
+  if (instance == this) {
+    instance = nullptr;
+  }
+  running = false;
+}
+
+void SwitchMatrix::resetConfig() {
+  stopReader();
+
+  if (columnsProgramLoaded) {
+    if (loadedActiveLow) {
+      extern const pio_program_t active_low_4_columns_pio_program;
+      pio_remove_program(pio, &active_low_4_columns_pio_program,
+                         columnsProgramOffset);
+    } else {
+      extern const pio_program_t active_high_4_columns_pio_program;
+      pio_remove_program(pio, &active_high_4_columns_pio_program,
+                         columnsProgramOffset);
+    }
+    columnsProgramLoaded = false;
+  }
+
+  if (rowsProgramLoaded) {
+    if (loadedActiveLow) {
+      if (loadedNumRows == 4) {
+        extern const pio_program_t active_low_4_rows_pio_program;
+        pio_remove_program(pio, &active_low_4_rows_pio_program,
+                           rowsProgramOffset);
+      } else {
+        extern const pio_program_t active_low_8_rows_pio_program;
+        pio_remove_program(pio, &active_low_8_rows_pio_program,
+                           rowsProgramOffset);
+      }
+    } else {
+      if (loadedNumRows == 4) {
+        extern const pio_program_t active_high_4_rows_pio_program;
+        pio_remove_program(pio, &active_high_4_rows_pio_program,
+                           rowsProgramOffset);
+      } else {
+        extern const pio_program_t active_high_8_rows_pio_program;
+        pio_remove_program(pio, &active_high_8_rows_pio_program,
+                           rowsProgramOffset);
+      }
+    }
+    rowsProgramLoaded = false;
+  }
+
+  activeLow = false;
+  numRows = 4;
+  loadedActiveLow = false;
+  loadedNumRows = 4;
+  active = false;
+  memset(mapping, 0, sizeof(mapping));
+  lastStable = 0;
+  memset(debounceTime, 0, sizeof(debounceTime));
+}
+
 void SwitchMatrix::registerSwitch(byte p, byte n) {
   if (p < (NUM_COLUMNS * numRows)) {
     mapping[p] = n;
@@ -89,15 +155,15 @@ void SwitchMatrix::handleEvent(Event* event) {
 
             if (4 == numRows) {
               extern const pio_program_t active_low_4_rows_pio_program;
-              uint rows_offset =
+              rows_offset =
                   pio_add_program(pio, &active_low_4_rows_pio_program);
-              pio_sm_config c_rows =
+              c_rows =
                   active_low_4_rows_pio_program_get_default_config(rows_offset);
             } else {  // 8 rows
               extern const pio_program_t active_low_8_rows_pio_program;
-              uint rows_offset =
+              rows_offset =
                   pio_add_program(pio, &active_low_8_rows_pio_program);
-              pio_sm_config c_rows =
+              c_rows =
                   active_low_8_rows_pio_program_get_default_config(rows_offset);
             }
           } else {  // active high
@@ -109,20 +175,26 @@ void SwitchMatrix::handleEvent(Event* event) {
 
             if (4 == numRows) {
               extern const pio_program_t active_high_4_rows_pio_program;
-              uint rows_offset =
+              rows_offset =
                   pio_add_program(pio, &active_high_4_rows_pio_program);
-              pio_sm_config c_rows =
+              c_rows =
                   active_high_4_rows_pio_program_get_default_config(
                       rows_offset);
             } else {  // 8 rows
               extern const pio_program_t active_high_8_rows_pio_program;
-              uint rows_offset =
+              rows_offset =
                   pio_add_program(pio, &active_high_8_rows_pio_program);
-              pio_sm_config c_rows =
+              c_rows =
                   active_high_8_rows_pio_program_get_default_config(
                       rows_offset);
             }
           }
+          columnsProgramLoaded = true;
+          rowsProgramLoaded = true;
+          columnsProgramOffset = columns_offset;
+          rowsProgramOffset = rows_offset;
+          loadedActiveLow = activeLow;
+          loadedNumRows = numRows;
 
           // Columns
           sm_config_set_in_pins(&c_columns, COLUMNS_BASE_PIN);

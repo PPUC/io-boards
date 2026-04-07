@@ -32,17 +32,7 @@ class Switches : public EventListener {
     validSwitchMask = (1u << numSwitches) - 1;
   }
   void registerSwitch(byte p, byte n, uint8_t debounceTimeMs);
-  void resetConfig() {
-    active = false;
-    last = -1;
-    numSwitches = MAX_SWITCHES;
-    validSwitchMask = (1u << MAX_SWITCHES) - 1;
-    currentStable = 0;
-    memset(port, 0, sizeof(port));
-    memset(number, 0, sizeof(number));
-    memset(debounceSetting, 0, sizeof(debounceSetting));
-    memset(debounceTime, 0, sizeof(debounceTime));
-  }
+  void resetConfig();
 
   void handleEvent(Event* event);
 
@@ -66,6 +56,7 @@ class Switches : public EventListener {
   }
 
  private:
+  void stopReader();
   int findRegisteredSwitch(byte p, byte n) const {
     for (int i = 0; i <= last; i++) {
       if (port[i] == p || number[i] == n) {
@@ -79,6 +70,9 @@ class Switches : public EventListener {
 
   bool running = false;
   bool active = false;
+  bool programLoaded = false;
+  uint programOffset = 0;
+  uint8_t loadedNumSwitches = MAX_SWITCHES;
 
   byte port[MAX_SWITCHES] = {0};
   byte number[MAX_SWITCHES] = {0};

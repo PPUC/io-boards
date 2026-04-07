@@ -6,6 +6,60 @@
 
 Switches* Switches::instance = nullptr;
 
+void Switches::stopReader() {
+  if (!running) {
+    return;
+  }
+
+  pio_sm_set_enabled(pio, sm, false);
+  pio_set_irq1_source_enabled(pio, pis_interrupt1, false);
+  irq_set_enabled(PIO0_IRQ_1, false);
+  if (instance == this) {
+    instance = nullptr;
+  }
+  running = false;
+}
+
+void Switches::resetConfig() {
+  stopReader();
+
+  if (programLoaded) {
+    switch (loadedNumSwitches) {
+      case 4: {
+        extern const pio_program_t active_low_4_switches_pio_program;
+        pio_remove_program(pio, &active_low_4_switches_pio_program,
+                           programOffset);
+        break;
+      }
+      case 8: {
+        extern const pio_program_t active_low_8_switches_pio_program;
+        pio_remove_program(pio, &active_low_8_switches_pio_program,
+                           programOffset);
+        break;
+      }
+      case MAX_SWITCHES:
+      default: {
+        extern const pio_program_t active_low_16_switches_pio_program;
+        pio_remove_program(pio, &active_low_16_switches_pio_program,
+                           programOffset);
+        break;
+      }
+    }
+    programLoaded = false;
+  }
+
+  active = false;
+  last = -1;
+  numSwitches = MAX_SWITCHES;
+  loadedNumSwitches = MAX_SWITCHES;
+  validSwitchMask = (1u << MAX_SWITCHES) - 1;
+  currentStable = 0;
+  memset(port, 0, sizeof(port));
+  memset(number, 0, sizeof(number));
+  memset(debounceSetting, 0, sizeof(debounceSetting));
+  memset(debounceTime, 0, sizeof(debounceTime));
+}
+
 void Switches::registerSwitch(byte p, byte n, uint8_t debounceTimeMs) {
   const int pinIndex = static_cast<int>(p) - SWITCHES_BASE_PIN;
   if (pinIndex < 0 || pinIndex >= numSwitches) {
@@ -107,6 +161,9 @@ void Switches::handleEvent(Event* event) {
               c = active_low_16_switches_pio_program_get_default_config(offset);
               break;
           }
+          programLoaded = true;
+          programOffset = offset;
+          loadedNumSwitches = numSwitches;
 
           sm_config_set_in_pins(&c, SWITCHES_BASE_PIN);
           if (MAX_SWITCHES == numSwitches) {

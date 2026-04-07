@@ -28,14 +28,7 @@ class SwitchMatrix : public EventListener {
   void setActiveLow() { activeLow = true; }
   void setNumRows(uint8_t n) { numRows = n; }
   void registerSwitch(byte p, byte n);
-  void resetConfig() {
-    activeLow = false;
-    numRows = 4;
-    active = false;
-    memset(mapping, 0, sizeof(mapping));
-    lastStable = 0;
-    memset(debounceTime, 0, sizeof(debounceTime));
-  }
+  void resetConfig();
 
   void handleEvent(Event* event);
 
@@ -58,11 +51,18 @@ class SwitchMatrix : public EventListener {
   }
 
   private:
+  void stopReader();
   byte boardId;
   bool activeLow = false;
   uint8_t numRows = 4;
   bool running = false;
   bool active = false;
+  bool columnsProgramLoaded = false;
+  bool rowsProgramLoaded = false;
+  uint columnsProgramOffset = 0;
+  uint rowsProgramOffset = 0;
+  bool loadedActiveLow = false;
+  uint8_t loadedNumRows = 4;
 
   byte mapping[NUM_COLUMNS * MAX_ROWS] = {0};
   uint32_t lastStable = 0;

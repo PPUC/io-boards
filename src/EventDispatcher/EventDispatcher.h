@@ -45,6 +45,7 @@ class EventDispatcher {
   void addListener(EventListener* eventListener, char sourceId);
 
   void addListener(EventListener* eventListener);
+  void removeListener(EventListener* eventListener);
 
   void dispatch(Event* event);
 
@@ -73,6 +74,7 @@ class EventDispatcher {
   void clearReportedStatusFlags();
   int16_t findMappedIndex(const uint16_t* table, uint16_t count,
                           uint16_t number);
+  bool shouldDropOnCrossCoreBackpressure(const Event* event) const;
 
   void callListeners(Event* event, bool sendToOtherCore);
 
@@ -108,6 +110,7 @@ class EventDispatcher {
   bool m_sawRs485Activity = false;
   uint32_t v2TxFrames = 0;
   uint32_t v2SwitchNoChangeTx = 0;
+  uint32_t crossCoreEventDrops = 0;
   bool switchDirty = false;
   bool switchOverflow = false;
   bool applyingRemoteSwitchState = false;

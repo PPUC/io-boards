@@ -68,6 +68,15 @@ void EventDispatcher::addListener(EventListener *eventListener, char sourceId) {
   }
 }
 
+void EventDispatcher::removeListener(EventListener *eventListener) {
+  for (byte i = 0; i <= numListeners; i++) {
+    if (eventListeners[i] == eventListener) {
+      eventListeners[i] = nullptr;
+      eventListenerFilters[i] = EVENT_NULL;
+    }
+  }
+}
+
 void EventDispatcher::dispatch(Event *event) {
   if (EVENT_RESET == event->sourceId || EVENT_RESTART == event->sourceId) {
     // Force immediate handling of reset/restart. Forget about any queued
@@ -86,6 +95,9 @@ void EventDispatcher::dispatch(Event *event) {
 
   if (event->localFast) {
     for (byte i = 0; i <= numListeners; i++) {
+      if (!eventListeners[i]) {
+        continue;
+      }
       if (event->sourceId == eventListenerFilters[i] ||
           EVENT_SOURCE_ANY == eventListenerFilters[i]) {
         eventListeners[i]->handleEvent(event);
@@ -97,6 +109,9 @@ void EventDispatcher::dispatch(Event *event) {
 void EventDispatcher::callListeners(Event *event, bool sendToOtherCore) {
   if (!event->localFast) {
     for (byte i = 0; i <= numListeners; i++) {
+      if (!eventListeners[i]) {
+        continue;
+      }
       if (event->sourceId == eventListenerFilters[i] ||
           EVENT_SOURCE_ANY == eventListenerFilters[i]) {
         eventListeners[i]->handleEvent(event);
@@ -105,7 +120,13 @@ void EventDispatcher::callListeners(Event *event, bool sendToOtherCore) {
   }
 
   if (multiCore && sendToOtherCore && event->sourceId != EVENT_NULL) {
-    multiCoreCrossLink->pushEvent(event);
+    if (shouldDropOnCrossCoreBackpressure(event)) {
+      if (!multiCoreCrossLink->tryPushEvent(event)) {
+        crossCoreEventDrops++;
+      }
+    } else {
+      multiCoreCrossLink->pushEvent(event);
+    }
   }
 
   if (event->sourceId == EVENT_SOURCE_SWITCH) {
@@ -116,8 +137,28 @@ void EventDispatcher::callListeners(Event *event, bool sendToOtherCore) {
   delete event;
 }
 
+bool EventDispatcher::shouldDropOnCrossCoreBackpressure(
+    const Event* event) const {
+  if (!event) {
+    return false;
+  }
+
+  switch (event->sourceId) {
+    case EVENT_SOURCE_SOLENOID:
+    case EVENT_SOURCE_LIGHT:
+    case EVENT_SOURCE_GI:
+    case EVENT_SOURCE_SWITCH:
+      return true;
+    default:
+      return false;
+  }
+}
+
 void EventDispatcher::callListeners(ConfigEvent *event, bool sendToOtherCore) {
   for (byte i = 0; i <= numListeners; i++) {
+    if (!eventListeners[i]) {
+      continue;
+    }
     if (EVENT_CONFIGURATION == eventListenerFilters[i] ||
         EVENT_SOURCE_ANY == eventListenerFilters[i]) {
       eventListeners[i]->handleEvent(event);
@@ -761,7 +802,9 @@ void EventDispatcher::update() {
     Serial.print(" tx=");
     Serial.print(v2TxFrames);
     Serial.print(" tx_nochange=");
-    Serial.println(v2SwitchNoChangeTx);
+    Serial.print(v2SwitchNoChangeTx);
+    Serial.print(" xcore_drop=");
+    Serial.println(crossCoreEventDrops);
     rp2040.resumeOtherCore();
   }
 }
