@@ -206,6 +206,8 @@ size_t EventDispatcher::getV2PayloadBytes(ppuc::v2::FrameType frameType) {
       return ppuc::v2::SwitchPayloadBytes(runtimeConfig);
     case ppuc::v2::kFrameSwitchNoChange:
       return ppuc::v2::SwitchNoChangePayloadBytes();
+    case ppuc::v2::kFrameTrigger:
+      return ppuc::v2::kTriggerPayloadBytes;
     case ppuc::v2::kFrameHeartbeat:
     case ppuc::v2::kFrameError:
     case ppuc::v2::kFrameReset:
@@ -328,6 +330,7 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
   const bool hostOriginated =
       frameType == ppuc::v2::kFrameSetup || frameType == ppuc::v2::kFrameMapping ||
       frameType == ppuc::v2::kFrameConfig ||
+      frameType == ppuc::v2::kFrameTrigger ||
       frameType == ppuc::v2::kFrameOutputState ||
       frameType == ppuc::v2::kFrameHeartbeat ||
       frameType == ppuc::v2::kFrameError || frameType == ppuc::v2::kFrameReset ||
@@ -445,6 +448,19 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
     if (runtimeConfigValid && incomingEpoch == currentEpoch) {
       forwardSwitchTokenIfSelected(frame[2]);
     }
+    return true;
+  }
+
+  if (frameType == ppuc::v2::kFrameTrigger) {
+    if (!runtimeConfigValid || incomingEpoch != currentEpoch) {
+      return true;
+    }
+
+    const uint8_t source = frame[payloadOffset];
+    const uint16_t number =
+        word(frame[payloadOffset + 1], frame[payloadOffset + 2]);
+    const uint8_t value = frame[payloadOffset + 3];
+    callListeners(new Event(source, number, value), true);
     return true;
   }
 

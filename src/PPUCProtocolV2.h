@@ -49,6 +49,7 @@ enum FrameType : uint8_t {
   kFrameSwitchNoChange = 0x09,
   kFrameConfigAck = 0x0A,
   kFrameRestart = 0x0B,
+  kFrameTrigger = 0x0C,
 };
 
 enum MappingDomain : uint8_t {
@@ -132,6 +133,13 @@ struct SwitchPayload {
   uint8_t switches[kMaxSwitchBytes];
 };
 
+struct TriggerPayload {
+  uint8_t source;
+  uint8_t numberHi;
+  uint8_t numberLow;
+  uint8_t value;
+};
+
 struct SetupFrame {
   FrameHeader header;
   SetupPayload payload;
@@ -168,12 +176,19 @@ struct SwitchStateFrame {
   uint16_t crc;
 };
 
+struct TriggerFrame {
+  FrameHeader header;
+  TriggerPayload payload;
+  uint16_t crc;
+};
+
 constexpr size_t kSetupPayloadBytes = sizeof(SetupPayload);
 constexpr size_t kMappingPayloadBytes = sizeof(MappingPayload);
 constexpr size_t kConfigPayloadBytes = sizeof(ConfigPayload);
 constexpr size_t kOutputPayloadBytes = sizeof(OutputPayload);
 constexpr size_t kConfigAckPayloadBytes = sizeof(ConfigAckPayload);
 constexpr size_t kSwitchPayloadBytes = sizeof(SwitchPayload);
+constexpr size_t kTriggerPayloadBytes = sizeof(TriggerPayload);
 constexpr size_t kSwitchStatusBytes = 4;
 constexpr size_t kResetFrameBytes = kHeaderBytes + kCrcBytes;
 constexpr size_t kRestartFrameBytes = kHeaderBytes + kCrcBytes;
@@ -183,6 +198,7 @@ constexpr size_t kConfigFrameBytes = kHeaderBytes + kConfigPayloadBytes + kCrcBy
 constexpr size_t kOutputFrameBytes = kHeaderBytes + kOutputPayloadBytes + kCrcBytes;
 constexpr size_t kConfigAckFrameBytes = kHeaderBytes + kConfigAckPayloadBytes + kCrcBytes;
 constexpr size_t kSwitchFrameBytes = kHeaderBytes + kSwitchPayloadBytes + kCrcBytes;
+constexpr size_t kTriggerFrameBytes = kHeaderBytes + kTriggerPayloadBytes + kCrcBytes;
 
 struct RuntimeConfig {
   uint16_t coilBits = kDefaultCoilBits;

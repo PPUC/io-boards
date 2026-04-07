@@ -7,6 +7,7 @@
 #define EVENT_h
 
 #include <inttypes.h>
+#include <stddef.h>
 
 // microseconds
 #define RS485_MODE_SWITCH_DELAY 50
@@ -100,6 +101,22 @@
 #define PWM_EFFECT_SINE 1
 #define PWM_EFFECT_RAMP_DOWN_STOP 2
 #define PWM_EFFECT_IMPULSE 3
+
+inline uint16_t HashNamedTriggerId(const char* name) {
+  if (!name) {
+    return 0;
+  }
+
+  uint32_t hash = 2166136261u;
+  while (*name != '\0') {
+    hash ^= static_cast<uint8_t>(*name++);
+    hash *= 16777619u;
+  }
+
+  hash ^= (hash >> 16);
+  const uint16_t reduced = static_cast<uint16_t>(hash & 0xFFFFu);
+  return reduced == 0 ? 1 : reduced;
+}
 
 struct Event {
   uint8_t sourceId;
