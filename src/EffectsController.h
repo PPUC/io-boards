@@ -78,6 +78,7 @@ class EffectsController : public EventListener {
                 -1,  // repeat
                 0    // mode
       );
+      builtInEffectCount = stackCounter + 1;
       initialized = true;
     } else {
       Serial.print("Unsupported Effects Controller: ");
@@ -131,6 +132,7 @@ class EffectsController : public EventListener {
 
  private:
   int findEffectContainer(const EffectContainer* candidate) const;
+  void clearConfiguredEffects();
 
   int readBoardId() const {
     delay(2);
@@ -169,6 +171,7 @@ class EffectsController : public EventListener {
   byte ws2812FXbrightness[PPUC_MAX_WS2812FX_DEVICES] = {0};
   EffectContainer* stackEffectContainers[EFFECT_STACK_SIZE];
   int stackCounter = -1;
+  int builtInEffectCount = 0;
   bool flickerState = false;
   int mode = 0;
 

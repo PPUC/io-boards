@@ -69,12 +69,16 @@ void EventDispatcher::addListener(EventListener *eventListener, char sourceId) {
 }
 
 void EventDispatcher::dispatch(Event *event) {
-  if (EVENT_RESET == event->sourceId) {
-    // Force immediate handling of the reset event. Forget about the others.
+  if (EVENT_RESET == event->sourceId || EVENT_RESTART == event->sourceId) {
+    // Force immediate handling of reset/restart. Forget about any queued
+    // runtime/config traffic from the previous session first.
     while (!eventQueue.empty()) {
       Event *e = eventQueue.front();
       eventQueue.pop();
       delete e;
+    }
+    if (multiCoreCrossLink) {
+      multiCoreCrossLink->clearAll();
     }
   }
 
@@ -164,9 +168,41 @@ size_t EventDispatcher::getV2PayloadBytes(ppuc::v2::FrameType frameType) {
     case ppuc::v2::kFrameHeartbeat:
     case ppuc::v2::kFrameError:
     case ppuc::v2::kFrameReset:
+    case ppuc::v2::kFrameRestart:
       return 0;
     default:
       return 0;
+  }
+}
+
+void EventDispatcher::clearSessionState() {
+  runtimeConfig = ppuc::v2::RuntimeConfig();
+  runtimeConfigValid = false;
+  mappingComplete = false;
+  expectedMappingFrames = 0;
+  receivedMappingFrames = 0;
+  v2RuntimeInitialized = false;
+  lastHostSequenceSeen = 0;
+  lastHostSequenceValid = false;
+  sequenceGapDetected = false;
+  parserResynced = false;
+  transportErrorLatched = false;
+  switchDirty = false;
+  switchOverflow = false;
+  applyingRemoteSwitchState = false;
+  nextSwitchBoard = ppuc::v2::kNoBoard;
+  memset(outputCoils, 0, sizeof(outputCoils));
+  memset(outputLamps, 0, sizeof(outputLamps));
+  memset(outputGi, 0, sizeof(outputGi));
+  memset(switchStates, 0, sizeof(switchStates));
+  for (uint16_t i = 0; i < ppuc::v2::kMaxCoilBits; ++i) {
+    coilIndexToNumber[i] = i;
+  }
+  for (uint16_t i = 0; i < ppuc::v2::kMaxLampBits; ++i) {
+    lampIndexToNumber[i] = i;
+  }
+  for (uint16_t i = 0; i < ppuc::v2::kMaxSwitchBits; ++i) {
+    switchIndexToNumber[i] = i;
   }
 }
 
@@ -253,7 +289,8 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
       frameType == ppuc::v2::kFrameConfig ||
       frameType == ppuc::v2::kFrameOutputState ||
       frameType == ppuc::v2::kFrameHeartbeat ||
-      frameType == ppuc::v2::kFrameError || frameType == ppuc::v2::kFrameReset;
+      frameType == ppuc::v2::kFrameError || frameType == ppuc::v2::kFrameReset ||
+      frameType == ppuc::v2::kFrameRestart;
   const bool hostOutputFrame = frameType == ppuc::v2::kFrameOutputState;
 
   auto noteHostSequence = [&]() {
@@ -290,21 +327,13 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
     return true;
   }
 
-  if (frameType == ppuc::v2::kFrameReset) {
-    runtimeConfigValid = false;
-    mappingComplete = false;
-    expectedMappingFrames = 0;
-    receivedMappingFrames = 0;
-    v2RuntimeInitialized = false;
-    lastHostSequenceValid = false;
-    sequenceGapDetected = false;
-    parserResynced = false;
-    transportErrorLatched = false;
-    switchDirty = false;
-    applyingRemoteSwitchState = false;
-    nextSwitchBoard = ppuc::v2::kNoBoard;
+  if (frameType == ppuc::v2::kFrameReset ||
+      frameType == ppuc::v2::kFrameRestart) {
+    clearSessionState();
     noteHostSequence();
-    dispatch(new Event(EVENT_RESET));
+    dispatch(new Event(EVENT_RUN, 1, 0));
+    dispatch(new Event(frameType == ppuc::v2::kFrameReset ? EVENT_RESET
+                                                          : EVENT_RESTART));
     return true;
   }
 
@@ -647,7 +676,8 @@ bool EventDispatcher::handleV2Frame() {
   size_t payloadBytes = getV2PayloadBytes(frameType);
   if (frameType != ppuc::v2::kFrameHeartbeat &&
       frameType != ppuc::v2::kFrameError &&
-      frameType != ppuc::v2::kFrameReset && payloadBytes == 0 &&
+      frameType != ppuc::v2::kFrameReset &&
+      frameType != ppuc::v2::kFrameRestart && payloadBytes == 0 &&
       frameType != ppuc::v2::kFrameOutputState &&
       frameType != ppuc::v2::kFrameSwitchNoChange) {
     return false;

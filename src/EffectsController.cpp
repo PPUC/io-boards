@@ -114,6 +114,55 @@ void EffectsController::addEffect(EffectContainer *container) {
   stackEffectContainers[++stackCounter] = container;
 }
 
+void EffectsController::clearConfiguredEffects() {
+  if (_shakerPWMDevice) {
+    _shakerPWMDevice->off();
+    delete _shakerPWMDevice;
+    _shakerPWMDevice = nullptr;
+  }
+  if (_ledPWMDevice) {
+    _ledPWMDevice->off();
+    delete _ledPWMDevice;
+    _ledPWMDevice = nullptr;
+  }
+  if (_rgbStripeDevice) {
+    delete _rgbStripeDevice;
+    _rgbStripeDevice = nullptr;
+  }
+
+  for (int i = 0; i < PPUC_MAX_WS2812FX_DEVICES; i++) {
+    if (ws2812FXstates[i] && ws2812FXDevices[i][0]) {
+      ws2812FXDevices[i][0]->off();
+    }
+    for (int k = ws2812FXDeviceCounters[i] - 1; k >= 0; k--) {
+      if (ws2812FXDevices[i][k]) {
+        delete ws2812FXDevices[i][k];
+        ws2812FXDevices[i][k] = nullptr;
+      }
+    }
+    ws2812FXDeviceCounters[i] = 0;
+    ws2812FXstates[i] = false;
+    ws2812FXrunning[i] = false;
+    ws2812FXbrightness[i] = 0;
+  }
+
+  for (int i = stackCounter; i >= builtInEffectCount; i--) {
+    if (stackEffectContainers[i]) {
+      delete stackEffectContainers[i];
+      stackEffectContainers[i] = nullptr;
+    }
+  }
+  stackCounter = builtInEffectCount - 1;
+
+  memset(config_values, 0, sizeof(config_values));
+  config_neoPixelType = 0;
+  config_payload = 0;
+  ws1812Effect = nullptr;
+  pwmEffect = nullptr;
+  flickerState = false;
+  mode = 0;
+}
+
 void EffectsController::setBrightness(byte port, byte brightness) {
   ws2812FXDevices[--port][0]->setBrightness(brightness);
   ws2812FXbrightness[port] = brightness;
@@ -122,19 +171,11 @@ void EffectsController::setBrightness(byte port, byte brightness) {
 void EffectsController::handleEvent(Event *event) {
   switch (event->sourceId) {
     case EVENT_RESET:
-      if (_shakerPWMDevice) _shakerPWMDevice->reset();
-      if (_ledPWMDevice) _ledPWMDevice->reset();
+      clearConfiguredEffects();
+      break;
 
-      for (int i = 0; i < PPUC_MAX_WS2812FX_DEVICES; i++) {
-        if (ws2812FXstates[i]) {
-          for (int k = ws2812FXDeviceCounters[i] - 1; k >= 0; k--) {
-            if (ws2812FXDevices[i][k]) {
-              delete ws2812FXDevices[i][k];
-            }
-          }
-        }
-      }
-
+    case EVENT_RESTART:
+      clearConfiguredEffects();
       break;
 
     default:

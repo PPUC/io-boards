@@ -84,6 +84,17 @@ class MultiCoreCrossLink {
     return get_core_num() == 1 && queue_get_level(&_configEventQueue);
   }
 
+  void clearAll() {
+    EventItem queuedEvent;
+    ConfigEventItem queuedConfigEvent;
+    while (queue_try_remove(&_eventQueue[0], &queuedEvent)) {
+    }
+    while (queue_try_remove(&_eventQueue[1], &queuedEvent)) {
+    }
+    while (queue_try_remove(&_configEventQueue, &queuedConfigEvent)) {
+    }
+  }
+
  private:
   queue_t _eventQueue[2];
   queue_t _configEventQueue;

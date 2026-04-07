@@ -32,6 +32,17 @@ class Switches : public EventListener {
     validSwitchMask = (1u << numSwitches) - 1;
   }
   void registerSwitch(byte p, byte n, uint8_t debounceTimeMs);
+  void resetConfig() {
+    active = false;
+    last = -1;
+    numSwitches = MAX_SWITCHES;
+    validSwitchMask = (1u << MAX_SWITCHES) - 1;
+    currentStable = 0;
+    memset(port, 0, sizeof(port));
+    memset(number, 0, sizeof(number));
+    memset(debounceSetting, 0, sizeof(debounceSetting));
+    memset(debounceTime, 0, sizeof(debounceTime));
+  }
 
   void handleEvent(Event* event);
 

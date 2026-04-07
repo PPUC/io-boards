@@ -141,6 +141,36 @@ void IOBoardController::update() {
   eventDispatcher()->update();
 }
 
+void IOBoardController::clearConfiguredState() {
+  running = false;
+  activePwmDevices = false;
+  activeSwitches = false;
+  activeSwitchMatrix = false;
+  port = 0;
+  number = 0;
+  power = 0;
+  rows = 0;
+  minPulseTime = 0;
+  maxPulseTime = 0;
+  holdPower = 0;
+  holdPowerActivationTime = 0;
+  fastSwitch = 0;
+  type = 0;
+  resetTimer = 0;
+
+  if (_pwmDevices) {
+    _pwmDevices->off();
+    _pwmDevices->reset();
+    _pwmDevices->resetHighPowerConfig();
+  }
+  if (_switches) {
+    _switches->resetConfig();
+  }
+  if (_switchMatrix) {
+    _switchMatrix->resetConfig();
+  }
+}
+
 void IOBoardController::handleEvent(Event *event) {
   switch (event->sourceId) {
     case EVENT_PING:
@@ -155,13 +185,16 @@ void IOBoardController::handleEvent(Event *event) {
       break;
 
     case EVENT_RESET:
-      // Clear all configurations or reboot the device.
-      _pwmDevices->reset();
+      clearConfiguredState();
 
       // Issue a delayed reset of the board.
       // Core 1 should have enough time to turn off it's devices.
       resetTimer = millis() + WAIT_FOR_EFFECT_CONTROLLER_RESET;
 
+      break;
+
+    case EVENT_RESTART:
+      clearConfiguredState();
       break;
   }
 }

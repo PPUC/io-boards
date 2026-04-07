@@ -65,6 +65,14 @@ class HighPowerOffAware : public EventListener {
     }
   }
 
+  void resetHighPowerConfig() {
+    coinDoorSwitch = 0;
+    gameOnSolenoid = 0;
+    coinDoorClosed = false;
+    powerOn = false;
+    powerToggled = false;
+  }
+
  protected:
   byte coinDoorSwitch = 0;
   byte gameOnSolenoid = 0;

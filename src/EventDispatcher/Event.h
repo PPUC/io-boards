@@ -32,6 +32,7 @@
 #define EVENT_PONG 89             // "Y"
 #define EVENT_RESET 90            // "Z"
 #define EVENT_RUN 91              // RUN
+#define EVENT_RESTART 92          // soft restart without reboot
 #define EVENT_NO_ERROR 98         // NO ERROR
 #define EVENT_ERROR 99            // ERROR
 

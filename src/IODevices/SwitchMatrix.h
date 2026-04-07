@@ -28,6 +28,14 @@ class SwitchMatrix : public EventListener {
   void setActiveLow() { activeLow = true; }
   void setNumRows(uint8_t n) { numRows = n; }
   void registerSwitch(byte p, byte n);
+  void resetConfig() {
+    activeLow = false;
+    numRows = 4;
+    active = false;
+    memset(mapping, 0, sizeof(mapping));
+    lastStable = 0;
+    memset(debounceTime, 0, sizeof(debounceTime));
+  }
 
   void handleEvent(Event* event);
 

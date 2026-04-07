@@ -35,10 +35,12 @@ class IOBoardController : public EventListener {
 
   bool isDebug() { return m_debug; }
   bool isInitialized() const { return m_initialized; }
+  bool isRunning() const { return running; }
 
  private:
   int readBoardSelectorRaw() const;
   void initializeBoardIdentity();
+  void clearConfiguredState();
 
   PwmDevices *_pwmDevices;
   Switches *_switches;

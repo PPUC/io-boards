@@ -85,6 +85,7 @@ Important constants:
 - `kFrameConfig (0x08)`: carries legacy config tuples `(boardId, topic, index, key, value)`
 - `kFrameSwitchNoChange (0x09)`: token response when no switch bitmap changed
 - `kFrameConfigAck (0x0A)`: addressed-board acknowledgment for config frames
+- `kFrameRestart (0x0B)`: soft restart, clear board-local config/runtime state without reboot
 
 Defined flags:
 
@@ -121,7 +122,7 @@ This is the compatibility strategy:
 
 The verified `v2` flow between `libppuc` and the boards is:
 
-1. Host resets boards with `ResetFrame`.
+1. Host sends `RestartFrame` to turn outputs off and clear session/config state without rebooting the RP2040.
 2. Host sends `ConfigFrame`s to register board-local hardware behavior.
 3. The addressed board acknowledges accepted config with `ConfigAck`.
 4. Host sends `SetupFrame`.
@@ -133,6 +134,9 @@ The verified `v2` flow between `libppuc` and the boards is:
    - `SwitchNoChangeFrame` otherwise
 9. The reply includes the next board token in its own `header.nextBoard`.
 10. The host continues reading chained replies until `nextBoard == kNoBoard`.
+
+`ResetFrame` still exists, but it is now the hard-reboot recovery path rather
+than the normal startup workflow.
 
 Important implementation detail:
 
@@ -220,7 +224,9 @@ Firmware-side implications:
 ## Known Gaps And Risks
 
 - The `v2` protocol path is now validated enough for normal startup/runtime on
-  the good boards, but reset/restart recovery is still not robust.
+  the good boards, and the preferred restart path is now `RestartFrame`
+  without reboot. Hard reboot recovery via `ResetFrame` is still not fully
+  robust on every board.
 - Startup on the wire is now `v2` only; the remaining legacy boundary is
   internal event bridging inside firmware.
 - `kFrameHeartbeat` and `kFrameError` are defined but effectively placeholders in the current firmware.
