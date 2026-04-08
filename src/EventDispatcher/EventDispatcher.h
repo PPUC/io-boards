@@ -101,6 +101,7 @@ class EventDispatcher {
   byte outputGi[ppuc::v2::kGiStrings] = {0};
   byte switchStates[ppuc::v2::kMaxSwitchBytes] = {0};
   byte localReportSwitchStates[ppuc::v2::kMaxSwitchBytes] = {0};
+  byte lastSentLocalReportSwitchStates[ppuc::v2::kMaxSwitchBytes] = {0};
   byte localOwnedSwitchMask[ppuc::v2::kMaxSwitchBytes] = {0};
   byte localSwitchReportHistory[SWITCH_REPORT_HISTORY_SIZE]
                                [ppuc::v2::kMaxSwitchBytes] = {{0}};

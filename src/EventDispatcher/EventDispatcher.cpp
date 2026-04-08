@@ -258,6 +258,8 @@ void EventDispatcher::clearSessionState() {
   memset(outputGi, 0, sizeof(outputGi));
   memset(switchStates, 0, sizeof(switchStates));
   memset(localReportSwitchStates, 0, sizeof(localReportSwitchStates));
+  memset(lastSentLocalReportSwitchStates, 0,
+         sizeof(lastSentLocalReportSwitchStates));
   memset(localOwnedSwitchMask, 0, sizeof(localOwnedSwitchMask));
   memset(localSwitchReportHistory, 0, sizeof(localSwitchReportHistory));
   localSwitchReportHead = 0;
@@ -634,6 +636,9 @@ void EventDispatcher::applySwitchStates(const byte* switches,
   // emits local switch events for fast-flip/effect listeners.
   applyingRemoteSwitchState = true;
   for (uint16_t n = 0; n < runtimeConfig.switchBits; ++n) {
+    if (ppuc::v2::GetBitmapBit(localOwnedSwitchMask, n)) {
+      continue;
+    }
     bool oldState = ppuc::v2::GetBitmapBit(switchStates, n);
     bool newState = ppuc::v2::GetBitmapBit(switches, n);
     if (oldState != newState) {
@@ -642,7 +647,11 @@ void EventDispatcher::applySwitchStates(const byte* switches,
     }
   }
   applyingRemoteSwitchState = false;
-  memcpy(switchStates, switches, switchBytes);
+  for (size_t i = 0; i < switchBytes; ++i) {
+    const byte remoteOwnedMask = static_cast<byte>(~localOwnedSwitchMask[i]);
+    switchStates[i] = static_cast<byte>((switchStates[i] & localOwnedSwitchMask[i]) |
+                                        (switches[i] & remoteOwnedMask));
+  }
 }
 
 void EventDispatcher::forwardSwitchTokenIfSelected(uint8_t selectedBoard) {
@@ -716,6 +725,9 @@ void EventDispatcher::sendSwitchStateFrame(byte nextBoard) {
 
   v2TxFrames++;
   if (localSwitchReportHead != localSwitchReportTail) {
+    memcpy(lastSentLocalReportSwitchStates,
+           localSwitchReportHistory[localSwitchReportTail],
+           sizeof(lastSentLocalReportSwitchStates));
     localSwitchReportTail = static_cast<uint8_t>(
         (localSwitchReportTail + 1) % SWITCH_REPORT_HISTORY_SIZE);
   }
