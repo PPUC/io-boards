@@ -292,8 +292,15 @@ void EffectsController::handleEvent(ConfigEvent *event) {
             case CONFIG_TOPIC_TO:
               config_values[3] = event->value;
 
+              // Explicitly initialize configured effect segments to a defined
+              // off state. Without that, segments that exist only for future
+              // effects can start from driver/segment runtime leftovers and
+              // show random static colors before any trigger fires.
               ws2812FXDevices[0][0]->getWS2812FX()->setSegment(
-                  config_values[1], config_values[2], config_values[3]);
+                  config_values[1], config_values[2], config_values[3],
+                  FX_MODE_STATIC, RGBW_BLACK, 1, NO_OPTIONS);
+              ws2812FXDevices[0][0]->getWS2812FX()->resetSegmentRuntime(
+                  config_values[1]);
               break;
           }
         }
