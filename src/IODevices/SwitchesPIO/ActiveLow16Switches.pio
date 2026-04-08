@@ -2,9 +2,11 @@
 .side_set 4 opt
     set x, 0         ; X = 0x0
     mov osr, ~x
-    jmp reset_stateful_pins
 
 loop:
+    jmp reset_stateful_pins
+
+read_inputs:
     mov isr, null    ; ISR is 0x0
     in pins, 16      ; read 16 switches to ISR
     mov y, isr       ; copy ISR to Y for comparison
@@ -43,4 +45,4 @@ reset_stateful_pins:
     nop                     side 0b1111 ; short delay
     nop                     side 0      ; set LOW
     set pindirs, 0                      ; change direction all pins back to input
-    jmp loop
+    jmp read_inputs
