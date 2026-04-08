@@ -111,11 +111,12 @@ void SwitchMatrix::handleRowChanges(uint32_t raw) {
           else
             lastStable &= ~mask;  // raw=0
 
-          // Dispatch all switch events as "local fast".
-          // If a PWM output registered to it, we have "fast flip". Useful for
-          // flippers, kick backs, jets and sling shots.
+          // Queue switch events for the normal core-0 dispatcher instead of
+          // running listeners immediately in IRQ context. This keeps fast-flip
+          // behavior board-local while avoiding IRQ bursts when multiple
+          // switches change close together.
           _eventDispatcher->dispatch(new Event(
-              EVENT_SOURCE_SWITCH, word(0, mapping[pos]), switchState, true));
+              EVENT_SOURCE_SWITCH, word(0, mapping[pos]), switchState));
         }
       }
     }

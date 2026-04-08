@@ -96,12 +96,13 @@ void Switches::handleSwitchChanges(uint32_t raw) {
             currentStable |= mask;  // set bit in lastStable to 1
           else
             currentStable &= ~mask;  // set bit in lastStable to 0
-          // Dispatch all switch events as "local fast".
-          // If a PWM output registered to it, we have "fast flip". Useful for
-          // flippers, kick backs, jets and sling shots.
+          // Queue switch events for the normal core-0 dispatcher instead of
+          // running listeners immediately in IRQ context. This still stays
+          // board-local and faster than the host roundtrip, while avoiding
+          // reply-timing stalls when multiple switches change nearly together.
           _eventDispatcher->dispatch(new Event(EVENT_SOURCE_SWITCH,
                                                word(0, number[i]),
-                                               switchState ? 1 : 0, true));
+                                               switchState ? 1 : 0));
           // digitalWrite(LED_BUILTIN, switchState);
         }
       }

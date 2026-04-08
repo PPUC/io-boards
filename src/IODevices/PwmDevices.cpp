@@ -134,7 +134,6 @@ void PwmDevices::deactivateOutput(byte i) {
   analogWrite(port[i], 0);
   activated[i] = 0;
   currentPower[i] = 0;
-  holdPower[i] = 0;
   scheduled[i] = false;
   fastSwitchManagedActive[i] = false;
 }
