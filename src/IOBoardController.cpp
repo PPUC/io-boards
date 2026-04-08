@@ -114,6 +114,9 @@ void IOBoardController::begin() {
 void IOBoardController::update() {
   if (running && (activeSwitches || activeSwitchMatrix)) {
     _eventDispatcher->dispatch(new Event(EVENT_POLL_EVENTS));
+    // Flush local switch edges before board-local PWM processing so fast-flip
+    // coils react to the freshest possible switch state in the same loop.
+    _eventDispatcher->update();
   }
 
   if (running) {
