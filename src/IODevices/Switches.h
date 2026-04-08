@@ -14,6 +14,7 @@
 #include "../EventDispatcher/EventDispatcher.h"
 #include "hardware/gpio.h"
 #include "hardware/pio.h"
+#include "hardware/sync.h"
 
 #define SWITCHES_BASE_PIN 3
 #define MAX_SWITCHES 16
@@ -81,6 +82,8 @@ class Switches : public EventListener {
   int last = -1;
 
   uint16_t currentStable = 0;
+  volatile uint16_t pendingSwitchMask = 0;
+  volatile uint16_t pendingSwitchStates = 0;
 
   EventDispatcher* _eventDispatcher;
 };

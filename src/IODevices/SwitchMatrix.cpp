@@ -72,6 +72,8 @@ void SwitchMatrix::resetConfig() {
   active = false;
   memset(mapping, 0, sizeof(mapping));
   lastStable = 0;
+  pendingMask = 0;
+  pendingStates = 0;
   memset(debounceTime, 0, sizeof(debounceTime));
 }
 
@@ -111,12 +113,16 @@ void SwitchMatrix::handleRowChanges(uint32_t raw) {
           else
             lastStable &= ~mask;  // raw=0
 
-          // Queue switch events for the normal core-0 dispatcher instead of
-          // running listeners immediately in IRQ context. This keeps fast-flip
-          // behavior board-local while avoiding IRQ bursts when multiple
-          // switches change close together.
-          _eventDispatcher->dispatch(new Event(
-              EVENT_SOURCE_SWITCH, word(0, mapping[pos]), switchState));
+          // Record the latest matrix switch state and flush it from the normal
+          // core-0 loop. Avoid heap allocation and std::queue mutation from
+          // IRQ context when multiple same-board switches change close
+          // together.
+          pendingMask |= mask;
+          if (switchState) {
+            pendingStates |= mask;
+          } else {
+            pendingStates &= ~mask;
+          }
         }
       }
     }
@@ -125,6 +131,37 @@ void SwitchMatrix::handleRowChanges(uint32_t raw) {
 
 void SwitchMatrix::handleEvent(Event* event) {
   switch (event->sourceId) {
+    case EVENT_POLL_EVENTS: {
+      const uint32_t irqState = save_and_disable_interrupts();
+      const uint32_t changedMask = pendingMask;
+      const uint32_t stateMask = pendingStates;
+      pendingMask = 0;
+      restore_interrupts(irqState);
+
+      if (changedMask == 0) {
+        break;
+      }
+
+      for (int column = 0; column < NUM_COLUMNS; column++) {
+        for (int row = 0; row < numRows; row++) {
+          const uint8_t pos = column * numRows + row;
+          if (mapping[pos] == 0) {
+            continue;
+          }
+
+          const uint32_t mask = 1u << ((NUM_COLUMNS - 1 - column) * numRows + row);
+          if ((changedMask & mask) == 0) {
+            continue;
+          }
+
+          _eventDispatcher->dispatch(new Event(
+              EVENT_SOURCE_SWITCH, word(0, mapping[pos]),
+              (stateMask & mask) ? 1 : 0));
+        }
+      }
+      break;
+    }
+
     case EVENT_READ_SWITCHES:
       // The CPU requested all current states. Usually this event is sent when
       // the game gets started.

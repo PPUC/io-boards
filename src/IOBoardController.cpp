@@ -112,6 +112,10 @@ void IOBoardController::begin() {
 }
 
 void IOBoardController::update() {
+  if (running && (activeSwitches || activeSwitchMatrix)) {
+    _eventDispatcher->dispatch(new Event(EVENT_POLL_EVENTS));
+  }
+
   if (running) {
     if (activeSwitches) {
       // nop

@@ -54,6 +54,8 @@ void Switches::resetConfig() {
   loadedNumSwitches = MAX_SWITCHES;
   validSwitchMask = (1u << MAX_SWITCHES) - 1;
   currentStable = 0;
+  pendingSwitchMask = 0;
+  pendingSwitchStates = 0;
   memset(port, 0, sizeof(port));
   memset(number, 0, sizeof(number));
   memset(debounceSetting, 0, sizeof(debounceSetting));
@@ -96,14 +98,16 @@ void Switches::handleSwitchChanges(uint32_t raw) {
             currentStable |= mask;  // set bit in lastStable to 1
           else
             currentStable &= ~mask;  // set bit in lastStable to 0
-          // Queue switch events for the normal core-0 dispatcher instead of
-          // running listeners immediately in IRQ context. This still stays
-          // board-local and faster than the host roundtrip, while avoiding
-          // reply-timing stalls when multiple switches change nearly together.
-          _eventDispatcher->dispatch(new Event(EVENT_SOURCE_SWITCH,
-                                               word(0, number[i]),
-                                               switchState ? 1 : 0));
-          // digitalWrite(LED_BUILTIN, switchState);
+          // Record the latest switch state and flush it from the normal
+          // core-0 loop. Avoid heap allocation and std::queue mutation from
+          // IRQ context, which is especially risky when two switches on the
+          // same board change almost simultaneously.
+          pendingSwitchMask |= mask;
+          if (switchState) {
+            pendingSwitchStates |= mask;
+          } else {
+            pendingSwitchStates &= ~mask;
+          }
         }
       }
     }
@@ -119,6 +123,32 @@ void Switches::handleSwitchChanges(uint32_t raw) {
 
 void Switches::handleEvent(Event* event) {
   switch (event->sourceId) {
+    case EVENT_POLL_EVENTS: {
+      const uint32_t irqState = save_and_disable_interrupts();
+      const uint16_t pendingMask = pendingSwitchMask;
+      const uint16_t pendingStates = pendingSwitchStates;
+      pendingSwitchMask = 0;
+      restore_interrupts(irqState);
+
+      if (pendingMask == 0) {
+        break;
+      }
+
+      for (int i = 0; i <= last; i++) {
+        if (number[i] == 0) {
+          continue;
+        }
+        const uint16_t mask = 1u << (port[i] - SWITCHES_BASE_PIN);
+        if ((pendingMask & mask) == 0) {
+          continue;
+        }
+        _eventDispatcher->dispatch(new Event(EVENT_SOURCE_SWITCH,
+                                             word(0, number[i]),
+                                             (pendingStates & mask) ? 1 : 0));
+      }
+      break;
+    }
+
     case EVENT_READ_SWITCHES:
       // The CPU requested all current states. Usually this event is sent when
       // the game gets started.

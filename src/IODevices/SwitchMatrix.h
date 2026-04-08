@@ -10,6 +10,7 @@
 #include "../EventDispatcher/EventDispatcher.h"
 #include "hardware/gpio.h"
 #include "hardware/pio.h"
+#include "hardware/sync.h"
 
 #define COLUMNS_BASE_PIN 15 // GPIO 15-18 for columns, the only pins with required hardware on IO_16_8_1 board
 #define NUM_COLUMNS 4
@@ -66,6 +67,8 @@ class SwitchMatrix : public EventListener {
 
   byte mapping[NUM_COLUMNS * MAX_ROWS] = {0};
   uint32_t lastStable = 0;
+  volatile uint32_t pendingMask = 0;
+  volatile uint32_t pendingStates = 0;
   absolute_time_t debounceTime[NUM_COLUMNS * MAX_ROWS][2] = {0};
   EventDispatcher* _eventDispatcher;
 };
