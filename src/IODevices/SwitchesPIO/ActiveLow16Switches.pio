@@ -2,11 +2,9 @@
 .side_set 4 opt
     set x, 0         ; X = 0x0
     mov osr, ~x
-
-loop:
     jmp reset_stateful_pins
 
-read_inputs:
+loop:
     mov isr, null    ; ISR is 0x0
     in pins, 16      ; read 16 switches to ISR
     mov y, isr       ; copy ISR to Y for comparison
@@ -22,10 +20,6 @@ changed:
     mov x, y         ; update X to the new state
     nop              ; short delay for debouncing
     nop              ; short delay for debouncing
-    nop              ; short delay for debouncing
-    nop              ; short delay for debouncing
-    nop              ; short delay for debouncing
-    nop              ; short delay for debouncing
 
     jmp loop
 
@@ -38,11 +32,15 @@ new_stable_state:
 reset_stateful_pins:
     ; Reset stateful pins (GPIO 15-18)
     set pindirs, 0b1111                 ; change direction of 4 pins (15-18) to output
-    nop                     side 0      ; set LOW
-    nop                     side 0b1111 ; set 4 pins to HIGH
-    nop                     side 0b1111 ; short delay
-    nop                     side 0b1111 ; short delay
-    nop                     side 0b1111 ; short delay
-    nop                     side 0      ; set LOW
+    nop                     side 0      ; settle LOW
+    nop                     side 0      ; settle LOW
+    nop                     side 0b1111 ; set 4 pins HIGH
+    nop                     side 0b1111 ; hold HIGH
+    nop                     side 0b1111 ; hold HIGH
+    nop                     side 0b1111 ; hold HIGH
+    nop                     side 0b1111 ; hold HIGH
+    nop                     side 0b1111 ; hold HIGH
+    nop                     side 0      ; pull LOW again before releasing inputs
+    nop                     side 0      ; hold LOW before switching back to input
     set pindirs, 0                      ; change direction all pins back to input
-    jmp read_inputs
+    jmp loop
