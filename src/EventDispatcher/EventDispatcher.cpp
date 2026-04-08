@@ -173,6 +173,16 @@ void EventDispatcher::callListeners(ConfigEvent *event, bool sendToOtherCore) {
   delete event;
 }
 
+bool EventDispatcher::getSwitchState(uint16_t number) const {
+  const int16_t mappedIndex =
+      findMappedIndex(switchIndexToNumber, runtimeConfig.switchBits, number);
+  if (mappedIndex < 0) {
+    return false;
+  }
+
+  return ppuc::v2::GetBitmapBit(switchStates, static_cast<uint16_t>(mappedIndex));
+}
+
 bool EventDispatcher::readBytes(byte *buffer, size_t len) {
   size_t offset = 0;
   uint32_t start = micros();
@@ -519,7 +529,7 @@ void EventDispatcher::sendConfigAckFrame(uint8_t boardId, uint8_t topic,
 }
 
 int16_t EventDispatcher::findMappedIndex(const uint16_t* table, uint16_t count,
-                                         uint16_t number) {
+                                         uint16_t number) const {
   for (uint16_t i = 0; i < count; ++i) {
     if (table[i] == number) {
       return (int16_t)i;

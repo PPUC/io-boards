@@ -46,6 +46,7 @@ class EventDispatcher {
 
   void addListener(EventListener* eventListener);
   void removeListener(EventListener* eventListener);
+  bool getSwitchState(uint16_t number) const;
 
   void dispatch(Event* event);
 
@@ -73,7 +74,7 @@ class EventDispatcher {
   uint8_t currentStatusFlags() const;
   void clearReportedStatusFlags();
   int16_t findMappedIndex(const uint16_t* table, uint16_t count,
-                          uint16_t number);
+                          uint16_t number) const;
   bool shouldDropOnCrossCoreBackpressure(const Event* event) const;
 
   void callListeners(Event* event, bool sendToOtherCore);

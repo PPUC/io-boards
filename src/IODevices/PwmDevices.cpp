@@ -143,6 +143,18 @@ void PwmDevices::update() {
 
   // Iterate over all outputs.
   for (byte i = 0; i < last; i++) {
+    if (_eventDispatcher && type[i] == PWM_TYPE_SOLENOID && fastSwitch[i] > 0) {
+      // Fast-flip coils should not depend forever on one switch edge event.
+      // Reconcile against the current board/global switch bitmap each update so
+      // a missed release event cannot leave a hold-style flipper powered until
+      // the next manual switch cycle.
+      fastSwitchClosed[i] =
+          _eventDispatcher->getSwitchState(static_cast<uint16_t>(fastSwitch[i]));
+      if (!fastSwitchClosed[i]) {
+        fastSwitchWaitForRelease[i] = false;
+      }
+    }
+
     if (activated[i] > 0) {
       // The output is active.
       uint32_t timePassed = _ms - activated[i];

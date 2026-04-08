@@ -19,7 +19,7 @@ class PwmDevices : public HighPowerOffAware {
  public:
   // Constructor
   PwmDevices(EventDispatcher *eventDispatcher)
-      : HighPowerOffAware(eventDispatcher) {
+      : HighPowerOffAware(eventDispatcher), _eventDispatcher(eventDispatcher) {
     eventDispatcher->addListener(this, EVENT_SOURCE_LIGHT);
     // Listening to solenoids and switches is added in HighPowerOffAware().
   }
@@ -56,6 +56,7 @@ class PwmDevices : public HighPowerOffAware {
   bool fastSwitchManagedActive[MAX_PWM_OUTPUTS] = {0};
   bool fastSwitchWaitForRelease[MAX_PWM_OUTPUTS] = {0};
   byte last = 0;
+  EventDispatcher* _eventDispatcher = nullptr;
 
   void updateSolenoidOrFlasher(bool targetState, byte i);
   void handleFastSwitchEvent(bool switchClosed, byte i);
