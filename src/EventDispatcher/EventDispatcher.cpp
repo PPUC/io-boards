@@ -27,6 +27,16 @@ EventDispatcher::EventDispatcher() {
   }
 }
 
+namespace {
+void ApplyMaskedBitmap(byte* destination, const byte* source, const byte* mask,
+                       size_t bytes) {
+  for (size_t i = 0; i < bytes; ++i) {
+    destination[i] = static_cast<byte>((destination[i] & ~mask[i]) |
+                                       (source[i] & mask[i]));
+  }
+}
+}
+
 void EventDispatcher::setRS485ModePin(int pin) {
   rs485 = true;
   rs485Pin = pin;
@@ -240,7 +250,6 @@ void EventDispatcher::clearSessionState() {
   sequenceGapDetected = false;
   parserResynced = false;
   transportErrorLatched = false;
-  switchDirty = false;
   switchOverflow = false;
   applyingRemoteSwitchState = false;
   nextSwitchBoard = ppuc::v2::kNoBoard;
@@ -248,6 +257,11 @@ void EventDispatcher::clearSessionState() {
   memset(outputLamps, 0, sizeof(outputLamps));
   memset(outputGi, 0, sizeof(outputGi));
   memset(switchStates, 0, sizeof(switchStates));
+  memset(localReportSwitchStates, 0, sizeof(localReportSwitchStates));
+  memset(localOwnedSwitchMask, 0, sizeof(localOwnedSwitchMask));
+  memset(localSwitchReportHistory, 0, sizeof(localSwitchReportHistory));
+  localSwitchReportHead = 0;
+  localSwitchReportTail = 0;
   for (uint16_t i = 0; i < ppuc::v2::kMaxCoilBits; ++i) {
     coilIndexToNumber[i] = i;
   }
@@ -550,10 +564,27 @@ void EventDispatcher::updateSwitchBitmap(Event *event) {
     return;
   }
 
-  ppuc::v2::SetBitmapBit(switchStates, (uint16_t)mappedIndex,
-                         event->value != 0);
+  const bool newState = event->value != 0;
+  ppuc::v2::SetBitmapBit(switchStates, (uint16_t)mappedIndex, newState);
   if (!applyingRemoteSwitchState) {
-    switchDirty = true;
+    const bool oldLocalState = ppuc::v2::GetBitmapBit(localReportSwitchStates,
+                                                      (uint16_t)mappedIndex);
+    ppuc::v2::SetBitmapBit(localReportSwitchStates, (uint16_t)mappedIndex,
+                           newState);
+    ppuc::v2::SetBitmapBit(localOwnedSwitchMask, (uint16_t)mappedIndex, true);
+
+    if (oldLocalState != newState) {
+      const uint8_t nextHead = static_cast<uint8_t>(
+          (localSwitchReportHead + 1) % SWITCH_REPORT_HISTORY_SIZE);
+      if (nextHead == localSwitchReportTail) {
+        switchOverflow = true;
+        localSwitchReportTail = static_cast<uint8_t>(
+            (localSwitchReportTail + 1) % SWITCH_REPORT_HISTORY_SIZE);
+      }
+      memcpy(localSwitchReportHistory[localSwitchReportHead],
+             localReportSwitchStates, sizeof(localReportSwitchStates));
+      localSwitchReportHead = nextHead;
+    }
   }
 }
 
@@ -618,13 +649,14 @@ void EventDispatcher::forwardSwitchTokenIfSelected(uint8_t selectedBoard) {
   if (selectedBoard != board) {
     return;
   }
+  const bool haveQueuedLocalSnapshots =
+      localSwitchReportHead != localSwitchReportTail;
 
   // Forward the token before running the heavier output/switch fanout logic on
   // core 0. Config ACKs are already fast; runtime replies need the same low
   // latency so switch polling does not depend on lamp/effect processing time.
-  if (switchDirty) {
+  if (haveQueuedLocalSnapshots) {
     sendSwitchStateFrame(nextSwitchBoard);
-    switchDirty = false;
   } else {
     sendSwitchNoChangeFrame(nextSwitchBoard);
   }
@@ -652,6 +684,10 @@ void EventDispatcher::sendSwitchStateFrame(byte nextBoard) {
   frame[7] = currentStatusFlags();
   frame[8] = 0;
   memcpy(&frame[9], switchStates, switchBytes);
+  if (localSwitchReportHead != localSwitchReportTail) {
+    ApplyMaskedBitmap(&frame[9], localSwitchReportHistory[localSwitchReportTail],
+                      localOwnedSwitchMask, switchBytes);
+  }
 
   uint16_t crc =
       ppuc::v2::Crc16Ccitt(frame, ppuc::v2::kHeaderBytes + payloadBytes);
@@ -679,6 +715,10 @@ void EventDispatcher::sendSwitchStateFrame(byte nextBoard) {
   }
 
   v2TxFrames++;
+  if (localSwitchReportHead != localSwitchReportTail) {
+    localSwitchReportTail = static_cast<uint8_t>(
+        (localSwitchReportTail + 1) % SWITCH_REPORT_HISTORY_SIZE);
+  }
   clearReportedStatusFlags();
   lastPoll = millis();
 }

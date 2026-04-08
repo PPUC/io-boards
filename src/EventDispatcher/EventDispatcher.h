@@ -25,6 +25,10 @@
 #define EVENT_STACK_SIZE 100
 #endif
 
+#ifndef SWITCH_REPORT_HISTORY_SIZE
+#define SWITCH_REPORT_HISTORY_SIZE 32
+#endif
+
 class EventDispatcher {
  public:
   EventDispatcher();
@@ -96,6 +100,12 @@ class EventDispatcher {
   byte outputLamps[ppuc::v2::kMaxLampBytes] = {0};
   byte outputGi[ppuc::v2::kGiStrings] = {0};
   byte switchStates[ppuc::v2::kMaxSwitchBytes] = {0};
+  byte localReportSwitchStates[ppuc::v2::kMaxSwitchBytes] = {0};
+  byte localOwnedSwitchMask[ppuc::v2::kMaxSwitchBytes] = {0};
+  byte localSwitchReportHistory[SWITCH_REPORT_HISTORY_SIZE]
+                               [ppuc::v2::kMaxSwitchBytes] = {{0}};
+  uint8_t localSwitchReportHead = 0;
+  uint8_t localSwitchReportTail = 0;
   uint16_t coilIndexToNumber[ppuc::v2::kMaxCoilBits];
   uint16_t lampIndexToNumber[ppuc::v2::kMaxLampBits];
   uint16_t switchIndexToNumber[ppuc::v2::kMaxSwitchBits];
@@ -112,7 +122,6 @@ class EventDispatcher {
   uint32_t v2TxFrames = 0;
   uint32_t v2SwitchNoChangeTx = 0;
   uint32_t crossCoreEventDrops = 0;
-  bool switchDirty = false;
   bool switchOverflow = false;
   bool applyingRemoteSwitchState = false;
   bool v2RuntimeInitialized = false;
