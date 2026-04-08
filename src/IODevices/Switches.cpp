@@ -54,8 +54,9 @@ void Switches::resetConfig() {
   loadedNumSwitches = MAX_SWITCHES;
   validSwitchMask = (1u << MAX_SWITCHES) - 1;
   currentStable = 0;
-  pendingSwitchMask = 0;
-  pendingSwitchStates = 0;
+  pendingEventHead = 0;
+  pendingEventTail = 0;
+  memset(pendingEvents, 0, sizeof(pendingEvents));
   memset(port, 0, sizeof(port));
   memset(number, 0, sizeof(number));
   memset(debounceSetting, 0, sizeof(debounceSetting));
@@ -98,15 +99,17 @@ void Switches::handleSwitchChanges(uint32_t raw) {
             currentStable |= mask;  // set bit in lastStable to 1
           else
             currentStable &= ~mask;  // set bit in lastStable to 0
-          // Record the latest switch state and flush it from the normal
-          // core-0 loop. Avoid heap allocation and std::queue mutation from
-          // IRQ context, which is especially risky when two switches on the
-          // same board change almost simultaneously.
-          pendingSwitchMask |= mask;
-          if (switchState) {
-            pendingSwitchStates |= mask;
-          } else {
-            pendingSwitchStates &= ~mask;
+          // Store full edge sequence in a fixed-size ring buffer so short
+          // close/open pulses are not collapsed into only the final state
+          // before the normal loop flushes them.
+          const uint8_t nextHead =
+              static_cast<uint8_t>((pendingEventHead + 1) %
+                                   SWITCH_EVENT_QUEUE_SIZE);
+          if (nextHead != pendingEventTail) {
+            pendingEvents[pendingEventHead] = {
+                static_cast<uint8_t>(number[i]),
+                static_cast<uint8_t>(switchState ? 1 : 0)};
+            pendingEventHead = nextHead;
           }
         }
       }
@@ -124,27 +127,21 @@ void Switches::handleSwitchChanges(uint32_t raw) {
 void Switches::handleEvent(Event* event) {
   switch (event->sourceId) {
     case EVENT_POLL_EVENTS: {
-      const uint32_t irqState = save_and_disable_interrupts();
-      const uint16_t pendingMask = pendingSwitchMask;
-      const uint16_t pendingStates = pendingSwitchStates;
-      pendingSwitchMask = 0;
-      restore_interrupts(irqState);
-
-      if (pendingMask == 0) {
-        break;
-      }
-
-      for (int i = 0; i <= last; i++) {
-        if (number[i] == 0) {
-          continue;
+      while (true) {
+        PendingSwitchEvent pending;
+        const uint32_t irqState = save_and_disable_interrupts();
+        if (pendingEventTail == pendingEventHead) {
+          restore_interrupts(irqState);
+          break;
         }
-        const uint16_t mask = 1u << (port[i] - SWITCHES_BASE_PIN);
-        if ((pendingMask & mask) == 0) {
-          continue;
-        }
+        pending = pendingEvents[pendingEventTail];
+        pendingEventTail = static_cast<uint8_t>((pendingEventTail + 1) %
+                                                SWITCH_EVENT_QUEUE_SIZE);
+        restore_interrupts(irqState);
+
         _eventDispatcher->dispatch(new Event(EVENT_SOURCE_SWITCH,
-                                             word(0, number[i]),
-                                             (pendingStates & mask) ? 1 : 0));
+                                             word(0, pending.number),
+                                             pending.state));
       }
       break;
     }

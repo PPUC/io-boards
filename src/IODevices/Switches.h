@@ -18,6 +18,12 @@
 
 #define SWITCHES_BASE_PIN 3
 #define MAX_SWITCHES 16
+#define SWITCH_EVENT_QUEUE_SIZE 32
+
+struct PendingSwitchEvent {
+  uint8_t number;
+  uint8_t state;
+};
 
 class Switches : public EventListener {
  public:
@@ -82,8 +88,9 @@ class Switches : public EventListener {
   int last = -1;
 
   uint16_t currentStable = 0;
-  volatile uint16_t pendingSwitchMask = 0;
-  volatile uint16_t pendingSwitchStates = 0;
+  volatile uint8_t pendingEventHead = 0;
+  volatile uint8_t pendingEventTail = 0;
+  PendingSwitchEvent pendingEvents[SWITCH_EVENT_QUEUE_SIZE] = {};
 
   EventDispatcher* _eventDispatcher;
 };

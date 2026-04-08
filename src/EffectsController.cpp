@@ -258,6 +258,10 @@ void EffectsController::handleEvent(ConfigEvent *event) {
               ws2812FXDevices[0][0]->setBrightness(config_values[3]);
               // "off" means no effects, standard operation mode.
               ws2812FXDevices[0][0]->off();
+              // Push an explicit black frame once so unassigned LEDs and
+              // future effect segments do not power up from undefined strip
+              // memory until the first real GI/lamp/effect update arrives.
+              ws2812FXDevices[0][0]->getWS2812FX()->show();
               if (config_values[4] > 0) {
                 ((CombinedGiAndLightMatrixWS2812FXDevice *)
                      ws2812FXDevices[0][0])

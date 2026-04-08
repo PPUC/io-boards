@@ -16,6 +16,12 @@
 #define NUM_COLUMNS 4
 #define MAX_ROWS 8
 #define MATRIX_SWITCH_DEBOUNCE 2
+#define MATRIX_SWITCH_EVENT_QUEUE_SIZE 32
+
+struct PendingMatrixSwitchEvent {
+  uint8_t number;
+  uint8_t state;
+};
 
 class SwitchMatrix : public EventListener {
  public:
@@ -67,8 +73,9 @@ class SwitchMatrix : public EventListener {
 
   byte mapping[NUM_COLUMNS * MAX_ROWS] = {0};
   uint32_t lastStable = 0;
-  volatile uint32_t pendingMask = 0;
-  volatile uint32_t pendingStates = 0;
+  volatile uint8_t pendingEventHead = 0;
+  volatile uint8_t pendingEventTail = 0;
+  PendingMatrixSwitchEvent pendingEvents[MATRIX_SWITCH_EVENT_QUEUE_SIZE] = {};
   absolute_time_t debounceTime[NUM_COLUMNS * MAX_ROWS][2] = {0};
   EventDispatcher* _eventDispatcher;
 };

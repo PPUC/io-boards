@@ -72,8 +72,9 @@ void SwitchMatrix::resetConfig() {
   active = false;
   memset(mapping, 0, sizeof(mapping));
   lastStable = 0;
-  pendingMask = 0;
-  pendingStates = 0;
+  pendingEventHead = 0;
+  pendingEventTail = 0;
+  memset(pendingEvents, 0, sizeof(pendingEvents));
   memset(debounceTime, 0, sizeof(debounceTime));
 }
 
@@ -113,15 +114,17 @@ void SwitchMatrix::handleRowChanges(uint32_t raw) {
           else
             lastStable &= ~mask;  // raw=0
 
-          // Record the latest matrix switch state and flush it from the normal
-          // core-0 loop. Avoid heap allocation and std::queue mutation from
-          // IRQ context when multiple same-board switches change close
-          // together.
-          pendingMask |= mask;
-          if (switchState) {
-            pendingStates |= mask;
-          } else {
-            pendingStates &= ~mask;
+          // Preserve the full edge sequence in a fixed-size ring buffer so a
+          // short pulse is not collapsed to only its final state before the
+          // normal loop flushes events.
+          const uint8_t nextHead =
+              static_cast<uint8_t>((pendingEventHead + 1) %
+                                   MATRIX_SWITCH_EVENT_QUEUE_SIZE);
+          if (nextHead != pendingEventTail) {
+            pendingEvents[pendingEventHead] = {
+                static_cast<uint8_t>(mapping[pos]),
+                static_cast<uint8_t>(switchState ? 1 : 0)};
+            pendingEventHead = nextHead;
           }
         }
       }
@@ -132,32 +135,21 @@ void SwitchMatrix::handleRowChanges(uint32_t raw) {
 void SwitchMatrix::handleEvent(Event* event) {
   switch (event->sourceId) {
     case EVENT_POLL_EVENTS: {
-      const uint32_t irqState = save_and_disable_interrupts();
-      const uint32_t changedMask = pendingMask;
-      const uint32_t stateMask = pendingStates;
-      pendingMask = 0;
-      restore_interrupts(irqState);
-
-      if (changedMask == 0) {
-        break;
-      }
-
-      for (int column = 0; column < NUM_COLUMNS; column++) {
-        for (int row = 0; row < numRows; row++) {
-          const uint8_t pos = column * numRows + row;
-          if (mapping[pos] == 0) {
-            continue;
-          }
-
-          const uint32_t mask = 1u << ((NUM_COLUMNS - 1 - column) * numRows + row);
-          if ((changedMask & mask) == 0) {
-            continue;
-          }
-
-          _eventDispatcher->dispatch(new Event(
-              EVENT_SOURCE_SWITCH, word(0, mapping[pos]),
-              (stateMask & mask) ? 1 : 0));
+      while (true) {
+        PendingMatrixSwitchEvent pending;
+        const uint32_t irqState = save_and_disable_interrupts();
+        if (pendingEventTail == pendingEventHead) {
+          restore_interrupts(irqState);
+          break;
         }
+        pending = pendingEvents[pendingEventTail];
+        pendingEventTail = static_cast<uint8_t>((pendingEventTail + 1) %
+                                                MATRIX_SWITCH_EVENT_QUEUE_SIZE);
+        restore_interrupts(irqState);
+
+        _eventDispatcher->dispatch(new Event(EVENT_SOURCE_SWITCH,
+                                             word(0, pending.number),
+                                             pending.state));
       }
       break;
     }
