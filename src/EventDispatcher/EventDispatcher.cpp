@@ -851,12 +851,17 @@ void EventDispatcher::update() {
   }
 
   if (multiCoreCrossLink) {
-    if (multiCoreCrossLink->eventAvailable()) {
+    // Drain cross-core traffic in bursts instead of one item per loop. Boards
+    // with heavy WS2812/effect config can receive well over 100 config frames
+    // during startup, and after a soft restart the old one-at-a-time handling
+    // can leave core 0 blocked on the queue before board-local config catches
+    // up on core 1.
+    while (multiCoreCrossLink->eventAvailable()) {
       Event *event = multiCoreCrossLink->popEvent();
       callListeners(event, false);
     }
 
-    if (multiCoreCrossLink->configEventAvailable()) {
+    while (multiCoreCrossLink->configEventAvailable()) {
       ConfigEvent *configEvent = multiCoreCrossLink->popConfigEvent();
       callListeners(configEvent, false);
     }
