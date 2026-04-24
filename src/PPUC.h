@@ -6,14 +6,15 @@
 #ifndef PPUC_h
 #define PPUC_h
 
-#define FIRMWARE_VERSION_MAJOR 0  // X Digits
-#define FIRMWARE_VERSION_MINOR 2  // Max 2 Digits
-#define FIRMWARE_VERSION_PATCH 0  // Max 2 Digits
-
 #include <Arduino.h>
 
+#include "PPUCFirmwareVersion.h"
 #include "PPUCPlatforms.h"
 #include "PPUCTimings.h"
+
+#define FIRMWARE_VERSION_MAJOR PPUC_FIRMWARE_VERSION_MAJOR
+#define FIRMWARE_VERSION_MINOR PPUC_FIRMWARE_VERSION_MINOR
+#define FIRMWARE_VERSION_PATCH PPUC_FIRMWARE_VERSION_PATCH
 
 #define CONTROLLER_16_8_1 1
 

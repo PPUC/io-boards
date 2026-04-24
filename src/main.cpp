@@ -27,6 +27,7 @@ volatile bool core_0_initialized = false;
 volatile bool core_0_loop_running = false;
 volatile bool core_1_initialized = false;
 volatile bool core_1_loop_running = false;
+volatile bool core_1_start_requested = false;
 volatile bool boot_led_active = true;
 volatile bool boot_runtime_stage_entered = false;
 volatile uint8_t boot_stage = 1;
@@ -42,11 +43,12 @@ enum BootStage : uint8_t {
   BOOT_STAGE_CORE0_BEGIN = 2,
   BOOT_STAGE_UART_READY = 3,
   BOOT_STAGE_USB_WAIT = 4,
-  BOOT_STAGE_CORE1_RESTART = 5,
-  BOOT_STAGE_CORE1_BEGIN = 6,
-  BOOT_STAGE_CROSSLINK_READY = 7,
-  BOOT_STAGE_EFFECTS_STARTED = 8,
-  BOOT_STAGE_RUNTIME = 9
+  BOOT_STAGE_WAIT_HOST = 5,
+  BOOT_STAGE_CORE1_RESTART = 6,
+  BOOT_STAGE_CORE1_BEGIN = 7,
+  BOOT_STAGE_CROSSLINK_READY = 8,
+  BOOT_STAGE_EFFECTS_STARTED = 9,
+  BOOT_STAGE_RUNTIME = 10
 };
 
 constexpr uint32_t BOOT_STAGE_RUNTIME_HOLD_MS = 4000;
@@ -185,8 +187,7 @@ void setup() {
   }
 
   core_0_initialized = true;
-  setBootStage(BOOT_STAGE_CORE1_RESTART);
-  rp2040.restartCore1();
+  setBootStage(BOOT_STAGE_WAIT_HOST);
 }
 
 void setup1() {
@@ -213,6 +214,12 @@ void setup1() {
 
 void loop() {
   core_0_loop_running = true;
+  if (!core_1_start_requested &&
+      ioBoardController.eventDispatcher()->runtimeSelected()) {
+    core_1_start_requested = true;
+    setBootStage(BOOT_STAGE_CORE1_RESTART);
+    rp2040.restartCore1();
+  }
   if (boot_led_active && core_1_initialized && core_1_loop_running) {
     if (!boot_runtime_stage_entered) {
       setBootStage(BOOT_STAGE_RUNTIME);

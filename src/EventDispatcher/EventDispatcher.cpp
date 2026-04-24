@@ -2,6 +2,8 @@
 
 #include <string.h>
 
+#include "../PPUCFirmwareVersion.h"
+
 namespace {
 constexpr uint32_t kSerialBaudRate = ppuc::v2::kBaudRate;
 
@@ -66,6 +68,10 @@ void EventDispatcher::setNextSwitchBoard(byte boardId) {
 void EventDispatcher::setSwitchReplyDelayUs(uint32_t delayUs) {
   switchReplyDelayUs = delayUs;
 }
+
+bool EventDispatcher::runtimeSelected() const { return runtimeSelectedByHost; }
+
+bool EventDispatcher::updateSelected() const { return updateSelectedByHost; }
 
 void EventDispatcher::addListener(EventListener *eventListener) {
   addListener(eventListener, EVENT_SOURCE_ANY);
@@ -238,10 +244,44 @@ size_t EventDispatcher::getV2PayloadBytes(ppuc::v2::FrameType frameType) {
   }
 }
 
+void EventDispatcher::sendHelloAckFrame(uint8_t sequence) {
+  byte* frame = bootBuffer;
+  frame[0] = ppuc::boot::kSyncByte;
+  frame[1] = ppuc::boot::kFrameHelloAck;
+  frame[2] = board;
+  frame[3] = sequence;
+  frame[4] = board;
+  frame[5] = updateSelectedByHost ? ppuc::boot::kModeUpdateSelected
+                                  : (runtimeSelectedByHost
+                                         ? ppuc::boot::kModeRuntimeSelected
+                                         : ppuc::boot::kModeAwaitingCommand);
+  frame[6] = PPUC_FIRMWARE_VERSION_MAJOR;
+  frame[7] = PPUC_FIRMWARE_VERSION_MINOR;
+  frame[8] = PPUC_FIRMWARE_VERSION_PATCH;
+  frame[9] = ppuc::boot::kProtocolMajor;
+  frame[10] = ppuc::boot::kProtocolMinor;
+  frame[11] = ppuc::boot::kCapabilityRuntimeCommand |
+              ppuc::boot::kCapabilityUpdateCommand;
+
+  const uint16_t crc = ppuc::boot::Crc16Ccitt(
+      frame, ppuc::boot::kHeaderBytes + ppuc::boot::kHelloAckPayloadBytes);
+  frame[12] = highByte(crc);
+  frame[13] = lowByte(crc);
+
+  digitalWrite(rs485Pin, HIGH);
+  delayMicroseconds(RS485_MODE_SWITCH_DELAY);
+  hwSerial->write(frame, ppuc::boot::kHelloAckFrameBytes);
+  delayMicroseconds(FrameWireTimeUs(ppuc::boot::kHelloAckFrameBytes));
+  digitalWrite(rs485Pin, LOW);
+  delayMicroseconds(RS485_MODE_SWITCH_DELAY);
+}
+
 void EventDispatcher::clearSessionState() {
   runtimeConfig = ppuc::v2::RuntimeConfig();
   runtimeConfigValid = false;
   mappingComplete = false;
+  runtimeSelectedByHost = false;
+  updateSelectedByHost = false;
   expectedMappingFrames = 0;
   receivedMappingFrames = 0;
   v2RuntimeInitialized = false;
@@ -273,6 +313,39 @@ void EventDispatcher::clearSessionState() {
   for (uint16_t i = 0; i < ppuc::v2::kMaxSwitchBits; ++i) {
     switchIndexToNumber[i] = i;
   }
+}
+
+bool EventDispatcher::processBootFrame(const byte* frame, size_t payloadBytes) {
+  if (payloadBytes != ppuc::boot::kHelloPayloadBytes ||
+      frame[1] != ppuc::boot::kFrameHello) {
+    return false;
+  }
+
+  const uint16_t crcOffset = ppuc::boot::kHeaderBytes + payloadBytes;
+  const uint16_t receivedCrc = word(frame[crcOffset], frame[crcOffset + 1]);
+  const uint16_t expectedCrc =
+      ppuc::boot::Crc16Ccitt(frame, ppuc::boot::kHeaderBytes + payloadBytes);
+  if (receivedCrc != expectedCrc) {
+    parserResynced = true;
+    return false;
+  }
+
+  const uint8_t targetBoard = frame[2];
+  if (targetBoard != board && targetBoard != ppuc::v2::kNoBoard) {
+    return true;
+  }
+
+  const uint8_t intent = frame[ppuc::boot::kHeaderBytes];
+  if (intent == ppuc::boot::kIntentRuntime) {
+    runtimeSelectedByHost = true;
+    updateSelectedByHost = false;
+  } else if (intent == ppuc::boot::kIntentUpdate) {
+    updateSelectedByHost = true;
+    runtimeSelectedByHost = false;
+  }
+
+  sendHelloAckFrame(frame[3]);
+  return true;
 }
 
 void EventDispatcher::resetSessionState(
@@ -348,6 +421,11 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
     return false;
   }
   v2RxFrames++;
+
+  if (!runtimeSelectedByHost) {
+    return true;
+  }
+
   if (transportErrorLatched) {
     dispatch(new Event(EVENT_NO_ERROR, 1, board));
     transportErrorLatched = false;
@@ -810,6 +888,31 @@ bool EventDispatcher::handleV2Frame() {
   return processV2Frame(v2Buffer, payloadBytes);
 }
 
+bool EventDispatcher::handleBootFrame() {
+  if (hwSerial->available() < (int)ppuc::boot::kHeaderBytes) {
+    return false;
+  }
+
+  if (hwSerial->peek() != ppuc::boot::kSyncByte) {
+    return false;
+  }
+
+  if (!readBytes(bootBuffer, ppuc::boot::kHeaderBytes)) {
+    return false;
+  }
+
+  if (bootBuffer[1] != ppuc::boot::kFrameHello) {
+    return false;
+  }
+
+  if (!readBytes(&bootBuffer[ppuc::boot::kHeaderBytes],
+                 ppuc::boot::kHelloPayloadBytes + ppuc::boot::kCrcBytes)) {
+    return false;
+  }
+
+  return processBootFrame(bootBuffer, ppuc::boot::kHelloPayloadBytes);
+}
+
 void EventDispatcher::update() {
   if (!rs485) {  // We're on Core1, the EffectController. Transmit stacked
                  // events to Core0.
@@ -834,11 +937,17 @@ void EventDispatcher::update() {
         v2RawBytes++;
         if (firstByte == ppuc::v2::kSyncByte) {
           v2RawA5++;
+        } else if (firstByte == ppuc::boot::kSyncByte) {
+          v2RawA5++;
         } else if (firstByte == 0xFF) {
           v2RawFF++;
         }
       }
-      if (firstByte == ppuc::v2::kSyncByte) {
+      if (firstByte == ppuc::boot::kSyncByte) {
+        if (!handleBootFrame()) {
+          break;
+        }
+      } else if (firstByte == ppuc::v2::kSyncByte) {
         if (!handleV2Frame()) {
           break;
         }

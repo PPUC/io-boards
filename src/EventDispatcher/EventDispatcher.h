@@ -15,6 +15,7 @@
 #include "Event.h"
 #include "EventListener.h"
 #include "MultiCoreCrossLink.h"
+#include "../PPUCBootProtocol.h"
 #include "../PPUCProtocolV2.h"
 
 #ifndef MAX_EVENT_LISTENERS
@@ -58,8 +59,13 @@ class EventDispatcher {
 
   uint32_t getLastPoll();
   bool sawRs485Activity() const;
+  bool runtimeSelected() const;
+  bool updateSelected() const;
 
  private:
+  bool handleBootFrame();
+  bool processBootFrame(const byte* frame, size_t payloadBytes);
+  void sendHelloAckFrame(uint8_t sequence);
   bool readBytes(byte* buffer, size_t len);
   bool handleV2Frame();
   size_t getV2PayloadBytes(ppuc::v2::FrameType frameType);
@@ -94,6 +100,8 @@ class EventDispatcher {
   byte v2Buffer[ppuc::v2::kHeaderBytes + ppuc::v2::kMaxCoilBytes +
                 ppuc::v2::kMaxLampBytes + ppuc::v2::kGiBytes +
                 ppuc::v2::kCrcBytes];
+  byte bootBuffer[ppuc::boot::kHeaderBytes + ppuc::boot::kHelloAckPayloadBytes +
+                  ppuc::boot::kCrcBytes];
   byte v2TxBuffer[ppuc::v2::kHeaderBytes + ppuc::v2::kSwitchStatusBytes +
                   ppuc::v2::kMaxSwitchBytes + ppuc::v2::kCrcBytes];
   byte outputCoils[ppuc::v2::kMaxCoilBytes] = {0};
@@ -128,6 +136,8 @@ class EventDispatcher {
   bool v2RuntimeInitialized = false;
   bool runtimeConfigValid = false;
   bool mappingComplete = false;
+  bool runtimeSelectedByHost = false;
+  bool updateSelectedByHost = false;
   uint16_t expectedMappingFrames = 0;
   uint16_t receivedMappingFrames = 0;
   uint8_t currentEpoch = 0;
