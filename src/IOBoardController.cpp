@@ -286,6 +286,7 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
             break;
           case CONFIG_TOPIC_FAST_SWITCH:
             fastSwitch = event->value;
+            _switches->markLocalFastSwitch(fastSwitch);
             break;
           case CONFIG_TOPIC_TYPE:
             switch (event->value) {

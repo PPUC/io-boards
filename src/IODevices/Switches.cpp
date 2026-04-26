@@ -60,7 +60,12 @@ void Switches::resetConfig() {
   memset(port, 0, sizeof(port));
   memset(number, 0, sizeof(number));
   memset(debounceSetting, 0, sizeof(debounceSetting));
-  memset(debounceTime, 0, sizeof(debounceTime));
+  memset(debounceTimeUs, 0, sizeof(debounceTimeUs));
+  pioBaseline = 0;
+  latestRaw = 0;
+  pendingDebounceMask = 0;
+  pendingDebounceState = 0;
+  memset(localFastSwitch, 0, sizeof(localFastSwitch));
 }
 
 void Switches::registerSwitch(byte p, byte n, uint8_t debounceTimeMs) {
@@ -80,8 +85,64 @@ void Switches::registerSwitch(byte p, byte n, uint8_t debounceTimeMs) {
   active = true;
 }
 
+void Switches::markLocalFastSwitch(byte n) {
+  localFastSwitch[n] = true;
+}
+
+void Switches::enqueuePendingSwitchEvent(uint8_t switchNumber, uint8_t state) {
+  const uint8_t nextHead =
+      static_cast<uint8_t>((pendingEventHead + 1) % SWITCH_EVENT_QUEUE_SIZE);
+  if (nextHead == pendingEventTail) {
+    pendingEventTail =
+        static_cast<uint8_t>((pendingEventTail + 1) % SWITCH_EVENT_QUEUE_SIZE);
+  }
+
+  pendingEvents[pendingEventHead] = {switchNumber, state};
+  pendingEventHead = nextHead;
+}
+
+void Switches::flushPendingDebounce(uint32_t nowUs) {
+  if (pendingDebounceMask == 0) {
+    return;
+  }
+
+  for (int i = 0; i <= last; i++) {
+    uint32_t mask = 1u << (port[i] - SWITCHES_BASE_PIN);
+    if ((pendingDebounceMask & mask) == 0) {
+      continue;
+    }
+
+    const bool switchState = (pendingDebounceState & mask) != 0;
+    if (((latestRaw & mask) != 0) != switchState) {
+      pendingDebounceMask &= ~mask;
+      continue;
+    }
+    if (((currentStable & mask) != 0) == switchState) {
+      pendingDebounceMask &= ~mask;
+      continue;
+    }
+
+    const uint32_t debounceUs =
+        static_cast<uint32_t>(debounceSetting[i]) * 1000u;
+    const uint32_t lastAcceptedUs = debounceTimeUs[i][switchState ? 1 : 0];
+    if (lastAcceptedUs != 0 && (nowUs - lastAcceptedUs) < debounceUs) {
+      continue;
+    }
+
+    debounceTimeUs[i][switchState ? 1 : 0] = nowUs;
+    if (switchState)
+      currentStable |= mask;
+    else
+      currentStable &= ~mask;
+    pendingDebounceMask &= ~mask;
+    enqueuePendingSwitchEvent(static_cast<uint8_t>(number[i]),
+                              static_cast<uint8_t>(switchState ? 1 : 0));
+  }
+}
+
 void Switches::handleSwitchChanges(uint32_t raw) {
-  uint32_t now = millis();
+  uint32_t nowUs = micros();
+  latestRaw = static_cast<uint16_t>(raw);
   uint32_t changed = raw ^ currentStable;
   if (changed > 0) {
     uint32_t allSwitchesMask = 0;
@@ -91,26 +152,29 @@ void Switches::handleSwitchChanges(uint32_t raw) {
       allSwitchesMask |= mask;
 
       if (changed & mask) {
-        // Debounce
-        if ((debounceTime[i] + debounceSetting[i]) < now) {
-          debounceTime[i] = now;
-          bool switchState = ((raw & mask) != 0);
+        bool switchState = ((raw & mask) != 0);
+        const uint32_t debounceUs =
+            static_cast<uint32_t>(debounceSetting[i]) * 1000u;
+        const uint32_t lastAcceptedUs = debounceTimeUs[i][switchState ? 1 : 0];
+        if (lastAcceptedUs == 0 || (nowUs - lastAcceptedUs) >= debounceUs) {
+          debounceTimeUs[i][switchState ? 1 : 0] = nowUs;
           if (switchState)
             currentStable |= mask;  // set bit in lastStable to 1
           else
             currentStable &= ~mask;  // set bit in lastStable to 0
+          pendingDebounceMask &= ~mask;
           // Store full edge sequence in a fixed-size ring buffer so short
           // close/open pulses are not collapsed into only the final state
-          // before the normal loop flushes them.
-          const uint8_t nextHead =
-              static_cast<uint8_t>((pendingEventHead + 1) %
-                                   SWITCH_EVENT_QUEUE_SIZE);
-          if (nextHead != pendingEventTail) {
-            pendingEvents[pendingEventHead] = {
-                static_cast<uint8_t>(number[i]),
-                static_cast<uint8_t>(switchState ? 1 : 0)};
-            pendingEventHead = nextHead;
-          }
+          // before the normal loop flushes them. If the ring fills, keep the
+          // newest physical edge and discard the oldest queued edge.
+          enqueuePendingSwitchEvent(static_cast<uint8_t>(number[i]),
+                                    static_cast<uint8_t>(switchState ? 1 : 0));
+        } else {
+          if (switchState)
+            pendingDebounceState |= mask;
+          else
+            pendingDebounceState &= ~mask;
+          pendingDebounceMask |= mask;
         }
       }
     }
@@ -118,15 +182,23 @@ void Switches::handleSwitchChanges(uint32_t raw) {
     // Set unregistered switches to raw value to for next comparison
     currentStable =
         (currentStable & allSwitchesMask) + (raw & ~allSwitchesMask);
+    pioBaseline = (pioBaseline & allSwitchesMask) + (raw & ~allSwitchesMask);
   }
 
-  // Push debounced state to PIO for next detection
-  pio_sm_put(pio, sm, ~currentStable);
+  // Push the observed state to PIO for next detection. Reported stable state is
+  // tracked separately so a temporarily suppressed edge can be committed later
+  // without causing repeated PIO IRQs while the input is physically steady.
+  pioBaseline = static_cast<uint16_t>(raw);
+  pio_sm_put(pio, sm, ~pioBaseline);
 }
 
 void Switches::handleEvent(Event* event) {
   switch (event->sourceId) {
     case EVENT_POLL_EVENTS: {
+      const uint32_t irqState = save_and_disable_interrupts();
+      flushPendingDebounce(micros());
+      restore_interrupts(irqState);
+
       while (true) {
         PendingSwitchEvent pending;
         const uint32_t irqState = save_and_disable_interrupts();
@@ -141,7 +213,8 @@ void Switches::handleEvent(Event* event) {
 
         _eventDispatcher->dispatch(new Event(EVENT_SOURCE_SWITCH,
                                              word(0, pending.number),
-                                             pending.state));
+                                             pending.state,
+                                             localFastSwitch[pending.number]));
       }
       break;
     }

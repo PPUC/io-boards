@@ -18,6 +18,7 @@
 
 #define SWITCHES_BASE_PIN 3
 #define MAX_SWITCHES 16
+#define MAX_LOCAL_FAST_SWITCH_NUMBER 255
 #define SWITCH_EVENT_QUEUE_SIZE 32
 
 struct PendingSwitchEvent {
@@ -39,6 +40,7 @@ class Switches : public EventListener {
     validSwitchMask = (1u << numSwitches) - 1;
   }
   void registerSwitch(byte p, byte n, uint8_t debounceTimeMs);
+  void markLocalFastSwitch(byte n);
   void resetConfig();
 
   void handleEvent(Event* event);
@@ -64,6 +66,8 @@ class Switches : public EventListener {
 
  private:
   void stopReader();
+  void enqueuePendingSwitchEvent(uint8_t switchNumber, uint8_t state);
+  void flushPendingDebounce(uint32_t nowUs);
   int findRegisteredSwitch(byte p, byte n) const {
     for (int i = 0; i <= last; i++) {
       if (port[i] == p || number[i] == n) {
@@ -84,13 +88,18 @@ class Switches : public EventListener {
   byte port[MAX_SWITCHES] = {0};
   byte number[MAX_SWITCHES] = {0};
   uint8_t debounceSetting[MAX_SWITCHES] = {0};
-  uint32_t debounceTime[MAX_SWITCHES] = {0};
+  uint32_t debounceTimeUs[MAX_SWITCHES][2] = {{0}};
   int last = -1;
 
   uint16_t currentStable = 0;
+  uint16_t pioBaseline = 0;
+  uint16_t latestRaw = 0;
+  uint16_t pendingDebounceMask = 0;
+  uint16_t pendingDebounceState = 0;
   volatile uint8_t pendingEventHead = 0;
   volatile uint8_t pendingEventTail = 0;
   PendingSwitchEvent pendingEvents[SWITCH_EVENT_QUEUE_SIZE] = {};
+  bool localFastSwitch[MAX_LOCAL_FAST_SWITCH_NUMBER + 1] = {false};
 
   EventDispatcher* _eventDispatcher;
 };
