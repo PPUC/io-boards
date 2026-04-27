@@ -193,6 +193,11 @@ void Switches::flushPendingDebounce(uint32_t nowUs) {
 
 void Switches::handleSwitchChanges(uint32_t raw) {
   uint32_t nowUs = micros();
+  // A pending edge may have already survived its debounce window before this
+  // new raw transition arrived. Commit it against the previous raw sample
+  // first so a valid quick press/release cannot be canceled by the release IRQ
+  // before the normal poll loop gets a chance to flush it.
+  flushPendingDebounce(nowUs);
   latestRaw = static_cast<uint16_t>(raw);
   uint32_t changed = raw ^ currentStable;
   if (changed > 0) {
@@ -208,26 +213,14 @@ void Switches::handleSwitchChanges(uint32_t raw) {
         const uint32_t lastAcceptedUs = debounceTimeUs[i][switchState ? 1 : 0];
         switch (debounceMode[i]) {
           case SWITCH_DEBOUNCE_FAST_FLIP:
-            if (lastAcceptedUs == 0 || (nowUs - lastAcceptedUs) >= debounceUs) {
-              // Preserve the full physical edge sequence for micro-flips. A
-              // repeated target state inside the configured window waits until
-              // the same-state debounce period expires.
-              acceptSwitchState(static_cast<uint8_t>(i), mask, switchState,
-                                nowUs);
-            } else {
-              deferSwitchState(static_cast<uint8_t>(i), mask, switchState,
-                               nowUs);
-            }
-            break;
-
-          case SWITCH_DEBOUNCE_FAST_MOMENTARY:
             if (switchState &&
                 (lastAcceptedUs == 0 ||
                  (nowUs - lastAcceptedUs) >= debounceUs)) {
-              // Sling/bumper style local triggers need immediate activation,
-              // but the release is debounced so contact chatter does not
-              // re-arm the assembly too early.
-              acceptSwitchState(static_cast<uint8_t>(i), mask, true, nowUs);
+              // Flipper button close must be as fast as possible. Opening is
+              // still debounced below so contact bounce right after a press
+              // cannot drop the flipper again.
+              acceptSwitchState(static_cast<uint8_t>(i), mask, switchState,
+                                nowUs);
             } else {
               deferSwitchState(static_cast<uint8_t>(i), mask, switchState,
                                nowUs);
