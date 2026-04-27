@@ -60,7 +60,9 @@ void Switches::resetConfig() {
   memset(port, 0, sizeof(port));
   memset(number, 0, sizeof(number));
   memset(debounceSetting, 0, sizeof(debounceSetting));
+  memset(debounceMode, SWITCH_DEBOUNCE_STANDARD, sizeof(debounceMode));
   memset(debounceTimeUs, 0, sizeof(debounceTimeUs));
+  memset(pendingDebounceSinceUs, 0, sizeof(pendingDebounceSinceUs));
   pioBaseline = 0;
   latestRaw = 0;
   pendingDebounceMask = 0;
@@ -85,8 +87,29 @@ void Switches::registerSwitch(byte p, byte n, uint8_t debounceTimeMs) {
   active = true;
 }
 
+void Switches::setDebounceMode(byte n, uint8_t mode) {
+  if (mode > SWITCH_DEBOUNCE_SLOW_STABLE) {
+    mode = SWITCH_DEBOUNCE_STANDARD;
+  }
+
+  for (int i = 0; i <= last; i++) {
+    if (number[i] == n) {
+      debounceMode[i] = mode;
+      return;
+    }
+  }
+}
+
 void Switches::markLocalFastSwitch(byte n) {
   localFastSwitch[n] = true;
+}
+
+uint32_t Switches::debounceWindowUs(uint8_t index) const {
+  uint32_t windowUs = static_cast<uint32_t>(debounceSetting[index]) * 1000u;
+  if (debounceMode[index] == SWITCH_DEBOUNCE_SLOW_STABLE) {
+    windowUs *= 4u;
+  }
+  return windowUs;
 }
 
 void Switches::enqueuePendingSwitchEvent(uint8_t switchNumber, uint8_t state) {
@@ -99,6 +122,33 @@ void Switches::enqueuePendingSwitchEvent(uint8_t switchNumber, uint8_t state) {
 
   pendingEvents[pendingEventHead] = {switchNumber, state};
   pendingEventHead = nextHead;
+}
+
+void Switches::acceptSwitchState(uint8_t index, uint32_t mask, bool switchState,
+                                 uint32_t nowUs) {
+  debounceTimeUs[index][switchState ? 1 : 0] = nowUs;
+  if (switchState)
+    currentStable |= mask;
+  else
+    currentStable &= ~mask;
+  pendingDebounceMask &= ~mask;
+  pendingDebounceSinceUs[index] = 0;
+  enqueuePendingSwitchEvent(static_cast<uint8_t>(number[index]),
+                            static_cast<uint8_t>(switchState ? 1 : 0));
+}
+
+void Switches::deferSwitchState(uint8_t index, uint32_t mask, bool switchState,
+                                uint32_t nowUs) {
+  if (((pendingDebounceMask & mask) == 0) ||
+      (((pendingDebounceState & mask) != 0) != switchState)) {
+    pendingDebounceSinceUs[index] = nowUs;
+  }
+
+  if (switchState)
+    pendingDebounceState |= mask;
+  else
+    pendingDebounceState &= ~mask;
+  pendingDebounceMask |= mask;
 }
 
 void Switches::flushPendingDebounce(uint32_t nowUs) {
@@ -123,20 +173,21 @@ void Switches::flushPendingDebounce(uint32_t nowUs) {
     }
 
     const uint32_t debounceUs =
-        static_cast<uint32_t>(debounceSetting[i]) * 1000u;
+        debounceWindowUs(static_cast<uint8_t>(i));
     const uint32_t lastAcceptedUs = debounceTimeUs[i][switchState ? 1 : 0];
-    if (lastAcceptedUs != 0 && (nowUs - lastAcceptedUs) < debounceUs) {
+    const uint32_t sinceUs = pendingDebounceSinceUs[i];
+    const bool stableLongEnough =
+        debounceMode[i] == SWITCH_DEBOUNCE_STANDARD ||
+        debounceMode[i] == SWITCH_DEBOUNCE_SLOW_STABLE;
+    if (stableLongEnough && sinceUs != 0 && (nowUs - sinceUs) < debounceUs) {
+      continue;
+    }
+    if (!stableLongEnough && lastAcceptedUs != 0 &&
+        (nowUs - lastAcceptedUs) < debounceUs) {
       continue;
     }
 
-    debounceTimeUs[i][switchState ? 1 : 0] = nowUs;
-    if (switchState)
-      currentStable |= mask;
-    else
-      currentStable &= ~mask;
-    pendingDebounceMask &= ~mask;
-    enqueuePendingSwitchEvent(static_cast<uint8_t>(number[i]),
-                              static_cast<uint8_t>(switchState ? 1 : 0));
+    acceptSwitchState(static_cast<uint8_t>(i), mask, switchState, nowUs);
   }
 }
 
@@ -153,28 +204,42 @@ void Switches::handleSwitchChanges(uint32_t raw) {
 
       if (changed & mask) {
         bool switchState = ((raw & mask) != 0);
-        const uint32_t debounceUs =
-            static_cast<uint32_t>(debounceSetting[i]) * 1000u;
+        const uint32_t debounceUs = debounceWindowUs(static_cast<uint8_t>(i));
         const uint32_t lastAcceptedUs = debounceTimeUs[i][switchState ? 1 : 0];
-        if (lastAcceptedUs == 0 || (nowUs - lastAcceptedUs) >= debounceUs) {
-          debounceTimeUs[i][switchState ? 1 : 0] = nowUs;
-          if (switchState)
-            currentStable |= mask;  // set bit in lastStable to 1
-          else
-            currentStable &= ~mask;  // set bit in lastStable to 0
-          pendingDebounceMask &= ~mask;
-          // Store full edge sequence in a fixed-size ring buffer so short
-          // close/open pulses are not collapsed into only the final state
-          // before the normal loop flushes them. If the ring fills, keep the
-          // newest physical edge and discard the oldest queued edge.
-          enqueuePendingSwitchEvent(static_cast<uint8_t>(number[i]),
-                                    static_cast<uint8_t>(switchState ? 1 : 0));
-        } else {
-          if (switchState)
-            pendingDebounceState |= mask;
-          else
-            pendingDebounceState &= ~mask;
-          pendingDebounceMask |= mask;
+        switch (debounceMode[i]) {
+          case SWITCH_DEBOUNCE_FAST_FLIP:
+            if (lastAcceptedUs == 0 || (nowUs - lastAcceptedUs) >= debounceUs) {
+              // Preserve the full physical edge sequence for micro-flips. A
+              // repeated target state inside the configured window waits until
+              // the same-state debounce period expires.
+              acceptSwitchState(static_cast<uint8_t>(i), mask, switchState,
+                                nowUs);
+            } else {
+              deferSwitchState(static_cast<uint8_t>(i), mask, switchState,
+                               nowUs);
+            }
+            break;
+
+          case SWITCH_DEBOUNCE_FAST_MOMENTARY:
+            if (switchState &&
+                (lastAcceptedUs == 0 ||
+                 (nowUs - lastAcceptedUs) >= debounceUs)) {
+              // Sling/bumper style local triggers need immediate activation,
+              // but the release is debounced so contact chatter does not
+              // re-arm the assembly too early.
+              acceptSwitchState(static_cast<uint8_t>(i), mask, true, nowUs);
+            } else {
+              deferSwitchState(static_cast<uint8_t>(i), mask, switchState,
+                               nowUs);
+            }
+            break;
+
+          case SWITCH_DEBOUNCE_SLOW_STABLE:
+          case SWITCH_DEBOUNCE_STANDARD:
+          default:
+            deferSwitchState(static_cast<uint8_t>(i), mask, switchState,
+                             nowUs);
+            break;
         }
       }
     }

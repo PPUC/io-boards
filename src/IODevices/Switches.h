@@ -40,6 +40,7 @@ class Switches : public EventListener {
     validSwitchMask = (1u << numSwitches) - 1;
   }
   void registerSwitch(byte p, byte n, uint8_t debounceTimeMs);
+  void setDebounceMode(byte n, uint8_t mode);
   void markLocalFastSwitch(byte n);
   void resetConfig();
 
@@ -66,8 +67,13 @@ class Switches : public EventListener {
 
  private:
   void stopReader();
+  void acceptSwitchState(uint8_t index, uint32_t mask, bool switchState,
+                         uint32_t nowUs);
+  void deferSwitchState(uint8_t index, uint32_t mask, bool switchState,
+                        uint32_t nowUs);
   void enqueuePendingSwitchEvent(uint8_t switchNumber, uint8_t state);
   void flushPendingDebounce(uint32_t nowUs);
+  uint32_t debounceWindowUs(uint8_t index) const;
   int findRegisteredSwitch(byte p, byte n) const {
     for (int i = 0; i <= last; i++) {
       if (port[i] == p || number[i] == n) {
@@ -88,7 +94,9 @@ class Switches : public EventListener {
   byte port[MAX_SWITCHES] = {0};
   byte number[MAX_SWITCHES] = {0};
   uint8_t debounceSetting[MAX_SWITCHES] = {0};
+  uint8_t debounceMode[MAX_SWITCHES] = {SWITCH_DEBOUNCE_STANDARD};
   uint32_t debounceTimeUs[MAX_SWITCHES][2] = {{0}};
+  uint32_t pendingDebounceSinceUs[MAX_SWITCHES] = {0};
   int last = -1;
 
   uint16_t currentStable = 0;

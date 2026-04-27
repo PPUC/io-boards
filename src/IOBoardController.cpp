@@ -251,6 +251,9 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
             _switches->registerSwitch((byte)port, number, event->value);
             activeSwitches = true;
             break;
+          case CONFIG_TOPIC_MODE:
+            _switches->setDebounceMode(number, event->value);
+            break;
         }
         break;
 

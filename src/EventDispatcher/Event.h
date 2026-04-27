@@ -102,6 +102,11 @@
 #define PWM_EFFECT_RAMP_DOWN_STOP 2
 #define PWM_EFFECT_IMPULSE 3
 
+#define SWITCH_DEBOUNCE_STANDARD 0
+#define SWITCH_DEBOUNCE_FAST_FLIP 1
+#define SWITCH_DEBOUNCE_FAST_MOMENTARY 2
+#define SWITCH_DEBOUNCE_SLOW_STABLE 3
+
 inline uint16_t HashNamedTriggerId(const char* name) {
   if (!name) {
     return 0;
