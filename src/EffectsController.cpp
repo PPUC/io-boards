@@ -145,6 +145,8 @@ void EffectsController::clearConfiguredEffects() {
     ws2812FXrunning[i] = false;
     ws2812FXbrightness[i] = 0;
   }
+  memset(ws2812FXDeviceByPort, 0, sizeof(ws2812FXDeviceByPort));
+  memset(pwmEffectDeviceByPort, 0, sizeof(pwmEffectDeviceByPort));
 
   for (int i = stackCounter; i >= builtInEffectCount; i--) {
     if (stackEffectContainers[i]) {
@@ -273,6 +275,9 @@ void EffectsController::handleEvent(ConfigEvent *event) {
                     ->setAfterGlow(config_values[2]);
               }
               ws2812FXstates[0] = true;
+              if (config_values[0] < PPUC_MAX_EFFECT_PORTS) {
+                ws2812FXDeviceByPort[config_values[0]] = ws2812FXDevices[0][0];
+              }
             }
             break;
         }
@@ -383,10 +388,14 @@ void EffectsController::handleEvent(ConfigEvent *event) {
           case CONFIG_TOPIC_VALUE:
             config_values[4] = event->value;
             switch (config_values[1]) {
-              case CONFIG_TOPIC_LED_EFFECT:
-                if (ws1812Effect) {
+              case CONFIG_TOPIC_LED_EFFECT: {
+                WS2812FXDevice* triggerDevice =
+                    config_values[0] < PPUC_MAX_EFFECT_PORTS
+                        ? ws2812FXDeviceByPort[config_values[0]]
+                        : nullptr;
+                if (ws1812Effect && triggerDevice) {
                   addEffect(
-                      ws1812Effect, ws2812FXDevices[0][0],
+                      ws1812Effect, triggerDevice,
                       new Event(config_values[2], config_values[3],
                                 config_values[4]),
                       config_values[7],  // priority
@@ -396,11 +405,16 @@ void EffectsController::handleEvent(ConfigEvent *event) {
                   );
                 }
                 break;
+              }
 
-              case CONFIG_TOPIC_PWM_EFFECT:
-                if (pwmEffect) {
+              case CONFIG_TOPIC_PWM_EFFECT: {
+                WavePWMDevice* triggerDevice =
+                    config_values[0] < PPUC_MAX_EFFECT_PORTS
+                        ? pwmEffectDeviceByPort[config_values[0]]
+                        : nullptr;
+                if (pwmEffect && triggerDevice) {
                   addEffect(
-                      pwmEffect, _shakerPWMDevice,
+                      pwmEffect, triggerDevice,
                       new Event(config_values[2], config_values[3],
                                 config_values[4]),
                       config_values[7],  // priority
@@ -410,6 +424,7 @@ void EffectsController::handleEvent(ConfigEvent *event) {
                   );
                 }
                 break;
+              }
             }
             break;
         }
@@ -478,6 +493,9 @@ void EffectsController::handleEvent(ConfigEvent *event) {
                 _shakerPWMDevice = new WavePWMDevice(
                     config_values[0], config_values[1], _eventDispatcher);
                 _shakerPWMDevice->off();
+                if (config_values[0] < PPUC_MAX_EFFECT_PORTS) {
+                  pwmEffectDeviceByPort[config_values[0]] = _shakerPWMDevice;
+                }
                 break;
             }
             break;

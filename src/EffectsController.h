@@ -46,6 +46,7 @@
 
 #define PPUC_MAX_WS2812FX_DEVICES 1
 #define PPUC_MAX_BRIGHTNESS_CONTROLS 1
+#define PPUC_MAX_EFFECT_PORTS 32
 
 class EffectsController : public EventListener {
  public:
@@ -169,6 +170,8 @@ class EffectsController : public EventListener {
   bool ws2812FXstates[PPUC_MAX_WS2812FX_DEVICES] = {0};
   bool ws2812FXrunning[PPUC_MAX_WS2812FX_DEVICES] = {0};
   byte ws2812FXbrightness[PPUC_MAX_WS2812FX_DEVICES] = {0};
+  WS2812FXDevice* ws2812FXDeviceByPort[PPUC_MAX_EFFECT_PORTS] = {nullptr};
+  WavePWMDevice* pwmEffectDeviceByPort[PPUC_MAX_EFFECT_PORTS] = {nullptr};
   EffectContainer* stackEffectContainers[EFFECT_STACK_SIZE];
   int stackCounter = -1;
   int builtInEffectCount = 0;
