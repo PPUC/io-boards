@@ -373,8 +373,8 @@ void EffectsController::handleEvent(ConfigEvent *event) {
             config_values[0] = event->value;  // port
             config_values[1] = 0;             // type
             config_values[2] = 0;             // source
-            config_values[3] = 0;             // number
             config_values[4] = 0;             // value
+            config_trigger_number = 0;
             break;
           case CONFIG_TOPIC_TYPE:
             config_values[1] = event->value;
@@ -383,7 +383,7 @@ void EffectsController::handleEvent(ConfigEvent *event) {
             config_values[2] = event->value;  // source
             break;
           case CONFIG_TOPIC_NUMBER:
-            config_values[3] = event->value;
+            config_trigger_number = static_cast<uint16_t>(event->value);
             break;
           case CONFIG_TOPIC_VALUE:
             config_values[4] = event->value;
@@ -396,7 +396,7 @@ void EffectsController::handleEvent(ConfigEvent *event) {
                 if (ws1812Effect && triggerDevice) {
                   addEffect(
                       ws1812Effect, triggerDevice,
-                      new Event(config_values[2], config_values[3],
+                      new Event(config_values[2], config_trigger_number,
                                 config_values[4]),
                       config_values[7],  // priority
                       config_values[8] == 255 ? -1
@@ -415,7 +415,7 @@ void EffectsController::handleEvent(ConfigEvent *event) {
                 if (pwmEffect && triggerDevice) {
                   addEffect(
                       pwmEffect, triggerDevice,
-                      new Event(config_values[2], config_values[3],
+                      new Event(config_values[2], config_trigger_number,
                                 config_values[4]),
                       config_values[7],  // priority
                       config_values[8] == 255 ? -1
