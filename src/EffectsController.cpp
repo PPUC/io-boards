@@ -3,10 +3,6 @@
 // see https://forum.arduino.cc/index.php?topic=398610.0
 EffectsController *EffectsController::effectsControllerInstance = NULL;
 
-namespace {
-constexpr bool kDebugFireAttractSparkleOnRun = false;
-}
-
 EventDispatcher *EffectsController::eventDispatcher() {
   return _eventDispatcher;
 }
@@ -100,6 +96,66 @@ int EffectsController::findEffectContainer(
   return -1;
 }
 
+int EffectsController::findRunningEffectOnDevice(
+    const EffectDevice* device) const {
+  if (!device) {
+    return -1;
+  }
+
+  for (int i = 0; i <= stackCounter; i++) {
+    const EffectContainer* container = stackEffectContainers[i];
+    if (!container) {
+      continue;
+    }
+    if (container->device == device && container->effect &&
+        container->effect->isRunning()) {
+      return i;
+    }
+  }
+
+  return -1;
+}
+
+int EffectsController::findBestSuspendedEffectForDevice(
+    const EffectDevice* device) const {
+  if (!device) {
+    return -1;
+  }
+
+  int bestIndex = -1;
+  for (int i = 0; i <= stackCounter; i++) {
+    const EffectContainer* container = stackEffectContainers[i];
+    if (!container || container->device != device || !container->suspended) {
+      continue;
+    }
+    if (bestIndex < 0 ||
+        container->priority > stackEffectContainers[bestIndex]->priority) {
+      bestIndex = i;
+    }
+  }
+
+  return bestIndex;
+}
+
+void EffectsController::resumeSuspendedEffects() {
+  for (int i = 0; i <= stackCounter; i++) {
+    EffectContainer* container = stackEffectContainers[i];
+    if (!container || !container->device) {
+      continue;
+    }
+    if (findRunningEffectOnDevice(container->device) >= 0) {
+      continue;
+    }
+
+    const int resumeIndex = findBestSuspendedEffectForDevice(container->device);
+    if (resumeIndex >= 0) {
+      stackEffectContainers[resumeIndex]->suspended = false;
+      stackEffectContainers[resumeIndex]->effect->start(
+          stackEffectContainers[resumeIndex]->repeat);
+    }
+  }
+}
+
 void EffectsController::addEffect(Effect *effect, EffectDevice *device,
                                   Event *event, int priority, int repeat,
                                   int mode) {
@@ -185,43 +241,36 @@ void EffectsController::handleEvent(Event *event) {
       break;
 
     case EVENT_RUN:
-      if (kDebugFireAttractSparkleOnRun && event->value != 0) {
-        // Temporary board-local test hook: prove that the configured named LED
-        // effect can start without relying on the host-side F trigger path.
-        eventDispatcher()->dispatch(new Event(EVENT_SOURCE_EFFECT,
-                                             HashNamedTriggerId(
-                                                 "attract-sparkle"),
-                                             1));
-      }
       [[fallthrough]];
 
     default:
       for (int i = 0; i <= stackCounter; i++) {
+        if (!stackEffectContainers[i]) {
+          continue;
+        }
         if (event->sourceId == stackEffectContainers[i]->event->sourceId &&
             event->eventId == stackEffectContainers[i]->event->eventId &&
             event->value == stackEffectContainers[i]->event->value &&
             (mode == stackEffectContainers[i]->mode ||
              -1 == stackEffectContainers[i]->mode  // -1 means any mode
              )) {
-          for (int k = 0; k <= stackCounter; k++) {
-            if (stackEffectContainers[i]->device ==
-                    stackEffectContainers[k]->device &&
-                stackEffectContainers[k]->effect->isRunning()) {
-              if (stackEffectContainers[i]->priority >
-                  stackEffectContainers[k]->priority) {
-                stackEffectContainers[k]->effect->terminate();
-                stackEffectContainers[i]->effect->start(
-                    stackEffectContainers[i]->repeat);
+          const int runningIndex =
+              findRunningEffectOnDevice(stackEffectContainers[i]->device);
+          if (runningIndex >= 0) {
+            if (stackEffectContainers[i]->priority >
+                stackEffectContainers[runningIndex]->priority) {
+              if (stackEffectContainers[runningIndex]->repeat == -2) {
+                stackEffectContainers[runningIndex]->suspended = true;
               }
-              break;
-            }
-            if (k == stackCounter) {
-              if (event->sourceId == EVENT_SOURCE_EFFECT) {
-                eventDispatcher()->dispatch(new Event(EVENT_SOURCE_DEBUG, 2, 1));
-              }
+              stackEffectContainers[runningIndex]->effect->terminate();
+              stackEffectContainers[i]->suspended = false;
               stackEffectContainers[i]->effect->start(
                   stackEffectContainers[i]->repeat);
             }
+          } else {
+            stackEffectContainers[i]->suspended = false;
+            stackEffectContainers[i]->effect->start(
+                stackEffectContainers[i]->repeat);
           }
         }
       }
@@ -418,8 +467,11 @@ void EffectsController::handleEvent(ConfigEvent *event) {
                                 static_cast<uint16_t>(config_values[3]),
                                 config_values[4]),
                       config_values[7],  // priority
-                      config_values[8] == 255 ? -1
-                                              : config_values[8],  // repeat
+                      config_values[8] == 255
+                          ? -1
+                          : (config_values[8] == 254
+                                 ? -2
+                                 : static_cast<int>(config_values[8])),
                       config_values[6]                             // mode
                   );
                 }
@@ -438,8 +490,11 @@ void EffectsController::handleEvent(ConfigEvent *event) {
                                 static_cast<uint16_t>(config_values[3]),
                                 config_values[4]),
                       config_values[7],  // priority
-                      config_values[8] == 255 ? -1
-                                              : config_values[8],  // repeat
+                      config_values[8] == 255
+                          ? -1
+                          : (config_values[8] == 254
+                                 ? -2
+                                 : static_cast<int>(config_values[8])),
                       config_values[6]                             // mode
                   );
                 }
@@ -592,6 +647,8 @@ void EffectsController::update() {
       stackEffectContainers[i]->effect->update();
     }
   }
+
+  resumeSuspendedEffects();
 
   if (millis() - ws2812UpdateInterval > UPDATE_INTERVAL_WS2812FX_EFFECTS) {
     // Updating the LEDs too fast leads to undefined behavior. Just update

@@ -70,16 +70,15 @@ class EffectsController : public EventListener {
       _ledBuiltInDevice = new LedBuiltInDevice();
       _ledBuiltInDevice->on();
 
-      addEffect(new LedBlinkEffect(), _ledBuiltInDevice,
-                new Event(EVENT_SOURCE_DEBUG, 1, 1),
-                6,   // priority
-                0,   // repeat
-                -1); // mode
-      addEffect(new LedBlinkEffect(), _ledBuiltInDevice,
-                new Event(EVENT_SOURCE_DEBUG, 2, 1),
-                7,   // priority
-                1,   // repeat once more for a distinct double pattern
-                -1); // mode
+      addEffect(new FastLedBlinkEffect(), _ledBuiltInDevice,
+                new Event(EVENT_ERROR), 3, -1, -1);
+      addEffect(new LedOnEffect(), _ledBuiltInDevice, new Event(EVENT_NO_ERROR),
+                4, 0, -1);
+      addEffect(new LedBlinkEffect(), _ledBuiltInDevice, new Event(EVENT_RUN),
+                1,   // priority
+                -1,  // repeat
+                0    // mode
+      );
       builtInEffectCount = stackCounter + 1;
       initialized = true;
     } else {
@@ -134,6 +133,9 @@ class EffectsController : public EventListener {
 
  private:
   int findEffectContainer(const EffectContainer* candidate) const;
+  int findRunningEffectOnDevice(const EffectDevice* device) const;
+  int findBestSuspendedEffectForDevice(const EffectDevice* device) const;
+  void resumeSuspendedEffects();
   void clearConfiguredEffects();
 
   int readBoardId() const {

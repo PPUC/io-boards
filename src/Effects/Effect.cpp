@@ -31,8 +31,8 @@ void Effect::resetMillis() {
 void Effect::stop() {
   if (repeat > 0) {
     start(--repeat);
-  } else if (repeat == -1) {
-    start(-1);
+  } else if (repeat == -1 || repeat == -2) {
+    start(repeat);
   } else {
     terminate();
   }
