@@ -3,6 +3,10 @@
 // see https://forum.arduino.cc/index.php?topic=398610.0
 EffectsController *EffectsController::effectsControllerInstance = NULL;
 
+namespace {
+constexpr bool kDebugFireAttractSparkleOnRun = true;
+}
+
 EventDispatcher *EffectsController::eventDispatcher() {
   return _eventDispatcher;
 }
@@ -179,6 +183,17 @@ void EffectsController::handleEvent(Event *event) {
     case EVENT_RESTART:
       clearConfiguredEffects();
       break;
+
+    case EVENT_RUN:
+      if (kDebugFireAttractSparkleOnRun && event->value != 0) {
+        // Temporary board-local test hook: prove that the configured LED
+        // effect can start without relying on the host-side F trigger path.
+        eventDispatcher()->dispatch(new Event(EVENT_SOURCE_EFFECT,
+                                             HashNamedTriggerId(
+                                                 "attract-sparkle"),
+                                             1));
+      }
+      [[fallthrough]];
 
     default:
       for (int i = 0; i <= stackCounter; i++) {
