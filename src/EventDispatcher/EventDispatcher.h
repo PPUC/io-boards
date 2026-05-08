@@ -132,7 +132,8 @@ class EventDispatcher {
   uint16_t receivedMappingFrames = 0;
   uint8_t currentEpoch = 0;
   uint8_t lastHostSequenceSeen = 0;
-  bool lastHostSequenceValid = false;
+  uint8_t lastHostFrameSequenceSeen = 0;
+  bool lastHostFrameSequenceValid = false;
   bool sequenceGapDetected = false;
   bool parserResynced = false;
   bool transportErrorLatched = false;

@@ -246,7 +246,8 @@ void EventDispatcher::clearSessionState() {
   receivedMappingFrames = 0;
   v2RuntimeInitialized = false;
   lastHostSequenceSeen = 0;
-  lastHostSequenceValid = false;
+  lastHostFrameSequenceSeen = 0;
+  lastHostFrameSequenceValid = false;
   sequenceGapDetected = false;
   parserResynced = false;
   transportErrorLatched = false;
@@ -285,7 +286,8 @@ void EventDispatcher::resetSessionState(
   receivedMappingFrames = 0;
   mappingComplete = expectedMappingFrames == 0;
   lastHostSequenceSeen = 0;
-  lastHostSequenceValid = false;
+  lastHostFrameSequenceSeen = 0;
+  lastHostFrameSequenceValid = false;
   sequenceGapDetected = false;
   parserResynced = false;
 
@@ -364,15 +366,16 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
   const bool hostOutputFrame = frameType == ppuc::v2::kFrameOutputState;
 
   auto noteHostSequence = [&]() {
-    if (!hostOutputFrame) {
-      return;
-    }
-    if (lastHostSequenceValid &&
-        static_cast<uint8_t>(lastHostSequenceSeen + 1) != incomingSequence) {
+    if (lastHostFrameSequenceValid &&
+        static_cast<uint8_t>(lastHostFrameSequenceSeen + 1) !=
+            incomingSequence) {
       sequenceGapDetected = true;
     }
-    lastHostSequenceSeen = incomingSequence;
-    lastHostSequenceValid = true;
+    lastHostFrameSequenceSeen = incomingSequence;
+    lastHostFrameSequenceValid = true;
+    if (hostOutputFrame) {
+      lastHostSequenceSeen = incomingSequence;
+    }
   };
 
   if (frameType == ppuc::v2::kFrameSetup) {
