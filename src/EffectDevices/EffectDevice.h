@@ -16,6 +16,10 @@ class EffectDevice {
 
   virtual void off();
 
+  virtual void startEffect(bool exclusive = true);
+
+  virtual void stopEffect(bool exclusive = true);
+
   virtual ~EffectDevice() {}
 };
 

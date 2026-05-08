@@ -143,6 +143,8 @@ class CombinedGiAndLightMatrixWS2812FXDevice : public WS2812FXDevice,
 
   void on();
   void off();
+  void startEffect(bool exclusive = true) override;
+  void stopEffect(bool exclusive = true) override;
 
   void assignLedToGiString(uint8_t number, int16_t led, uint32_t color = 0) {
     updateOrAppendLed(giLEDs, number, led, color);

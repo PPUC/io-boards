@@ -7,7 +7,8 @@ void WS2812FXEffect::setDevice(EffectDevice *effectDevice) {
 
 void WS2812FXEffect::start(int r) {
   Effect::start(r);
-  device->on();
+  const bool exclusive = segment == 255;
+  device->startEffect(exclusive);
   if (segment == 255) {
     ws2812FX->setSegment(getFirstSegment(), getFirstLED(), getlastLED(), mode,
                          colors, speed, options);
@@ -24,7 +25,7 @@ void WS2812FXEffect::start(int r) {
 }
 
 void WS2812FXEffect::stop() {
-  device->off();
+  device->stopEffect(segment == 255);
   Effect::stop();
 }
 

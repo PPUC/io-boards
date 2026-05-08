@@ -1,12 +1,20 @@
 #include "WS2812FXDevice.h"
 
-void WS2812FXDevice::on() {
-  reset();
+void WS2812FXDevice::on() { startEffect(true); }
+
+void WS2812FXDevice::off() { stopEffect(true); }
+
+void WS2812FXDevice::startEffect(bool exclusive) {
+  if (exclusive) {
+    reset();
+  }
   stopped = false;
 }
 
-void WS2812FXDevice::off() {
-  reset();
+void WS2812FXDevice::stopEffect(bool exclusive) {
+  if (exclusive) {
+    reset();
+  }
   stopped = true;
 }
 

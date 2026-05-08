@@ -1,15 +1,23 @@
 #include "CombinedGiAndLightMatrixWS2812FXDevice.h"
 
-void CombinedGiAndLightMatrixWS2812FXDevice::on() {
-  WS2812FXDevice::on();
-  effectRunning = true;
+void CombinedGiAndLightMatrixWS2812FXDevice::on() { startEffect(true); }
+
+void CombinedGiAndLightMatrixWS2812FXDevice::off() { stopEffect(true); }
+
+void CombinedGiAndLightMatrixWS2812FXDevice::startEffect(bool exclusive) {
+  WS2812FXDevice::startEffect(exclusive);
+  if (exclusive) {
+    effectRunning = true;
+  }
 }
 
-void CombinedGiAndLightMatrixWS2812FXDevice::off() {
-  effectRunning = false;
+void CombinedGiAndLightMatrixWS2812FXDevice::stopEffect(bool exclusive) {
+  if (exclusive) {
+    effectRunning = false;
+  }
   // No stop. Just reset to quit effects and return to standard GI and Light
-  // Matrix operation.
-  reset();
+  // Matrix operation when the effect owned the full combined strip.
+  WS2812FXDevice::stopEffect(exclusive);
 }
 
 void CombinedGiAndLightMatrixWS2812FXDevice::handleEvent(Event* event) {
