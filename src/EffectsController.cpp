@@ -5,6 +5,7 @@ EffectsController *EffectsController::effectsControllerInstance = NULL;
 
 namespace {
 constexpr bool kDebugFireAttractSparkleOnRun = true;
+constexpr uint8_t kDebugAttractSparkleSegment = 1;
 constexpr uint8_t kDebugAttractSparkleMode = 23;
 constexpr uint32_t kDebugAttractSparkleColor = 0x00FEFB00u;
 constexpr uint16_t kDebugAttractSparkleSpeed = 1000;
@@ -197,11 +198,15 @@ void EffectsController::handleEvent(Event *event) {
           WS2812FXDevice* device = ws2812FXDevices[0][0];
           device->on();
           WS2812FX* ws2812 = device->getWS2812FX();
-          ws2812->setSegment(0, device->getFirstLED(), device->getlastLED(),
+          ws2812->setSegment(kDebugAttractSparkleSegment,
+                             ws2812->getSegment(kDebugAttractSparkleSegment)
+                                 ->start,
+                             ws2812->getSegment(kDebugAttractSparkleSegment)
+                                 ->stop,
                              kDebugAttractSparkleMode,
                              kDebugAttractSparkleColor,
                              kDebugAttractSparkleSpeed, NO_OPTIONS);
-          ws2812->resetSegmentRuntime(0);
+          ws2812->resetSegmentRuntime(kDebugAttractSparkleSegment);
           ws2812->start();
           ws2812->service();
           ws2812FXrunning[0] = true;
