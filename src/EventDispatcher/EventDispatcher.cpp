@@ -2,8 +2,6 @@
 
 #include <string.h>
 
-#include "CrossLinkDebugger.h"
-
 namespace {
 constexpr uint32_t kSerialBaudRate = ppuc::v2::kBaudRate;
 
@@ -489,13 +487,14 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
   }
 
   if (frameType == ppuc::v2::kFrameTrigger) {
+    if (!runtimeConfigValid || incomingEpoch != currentEpoch) {
+      return true;
+    }
+
     const uint8_t source = frame[payloadOffset];
     const uint16_t number =
         word(frame[payloadOffset + 1], frame[payloadOffset + 2]);
     const uint8_t value = frame[payloadOffset + 3];
-    if (!runtimeConfigValid || incomingEpoch != currentEpoch) {
-      return true;
-    }
     callListeners(new Event(source, number, value), true);
     return true;
   }
