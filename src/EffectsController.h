@@ -183,10 +183,9 @@ class EffectsController : public EventListener {
   byte boardId = 255;
   bool initialized = false;
   byte config_port = 0;
-  byte config_values[9] = {0};
+  uint32_t config_values[9] = {0};
   neoPixelType config_neoPixelType = 0;
   uint32_t config_payload = 0;
-  uint16_t config_trigger_number = 0;
   WS2812FXEffect* ws1812Effect;
   WavePWMEffect* pwmEffect;
 

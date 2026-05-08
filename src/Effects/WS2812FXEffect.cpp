@@ -6,7 +6,7 @@ void WS2812FXEffect::setDevice(EffectDevice *effectDevice) {
 }
 
 void WS2812FXEffect::start(int r) {
-  Effect::start();
+  Effect::start(r);
   device->on();
   if (segment == 255) {
     ws2812FX->setSegment(getFirstSegment(), getFirstLED(), getlastLED(), mode,
