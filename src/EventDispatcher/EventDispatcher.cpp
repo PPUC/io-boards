@@ -2,6 +2,8 @@
 
 #include <string.h>
 
+#include "CrossLinkDebugger.h"
+
 namespace {
 constexpr uint32_t kSerialBaudRate = ppuc::v2::kBaudRate;
 
@@ -495,6 +497,9 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
     const uint16_t number =
         word(frame[payloadOffset + 1], frame[payloadOffset + 2]);
     const uint8_t value = frame[payloadOffset + 3];
+    if (source == EVENT_SOURCE_EFFECT) {
+      callListeners(new Event(EVENT_SOURCE_DEBUG, 1, 1), true);
+    }
     callListeners(new Event(source, number, value), true);
     return true;
   }

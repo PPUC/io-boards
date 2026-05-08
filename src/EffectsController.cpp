@@ -4,7 +4,7 @@
 EffectsController *EffectsController::effectsControllerInstance = NULL;
 
 namespace {
-constexpr bool kDebugFireAttractSparkleOnRun = true;
+constexpr bool kDebugFireAttractSparkleOnRun = false;
 }
 
 EventDispatcher *EffectsController::eventDispatcher() {
@@ -216,6 +216,9 @@ void EffectsController::handleEvent(Event *event) {
               break;
             }
             if (k == stackCounter) {
+              if (event->sourceId == EVENT_SOURCE_EFFECT) {
+                eventDispatcher()->dispatch(new Event(EVENT_SOURCE_DEBUG, 2, 1));
+              }
               stackEffectContainers[i]->effect->start(
                   stackEffectContainers[i]->repeat);
             }
