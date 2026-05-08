@@ -20,6 +20,7 @@ struct EffectContainer {
   int repeat;    // 0 = no repeat, >=1 times repeat
   int mode;  // -1 = always, 0 = normal play, >=1 multiball, mode, scene, ball
              // save ...
+  bool suspended = false;
 
   EffectContainer(Effect* ef, EffectDevice* d, Event* ev, int p) {
     effect = ef;

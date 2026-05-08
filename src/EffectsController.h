@@ -133,6 +133,9 @@ class EffectsController : public EventListener {
 
  private:
   int findEffectContainer(const EffectContainer* candidate) const;
+  int findRunningEffectOnDevice(const EffectDevice* device) const;
+  int findBestSuspendedEffectForDevice(const EffectDevice* device) const;
+  void resumeSuspendedEffects();
   void clearConfiguredEffects();
 
   int readBoardId() const {
