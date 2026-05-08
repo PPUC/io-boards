@@ -401,9 +401,18 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
       frameType == ppuc::v2::kFrameRestart) {
     clearSessionState();
     noteHostSequence();
-    dispatch(new Event(EVENT_RUN, 1, 0));
     dispatch(new Event(frameType == ppuc::v2::kFrameReset ? EVENT_RESET
                                                           : EVENT_RESTART));
+    // Process reset/restart teardown immediately before consuming any
+    // following config frames from the new session. Without this, core 0 can
+    // ACK and queue fresh config for core 1 while core 1 is still running the
+    // previous WS2812/effects state, which is especially fragile on the first
+    // board in the chain after a soft restart.
+    while (!eventQueue.empty()) {
+      Event* queuedEvent = eventQueue.front();
+      eventQueue.pop();
+      callListeners(queuedEvent, true);
+    }
     return true;
   }
 
