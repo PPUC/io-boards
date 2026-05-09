@@ -341,7 +341,7 @@ void EffectsController::handleEvent(ConfigEvent *event) {
               // show random static colors before any trigger fires.
               ws2812FXDevices[0]->getWS2812FX()->setSegment(
                   config_values[1], config_values[2], config_values[3],
-                  FX_MODE_STATIC, RGBW_BLACK, 1, NO_OPTIONS);
+                  FX_MODE_STATIC, RGBW_PUREWHITE, 1, NO_OPTIONS);
               ws2812FXDevices[0]->getWS2812FX()->resetSegmentRuntime(
                   config_values[1]);
               break;

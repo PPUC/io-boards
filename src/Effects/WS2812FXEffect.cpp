@@ -7,6 +7,7 @@ void WS2812FXEffect::setDevice(EffectDevice *effectDevice) {
 
 void WS2812FXEffect::start(int r) {
   Effect::start(r);
+  /*
   ws2812FX->getSegment(segment)->mode = mode;
   ws2812FX->getSegment(segment)->colors[0] = colors[0];
   ws2812FX->getSegment(segment)->colors[1] = colors[1];
@@ -14,6 +15,7 @@ void WS2812FXEffect::start(int r) {
   ws2812FX->getSegment(segment)->speed = speed;
   ws2812FX->getSegment(segment)->options = options;
   ws2812FX->resetSegmentRuntime(segment);
+  */
 }
 
 void WS2812FXEffect::stop() {
