@@ -7,26 +7,22 @@ void WS2812FXEffect::setDevice(EffectDevice *effectDevice) {
 
 void WS2812FXEffect::start(int r) {
   Effect::start(r);
-  const bool exclusive = segment == 255;
-  device->startEffect(exclusive);
-  if (segment == 255) {
-    ws2812FX->setSegment(getFirstSegment(), getFirstLED(), getlastLED(), mode,
-                         colors, speed, options);
-    ws2812FX->resetSegmentRuntime(getFirstSegment());
-  } else {
-    ws2812FX->getSegment(segment)->mode = mode;
-    ws2812FX->getSegment(segment)->colors[0] = colors[0];
-    ws2812FX->getSegment(segment)->colors[1] = colors[1];
-    ws2812FX->getSegment(segment)->colors[2] = colors[2];
-    ws2812FX->getSegment(segment)->speed = speed;
-    ws2812FX->getSegment(segment)->options = options;
-    ws2812FX->resetSegmentRuntime(segment);
-  }
+  ws2812FX->getSegment(segment)->mode = mode;
+  ws2812FX->getSegment(segment)->colors[0] = colors[0];
+  ws2812FX->getSegment(segment)->colors[1] = colors[1];
+  ws2812FX->getSegment(segment)->colors[2] = colors[2];
+  ws2812FX->getSegment(segment)->speed = speed;
+  ws2812FX->getSegment(segment)->options = options;
+  ws2812FX->resetSegmentRuntime(segment);
 }
 
 void WS2812FXEffect::stop() {
-  device->stopEffect(segment == 255);
   Effect::stop();
+  ws2812FX->getSegment(segment)->mode = FX_MODE_STATIC;
+  ws2812FX->getSegment(segment)->colors[0] = RGBW_BLACK;
+  ws2812FX->getSegment(segment)->speed = 1;
+  ws2812FX->getSegment(segment)->options = NO_OPTIONS;
+  ws2812FX->resetSegmentRuntime(segment);
 }
 
 void WS2812FXEffect::update() {
@@ -35,28 +31,4 @@ void WS2812FXEffect::update() {
   if (duration && duration < ms) {
     stop();
   }
-}
-
-int WS2812FXEffect::getFirstLED() {
-  return ((WS2812FXDevice *)device)->getFirstLED();
-}
-
-int WS2812FXEffect::getlastLED() {
-  return ((WS2812FXDevice *)device)->getlastLED();
-}
-
-int WS2812FXEffect::getNumLEDs() {
-  return ((WS2812FXDevice *)device)->getNumLEDs();
-}
-
-int WS2812FXEffect::getFirstSegment() {
-  return ((WS2812FXDevice *)device)->getFirstSegment();
-}
-
-int WS2812FXEffect::getLastSegment() {
-  return ((WS2812FXDevice *)device)->getLastSegment();
-}
-
-int WS2812FXEffect::getNumSegments() {
-  return ((WS2812FXDevice *)device)->getNumSegments();
 }

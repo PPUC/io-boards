@@ -40,10 +40,6 @@ class WS2812FXDevice : public EffectDevice {
 
   virtual void off();
 
-  void startEffect(bool exclusive = true) override;
-
-  void stopEffect(bool exclusive = true) override;
-
   void reset();
 
   WS2812FX* getWS2812FX();

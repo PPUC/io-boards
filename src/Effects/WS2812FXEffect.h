@@ -67,17 +67,9 @@ class WS2812FXEffect : public Effect {
 
   virtual void update();
 
-  int getFirstLED();
-  int getlastLED();
-  int getNumLEDs();
-
-  int getFirstSegment();
-  int getLastSegment();
-  int getNumSegments();
-
  protected:
   WS2812FX* ws2812FX;
-  uint8_t segment = 255;
+  uint8_t segment = 0;
   uint8_t mode;
   uint32_t colors[3] = {0, 0, 0};
   uint16_t speed;

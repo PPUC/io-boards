@@ -106,9 +106,6 @@ class EffectsController : public EventListener {
 
   CombinedGiAndLightMatrixWS2812FXDevice* giAndLightMatrix(int port);
 
-  WS2812FXDevice* createWS2812FXDevice(int port, int number, int segments,
-                                       int firstLED, int lastLED);
-
   WS2812FXDevice* ws2812FXDevice(int port, int number);
 
   void addEffect(Effect* effect, EffectDevice* device, Event* event,
@@ -168,8 +165,7 @@ class EffectsController : public EventListener {
   WavePWMDevice* _shakerPWMDevice = nullptr;
   WavePWMDevice* _ledPWMDevice = nullptr;
   RgbStripDevice* _rgbStripeDevice = nullptr;
-  WS2812FXDevice* ws2812FXDevices[PPUC_MAX_WS2812FX_DEVICES][10];
-  int ws2812FXDeviceCounters[PPUC_MAX_WS2812FX_DEVICES] = {0};
+  WS2812FXDevice* ws2812FXDevices[PPUC_MAX_WS2812FX_DEVICES];
   bool ws2812FXstates[PPUC_MAX_WS2812FX_DEVICES] = {0};
   bool ws2812FXrunning[PPUC_MAX_WS2812FX_DEVICES] = {0};
   byte ws2812FXbrightness[PPUC_MAX_WS2812FX_DEVICES] = {0};

@@ -20,7 +20,7 @@ WavePWMDevice *EffectsController::ledPWMDevice() { return _ledPWMDevice; }
 RgbStripDevice *EffectsController::rgbStripDevice() { return _rgbStripeDevice; }
 
 WS2812FXDevice *EffectsController::ws2812FXDevice(int port) {
-  return ws2812FXDevices[--port][0];
+  return ws2812FXDevices[--port];
 }
 
 CombinedGiAndLightMatrixWS2812FXDevice *EffectsController::giAndLightMatrix(
@@ -30,7 +30,7 @@ CombinedGiAndLightMatrixWS2812FXDevice *EffectsController::giAndLightMatrix(
 
 CombinedGiAndLightMatrixWS2812FXDevice *
 EffectsController::createCombinedGiAndLightMatrixWs2812FXDevice(int port) {
-  WS2812FXDevice *ws2812FXDevice = ws2812FXDevices[--port][0];
+  WS2812FXDevice *ws2812FXDevice = ws2812FXDevices[--port];
 
   CombinedGiAndLightMatrixWS2812FXDevice *giAndLightMatrix =
       new CombinedGiAndLightMatrixWS2812FXDevice(
@@ -40,35 +40,10 @@ EffectsController::createCombinedGiAndLightMatrixWs2812FXDevice(int port) {
 
   giAndLightMatrix->off();
 
-  ws2812FXDevices[port][0] = giAndLightMatrix;
+  ws2812FXDevices[port] = giAndLightMatrix;
   delete ws2812FXDevice;
 
   return giAndLightMatrix;
-}
-
-WS2812FXDevice *EffectsController::createWS2812FXDevice(int port, int number,
-                                                        int segments,
-                                                        int firstLED,
-                                                        int lastLED) {
-  --port;
-
-  if (number == 0) {
-    ws2812FXDevices[port][0]->_reduceLEDs(lastLED, segments - 1);
-  } else {
-    int firstSegment = ws2812FXDevices[port][number - 1]->getLastSegment() + 1;
-
-    ws2812FXDevices[port][number] =
-        new WS2812FXDevice(ws2812FXDevices[port][0]->getWS2812FX(), firstLED,
-                           lastLED, firstSegment, firstSegment + segments - 1);
-
-    ++ws2812FXDeviceCounters[port];
-  }
-
-  return ws2812FXDevices[port][number];
-}
-
-WS2812FXDevice *EffectsController::ws2812FXDevice(int port, int number) {
-  return ws2812FXDevices[--port][number];
 }
 
 int EffectsController::findEffectContainer(
@@ -191,16 +166,9 @@ void EffectsController::clearConfiguredEffects() {
   }
 
   for (int i = 0; i < PPUC_MAX_WS2812FX_DEVICES; i++) {
-    if (ws2812FXstates[i] && ws2812FXDevices[i][0]) {
-      ws2812FXDevices[i][0]->off();
+    if (ws2812FXstates[i] && ws2812FXDevices[i]) {
+      ws2812FXDevices[i]->off();
     }
-    for (int k = ws2812FXDeviceCounters[i] - 1; k >= 0; k--) {
-      if (ws2812FXDevices[i][k]) {
-        delete ws2812FXDevices[i][k];
-        ws2812FXDevices[i][k] = nullptr;
-      }
-    }
-    ws2812FXDeviceCounters[i] = 0;
     ws2812FXstates[i] = false;
     ws2812FXrunning[i] = false;
     ws2812FXbrightness[i] = 0;
@@ -226,7 +194,7 @@ void EffectsController::clearConfiguredEffects() {
 }
 
 void EffectsController::setBrightness(byte port, byte brightness) {
-  ws2812FXDevices[--port][0]->setBrightness(brightness);
+  ws2812FXDevices[--port]->setBrightness(brightness);
   ws2812FXbrightness[port] = brightness;
 }
 
@@ -314,36 +282,35 @@ void EffectsController::handleEvent(ConfigEvent *event) {
             break;
           case CONFIG_TOPIC_LIGHT_UP:
             config_values[4] = event->value;
-            if (!ws2812FXDevices[0][0]) {
-              ws2812FXDevices[0][0] =
+            if (!ws2812FXDevices[0]) {
+              ws2812FXDevices[0] =
                   new CombinedGiAndLightMatrixWS2812FXDevice(
                       new WS2812FX(config_values[1], config_values[0],
                                    config_neoPixelType),
                       0, config_values[1] - 1, 0, 0, _eventDispatcher);
-              ws2812FXDevices[0][0]->getWS2812FX()->init();
-              ws2812FXDeviceCounters[0] = 1;
+              ws2812FXDevices[0]->getWS2812FX()->init();
 
               // Brightness might be overwritten later.
-              ws2812FXDevices[0][0]->setBrightness(config_values[3]);
+              ws2812FXDevices[0]->setBrightness(config_values[3]);
               // "off" means no effects, standard operation mode.
-              ws2812FXDevices[0][0]->off();
+              ws2812FXDevices[0]->off();
               // Push an explicit black frame once so unassigned LEDs and
               // future effect segments do not power up from undefined strip
               // memory until the first real GI/lamp/effect update arrives.
-              ws2812FXDevices[0][0]->getWS2812FX()->show();
+              ws2812FXDevices[0]->getWS2812FX()->show();
               if (config_values[4] > 0) {
                 ((CombinedGiAndLightMatrixWS2812FXDevice *)
-                     ws2812FXDevices[0][0])
+                     ws2812FXDevices[0])
                     ->setHeatUp(config_values[4]);
               }
               if (config_values[2] > 0) {
                 ((CombinedGiAndLightMatrixWS2812FXDevice *)
-                     ws2812FXDevices[0][0])
+                     ws2812FXDevices[0])
                     ->setAfterGlow(config_values[2]);
               }
               ws2812FXstates[0] = true;
               if (config_values[0] < PPUC_MAX_EFFECT_PORTS) {
-                ws2812FXDeviceByPort[config_values[0]] = ws2812FXDevices[0][0];
+                ws2812FXDeviceByPort[config_values[0]] = ws2812FXDevices[0];
               }
             }
             break;
@@ -351,7 +318,7 @@ void EffectsController::handleEvent(ConfigEvent *event) {
         break;
 
       case CONFIG_TOPIC_LED_SEGMENT:
-        if (ws2812FXDevices[0][0]) {
+        if (ws2812FXDevices[0]) {
           switch (event->key) {
             case CONFIG_TOPIC_PORT:
               config_values[0] = event->value;  // port
@@ -372,10 +339,10 @@ void EffectsController::handleEvent(ConfigEvent *event) {
               // off state. Without that, segments that exist only for future
               // effects can start from driver/segment runtime leftovers and
               // show random static colors before any trigger fires.
-              ws2812FXDevices[0][0]->getWS2812FX()->setSegment(
+              ws2812FXDevices[0]->getWS2812FX()->setSegment(
                   config_values[1], config_values[2], config_values[3],
                   FX_MODE_STATIC, RGBW_BLACK, 1, NO_OPTIONS);
-              ws2812FXDevices[0][0]->getWS2812FX()->resetSegmentRuntime(
+              ws2812FXDevices[0]->getWS2812FX()->resetSegmentRuntime(
                   config_values[1]);
               break;
           }
@@ -383,7 +350,7 @@ void EffectsController::handleEvent(ConfigEvent *event) {
         break;
 
       case CONFIG_TOPIC_LED_EFFECT:
-        if (ws2812FXDevices[0][0]) {
+        if (ws2812FXDevices[0]) {
           switch (event->key) {
             case CONFIG_TOPIC_PORT:
               config_values[0] = event->value;  // port
@@ -506,7 +473,7 @@ void EffectsController::handleEvent(ConfigEvent *event) {
         break;
 
       case CONFIG_TOPIC_LAMPS:
-        if (ws2812FXDevices[0][0]) {
+        if (ws2812FXDevices[0]) {
           switch (event->key) {
             case CONFIG_TOPIC_PORT:
               config_values[0] = event->value;  // port
@@ -529,19 +496,19 @@ void EffectsController::handleEvent(ConfigEvent *event) {
               switch (config_values[1]) {
                 case LED_TYPE_GI:
                   ((CombinedGiAndLightMatrixWS2812FXDevice *)
-                       ws2812FXDevices[0][0])
+                       ws2812FXDevices[0])
                       ->assignLedToGiString(config_values[2], config_values[3],
                                             config_payload);
                   break;
                 case LED_TYPE_LAMP:
                   ((CombinedGiAndLightMatrixWS2812FXDevice *)
-                       ws2812FXDevices[0][0])
+                       ws2812FXDevices[0])
                       ->assignLedToLightMatrix(
                           config_values[2], config_values[3], config_payload);
                   break;
                 case LED_TYPE_FLASHER:
                   ((CombinedGiAndLightMatrixWS2812FXDevice *)
-                       ws2812FXDevices[0][0])
+                       ws2812FXDevices[0])
                       ->assignLedToFlasher(config_values[2], config_values[3],
                                            config_payload);
                   break;
@@ -658,27 +625,16 @@ void EffectsController::update() {
     for (int i = 0; i < PPUC_MAX_WS2812FX_DEVICES; i++) {
       if (ws2812FXstates[i]) {
         if (ws2812FXrunning[i]) {
-          ws2812FXDevices[i][0]->getWS2812FX()->service();
-
-          bool stop = true;
-          for (int k = 0; k < ws2812FXDeviceCounters[i]; k++) {
-            stop &= ws2812FXDevices[i][k]->isStopped();
-          }
-
-          if (stop) {
-            ws2812FXDevices[i][0]->getWS2812FX()->stop();
+          ws2812FXDevices[i]->getWS2812FX()->service();
+          if (ws2812FXDevices[i]->isStopped()) {
+            ws2812FXDevices[i]->getWS2812FX()->stop();
             ws2812FXrunning[i] = false;
           }
-        } else {
-          bool start = false;
-          for (int k = 0; k < ws2812FXDeviceCounters[i]; k++) {
-            start |= !ws2812FXDevices[i][k]->isStopped();
-          }
-
-          if (start) {
-            ws2812FXDevices[i][0]->getWS2812FX()->start();
+        } else  {
+          if (!ws2812FXDevices[i]->isStopped()) {
+            ws2812FXDevices[i]->getWS2812FX()->start();
             ws2812FXrunning[i] = true;
-            ws2812FXDevices[i][0]->getWS2812FX()->service();
+            ws2812FXDevices[i]->getWS2812FX()->service();
           }
         }
       }
@@ -691,12 +647,12 @@ void EffectsController::update() {
     // every 3ms.
     ws2812AfterGlowUpdateInterval = millis();
     for (int i = 0; i < PPUC_MAX_WS2812FX_DEVICES; i++) {
-      if (ws2812FXstates[i] && ws2812FXDevices[i][0]->hasAfterGlowSupport() &&
+      if (ws2812FXstates[i] && ws2812FXDevices[i]->hasAfterGlowSupport() &&
           !ws2812FXrunning[i]) {
         // No other effect is running, handle after glow effect.
-        ((CombinedGiAndLightMatrixWS2812FXDevice *)ws2812FXDevices[i][0])
+        ((CombinedGiAndLightMatrixWS2812FXDevice *)ws2812FXDevices[i])
             ->updateAfterGlow();
-        ws2812FXDevices[i][0]->getWS2812FX()->show();
+        ws2812FXDevices[i]->getWS2812FX()->show();
       }
     }
   }
