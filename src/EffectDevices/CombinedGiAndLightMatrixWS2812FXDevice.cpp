@@ -2,11 +2,11 @@
 
 void CombinedGiAndLightMatrixWS2812FXDevice::on() {
   WS2812FXDevice::on();
-    effectRunning = true;
-  }
+  effectRunning = true;
+}
 
 void CombinedGiAndLightMatrixWS2812FXDevice::off() {
-    effectRunning = false;
+  effectRunning = false;
   // No stop. Just reset to quit effects and return to standard GI and Light
   // Matrix operation.
   reset();
@@ -53,15 +53,16 @@ void CombinedGiAndLightMatrixWS2812FXDevice::handleEvent(Event* event) {
             (targetGIBrightness[giIndex] > giBrightness && msAfterGlow == 0)) {
           for (auto& led : getGILEDsByNumber(giStringNumber)) {
             ws2812FX->setPixelColor(
-                led->position,
-                getDimmedPixelColor(led->color, giBrightness));
+                led->position, getDimmedPixelColor(led->color, giBrightness));
+            needsShow = true;
           }
         } else {
           for (auto& led : getGILEDsByNumber(giStringNumber)) {
             // Treat increasing GI brightness like "on" and decreasing
             // brightness like "off" so heat-up/afterglow follow the actual
             // transition direction on mixed GI/lamp strings.
-            intializeNewLEDState(led, targetGIBrightness[giIndex] < giBrightness);
+            intializeNewLEDState(led,
+                                 targetGIBrightness[giIndex] < giBrightness);
           }
         }
 
@@ -88,8 +89,10 @@ void CombinedGiAndLightMatrixWS2812FXDevice::intializeNewLEDState(LED* led,
                                                                   bool on) {
   if (on && msHeatUp == 0) {
     ws2812FX->setPixelColor(led->position, led->color);
+    needsShow = true;
   } else if (!on && msAfterGlow == 0) {
     ws2812FX->setPixelColor(led->position, RGBW_BLACK);
+    needsShow = true;
   } else if (on) {
     if (led->heatUp == 0 && led->afterGlow == 0) {
       led->heatUp = millis();
@@ -116,7 +119,8 @@ void CombinedGiAndLightMatrixWS2812FXDevice::intializeNewLEDState(LED* led,
     } else if (led->heatUp > 0) {
       // There's still a heat up effect running. Start after glow from
       // current value.
-      uint8_t value = wavePWMHeatUp->getExponentialValue(millis() - led->heatUp);
+      uint8_t value =
+          wavePWMHeatUp->getExponentialValue(millis() - led->heatUp);
       led->heatUp = 0;
       for (int ms = msAfterGlow; ms <= (msAfterGlow * 2); ms++) {
         if (wavePWMAfterGlow->getExponentialValue(ms) <= value) {
@@ -157,16 +161,16 @@ void CombinedGiAndLightMatrixWS2812FXDevice::updateAfterGlow() {
           float diff =
               sourceGIBrightness[giIndex] - targetGIBrightness[giIndex];
           float mult = diff / 255;
-          glowBrightness =
-              targetGIBrightness[giIndex] +
-              (wavePWMAfterGlow->getExponentialValue(
-                   millis() - led->afterGlow + msAfterGlow) *
-               mult);
+          glowBrightness = targetGIBrightness[giIndex] +
+                           (wavePWMAfterGlow->getExponentialValue(
+                                millis() - led->afterGlow + msAfterGlow) *
+                            mult);
         }
       }
 
-      ws2812FX->setPixelColor(
-          led->position, getDimmedPixelColor(led->color, glowBrightness));
+      ws2812FX->setPixelColor(led->position,
+                              getDimmedPixelColor(led->color, glowBrightness));
+      needsShow = true;
     }
   }
 
@@ -176,6 +180,7 @@ void CombinedGiAndLightMatrixWS2812FXDevice::updateAfterGlow() {
       if ((millis() - led->heatUp) >= msHeatUp) {
         led->heatUp = 0;
         ws2812FX->setPixelColor(led->position, led->color);
+        needsShow = true;
       } else {
         glowBrightness =
             wavePWMHeatUp->getExponentialValue(millis() - led->heatUp);
@@ -184,6 +189,7 @@ void CombinedGiAndLightMatrixWS2812FXDevice::updateAfterGlow() {
       if ((millis() - led->afterGlow) >= msAfterGlow) {
         led->afterGlow = 0;
         ws2812FX->setPixelColor(led->position, RGBW_BLACK);
+        needsShow = true;
       } else {
         glowBrightness = wavePWMAfterGlow->getExponentialValue(
             millis() - led->afterGlow + msAfterGlow);
@@ -191,13 +197,15 @@ void CombinedGiAndLightMatrixWS2812FXDevice::updateAfterGlow() {
     }
 
     if (led->heatUp > 0 || led->afterGlow > 0) {
-      ws2812FX->setPixelColor(
-          led->position, getDimmedPixelColor(led->color, glowBrightness));
+      ws2812FX->setPixelColor(led->position,
+                              getDimmedPixelColor(led->color, glowBrightness));
+      needsShow = true;
     }
   }
 }
 
-uint32_t CombinedGiAndLightMatrixWS2812FXDevice::getDimmedPixelColor(uint32_t color, uint8_t brightness) {
+uint32_t CombinedGiAndLightMatrixWS2812FXDevice::getDimmedPixelColor(
+    uint32_t color, uint8_t brightness) {
   uint8_t w = (color >> 24) & 0xFF;
   uint8_t r = (color >> 16) & 0xFF;
   uint8_t g = (color >> 8) & 0xFF;

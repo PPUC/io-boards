@@ -11,8 +11,10 @@ void WS2812FXDevice::off() {
 }
 
 void WS2812FXDevice::reset() {
-  ws2812FX->setSegment(firstSegment, firstLED, lastLED, FX_MODE_STATIC,
-                       RGBW_BLACK, 1, NO_OPTIONS);
+  for (int i = firstLED; i <= lastLED; i++) {
+    ws2812FX->setPixelColor(i, RGBW_BLACK);
+  }
+  ws2812FX->show();
 }
 
 WS2812FX* WS2812FXDevice::getWS2812FX() { return ws2812FX; }
@@ -23,12 +25,6 @@ int WS2812FXDevice::getlastLED() { return lastLED; }
 
 int WS2812FXDevice::getNumLEDs() { return lastLED - firstLED + 1; }
 
-int WS2812FXDevice::getFirstSegment() { return firstSegment; }
-
-int WS2812FXDevice::getLastSegment() { return lastSegment; }
-
-int WS2812FXDevice::getNumSegments() { return lastSegment - firstSegment + 1; }
-
 bool WS2812FXDevice::isStopped() { return stopped; }
 
 void WS2812FXDevice::setBrightness(byte b) {
@@ -37,3 +33,10 @@ void WS2812FXDevice::setBrightness(byte b) {
 }
 
 byte WS2812FXDevice::getBrightness() { return brightness; }
+
+void WS2812FXDevice::show() {
+  if (needsShow) {
+    needsShow = false;
+    ws2812FX->show();
+  }
+}

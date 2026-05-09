@@ -119,10 +119,9 @@ class CombinedGiAndLightMatrixWS2812FXDevice : public WS2812FXDevice,
                                                public EventListener {
  public:
   CombinedGiAndLightMatrixWS2812FXDevice(WS2812FX* ws2812FX, int firstLED,
-                                         int lastLED, int firstSegment,
-                                         int lastSegment,
+                                         int lastLED,
                                          EventDispatcher* eventDispatcher)
-      : WS2812FXDevice(ws2812FX, firstLED, lastLED, firstSegment, lastSegment) {
+      : WS2812FXDevice(ws2812FX, firstLED, lastLED) {
     this->eventDispatcher = eventDispatcher;
     wavePWMHeatUp = new WavePWM();
     wavePWMAfterGlow = new WavePWM();
@@ -234,8 +233,8 @@ class CombinedGiAndLightMatrixWS2812FXDevice : public WS2812FXDevice,
   void intializeNewLEDState(LED* led, bool on);
   void updateOrAppendLed(std::vector<LED>& leds, uint8_t number, uint16_t led,
                          uint32_t color) {
-    auto existing = std::find_if(
-        leds.begin(), leds.end(), [number, led](const LED& entry) {
+    auto existing =
+        std::find_if(leds.begin(), leds.end(), [number, led](const LED& entry) {
           return entry.number == number && entry.position == led;
         });
     if (existing != leds.end()) {
