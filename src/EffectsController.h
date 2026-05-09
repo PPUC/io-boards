@@ -167,7 +167,6 @@ class EffectsController : public EventListener {
   RgbStripDevice* _rgbStripeDevice = nullptr;
   WS2812FXDevice* ws2812FXDevices[PPUC_MAX_WS2812FX_DEVICES];
   bool ws2812FXstates[PPUC_MAX_WS2812FX_DEVICES] = {0};
-  bool ws2812FXrunning[PPUC_MAX_WS2812FX_DEVICES] = {0};
   byte ws2812FXbrightness[PPUC_MAX_WS2812FX_DEVICES] = {0};
   WS2812FXDevice* ws2812FXDeviceByPort[PPUC_MAX_EFFECT_PORTS] = {nullptr};
   WavePWMDevice* pwmEffectDeviceByPort[PPUC_MAX_EFFECT_PORTS] = {nullptr};

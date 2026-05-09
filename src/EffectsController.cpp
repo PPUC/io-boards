@@ -72,13 +72,13 @@ int EffectsController::findEffectContainer(
 }
 
 int EffectsController::findRunningEffectOnDevice(
-    const EffectDevice* device) const {
+    const EffectDevice *device) const {
   if (!device) {
     return -1;
   }
 
   for (int i = 0; i <= stackCounter; i++) {
-    const EffectContainer* container = stackEffectContainers[i];
+    const EffectContainer *container = stackEffectContainers[i];
     if (!container) {
       continue;
     }
@@ -92,14 +92,14 @@ int EffectsController::findRunningEffectOnDevice(
 }
 
 int EffectsController::findBestSuspendedEffectForDevice(
-    const EffectDevice* device) const {
+    const EffectDevice *device) const {
   if (!device) {
     return -1;
   }
 
   int bestIndex = -1;
   for (int i = 0; i <= stackCounter; i++) {
-    const EffectContainer* container = stackEffectContainers[i];
+    const EffectContainer *container = stackEffectContainers[i];
     if (!container || container->device != device || !container->suspended) {
       continue;
     }
@@ -114,7 +114,7 @@ int EffectsController::findBestSuspendedEffectForDevice(
 
 void EffectsController::resumeSuspendedEffects() {
   for (int i = 0; i <= stackCounter; i++) {
-    EffectContainer* container = stackEffectContainers[i];
+    EffectContainer *container = stackEffectContainers[i];
     if (!container || !container->device) {
       continue;
     }
@@ -170,7 +170,6 @@ void EffectsController::clearConfiguredEffects() {
       ws2812FXDevices[i]->off();
     }
     ws2812FXstates[i] = false;
-    ws2812FXrunning[i] = false;
     ws2812FXbrightness[i] = 0;
   }
   memset(ws2812FXDeviceByPort, 0, sizeof(ws2812FXDeviceByPort));
@@ -283,11 +282,10 @@ void EffectsController::handleEvent(ConfigEvent *event) {
           case CONFIG_TOPIC_LIGHT_UP:
             config_values[4] = event->value;
             if (!ws2812FXDevices[0]) {
-              ws2812FXDevices[0] =
-                  new CombinedGiAndLightMatrixWS2812FXDevice(
-                      new WS2812FX(config_values[1], config_values[0],
-                                   config_neoPixelType),
-                      0, config_values[1] - 1, 0, 0, _eventDispatcher);
+              ws2812FXDevices[0] = new CombinedGiAndLightMatrixWS2812FXDevice(
+                  new WS2812FX(config_values[1], config_values[0],
+                               config_neoPixelType),
+                  0, config_values[1] - 1, 0, 0, _eventDispatcher);
               ws2812FXDevices[0]->getWS2812FX()->init();
 
               // Brightness might be overwritten later.
@@ -299,13 +297,11 @@ void EffectsController::handleEvent(ConfigEvent *event) {
               // memory until the first real GI/lamp/effect update arrives.
               ws2812FXDevices[0]->getWS2812FX()->show();
               if (config_values[4] > 0) {
-                ((CombinedGiAndLightMatrixWS2812FXDevice *)
-                     ws2812FXDevices[0])
+                ((CombinedGiAndLightMatrixWS2812FXDevice *)ws2812FXDevices[0])
                     ->setHeatUp(config_values[4]);
               }
               if (config_values[2] > 0) {
-                ((CombinedGiAndLightMatrixWS2812FXDevice *)
-                     ws2812FXDevices[0])
+                ((CombinedGiAndLightMatrixWS2812FXDevice *)ws2812FXDevices[0])
                     ->setAfterGlow(config_values[2]);
               }
               ws2812FXstates[0] = true;
@@ -341,7 +337,7 @@ void EffectsController::handleEvent(ConfigEvent *event) {
               // show random static colors before any trigger fires.
               ws2812FXDevices[0]->getWS2812FX()->setSegment(
                   config_values[1], config_values[2], config_values[3],
-                  FX_MODE_STATIC, RGBW_PUREWHITE, 1, NO_OPTIONS);
+                  FX_MODE_STATIC, RGBW_BLACK, 1, NO_OPTIONS);
               ws2812FXDevices[0]->getWS2812FX()->resetSegmentRuntime(
                   config_values[1]);
               break;
@@ -423,46 +419,44 @@ void EffectsController::handleEvent(ConfigEvent *event) {
             config_values[4] = event->value;
             switch (config_values[1]) {
               case CONFIG_TOPIC_LED_EFFECT: {
-                WS2812FXDevice* triggerDevice =
+                WS2812FXDevice *triggerDevice =
                     config_values[0] < PPUC_MAX_EFFECT_PORTS
                         ? ws2812FXDeviceByPort[config_values[0]]
                         : nullptr;
                 if (ws1812Effect && triggerDevice) {
-                  addEffect(
-                      ws1812Effect, triggerDevice,
-                      new Event(config_values[2],
-                                static_cast<uint16_t>(config_values[3]),
-                                config_values[4]),
-                      config_values[7],  // priority
-                      config_values[8] == 255
-                          ? -1
-                          : (config_values[8] == 254
-                                 ? -2
-                                 : static_cast<int>(config_values[8])),
-                      config_values[6]                             // mode
+                  addEffect(ws1812Effect, triggerDevice,
+                            new Event(config_values[2],
+                                      static_cast<uint16_t>(config_values[3]),
+                                      config_values[4]),
+                            config_values[7],  // priority
+                            config_values[8] == 255
+                                ? -1
+                                : (config_values[8] == 254
+                                       ? -2
+                                       : static_cast<int>(config_values[8])),
+                            config_values[6]  // mode
                   );
                 }
                 break;
               }
 
               case CONFIG_TOPIC_PWM_EFFECT: {
-                WavePWMDevice* triggerDevice =
+                WavePWMDevice *triggerDevice =
                     config_values[0] < PPUC_MAX_EFFECT_PORTS
                         ? pwmEffectDeviceByPort[config_values[0]]
                         : nullptr;
                 if (pwmEffect && triggerDevice) {
-                  addEffect(
-                      pwmEffect, triggerDevice,
-                      new Event(config_values[2],
-                                static_cast<uint16_t>(config_values[3]),
-                                config_values[4]),
-                      config_values[7],  // priority
-                      config_values[8] == 255
-                          ? -1
-                          : (config_values[8] == 254
-                                 ? -2
-                                 : static_cast<int>(config_values[8])),
-                      config_values[6]                             // mode
+                  addEffect(pwmEffect, triggerDevice,
+                            new Event(config_values[2],
+                                      static_cast<uint16_t>(config_values[3]),
+                                      config_values[4]),
+                            config_values[7],  // priority
+                            config_values[8] == 255
+                                ? -1
+                                : (config_values[8] == 254
+                                       ? -2
+                                       : static_cast<int>(config_values[8])),
+                            config_values[6]  // mode
                   );
                 }
                 break;
@@ -495,20 +489,17 @@ void EffectsController::handleEvent(ConfigEvent *event) {
               config_payload = event->value;
               switch (config_values[1]) {
                 case LED_TYPE_GI:
-                  ((CombinedGiAndLightMatrixWS2812FXDevice *)
-                       ws2812FXDevices[0])
+                  ((CombinedGiAndLightMatrixWS2812FXDevice *)ws2812FXDevices[0])
                       ->assignLedToGiString(config_values[2], config_values[3],
                                             config_payload);
                   break;
                 case LED_TYPE_LAMP:
-                  ((CombinedGiAndLightMatrixWS2812FXDevice *)
-                       ws2812FXDevices[0])
+                  ((CombinedGiAndLightMatrixWS2812FXDevice *)ws2812FXDevices[0])
                       ->assignLedToLightMatrix(
                           config_values[2], config_values[3], config_payload);
                   break;
                 case LED_TYPE_FLASHER:
-                  ((CombinedGiAndLightMatrixWS2812FXDevice *)
-                       ws2812FXDevices[0])
+                  ((CombinedGiAndLightMatrixWS2812FXDevice *)ws2812FXDevices[0])
                       ->assignLedToFlasher(config_values[2], config_values[3],
                                            config_payload);
                   break;
@@ -624,35 +615,21 @@ void EffectsController::update() {
 
     for (int i = 0; i < PPUC_MAX_WS2812FX_DEVICES; i++) {
       if (ws2812FXstates[i]) {
-        if (ws2812FXrunning[i]) {
-          ws2812FXDevices[i]->getWS2812FX()->service();
-          if (ws2812FXDevices[i]->isStopped()) {
-            ws2812FXDevices[i]->getWS2812FX()->stop();
-            ws2812FXrunning[i] = false;
-          }
-        } else  {
-          if (!ws2812FXDevices[i]->isStopped()) {
-            ws2812FXDevices[i]->getWS2812FX()->start();
-            ws2812FXrunning[i] = true;
-            ws2812FXDevices[i]->getWS2812FX()->service();
+        if (millis() - ws2812AfterGlowUpdateInterval >
+            UPDATE_INTERVAL_WS2812FX_AFTERGLOW) {
+          // Updating the LEDs too fast leads to undefined behavior. Just update
+          // every 3ms.
+          ws2812AfterGlowUpdateInterval = millis();
+          for (int i = 0; i < PPUC_MAX_WS2812FX_DEVICES; i++) {
+            if (ws2812FXstates[i] &&
+                ws2812FXDevices[i]->hasAfterGlowSupport()) {
+              // No other effect is running, handle after glow effect.
+              ((CombinedGiAndLightMatrixWS2812FXDevice *)ws2812FXDevices[i])
+                  ->updateAfterGlow();
+            }
           }
         }
-      }
-    }
-  }
-
-  if (millis() - ws2812AfterGlowUpdateInterval >
-      UPDATE_INTERVAL_WS2812FX_AFTERGLOW) {
-    // Updating the LEDs too fast leads to undefined behavior. Just update
-    // every 3ms.
-    ws2812AfterGlowUpdateInterval = millis();
-    for (int i = 0; i < PPUC_MAX_WS2812FX_DEVICES; i++) {
-      if (ws2812FXstates[i] && ws2812FXDevices[i]->hasAfterGlowSupport() &&
-          !ws2812FXrunning[i]) {
-        // No other effect is running, handle after glow effect.
-        ((CombinedGiAndLightMatrixWS2812FXDevice *)ws2812FXDevices[i])
-            ->updateAfterGlow();
-        ws2812FXDevices[i]->getWS2812FX()->show();
+        ws2812FXDevices[i]->getWS2812FX()->service();
       }
     }
   }
