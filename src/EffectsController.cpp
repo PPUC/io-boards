@@ -208,6 +208,11 @@ void EffectsController::handleEvent(Event *event) {
       break;
 
     case EVENT_RUN:
+      for (int i = 0; i < PPUC_MAX_WS2812FX_DEVICES; i++) {
+        if (ws2812FXstates[i]) {
+          ws2812FXDevices[i]->getWS2812FX()->show();
+        }
+      }
       [[fallthrough]];
 
     default:
@@ -615,21 +620,15 @@ void EffectsController::update() {
 
     for (int i = 0; i < PPUC_MAX_WS2812FX_DEVICES; i++) {
       if (ws2812FXstates[i]) {
-        if (millis() - ws2812AfterGlowUpdateInterval >
-            UPDATE_INTERVAL_WS2812FX_AFTERGLOW) {
-          // Updating the LEDs too fast leads to undefined behavior. Just update
-          // every 3ms.
-          ws2812AfterGlowUpdateInterval = millis();
-          for (int i = 0; i < PPUC_MAX_WS2812FX_DEVICES; i++) {
-            if (ws2812FXstates[i] &&
-                ws2812FXDevices[i]->hasAfterGlowSupport()) {
-              // No other effect is running, handle after glow effect.
-              ((CombinedGiAndLightMatrixWS2812FXDevice *)ws2812FXDevices[i])
-                  ->updateAfterGlow();
-            }
-          }
+        bool needsShow = false;
+        if (ws2812FXDevices[i]->hasAfterGlowSupport()) {
+          ((CombinedGiAndLightMatrixWS2812FXDevice *)ws2812FXDevices[i])
+              ->updateAfterGlow();
+          needsShow = true;
         }
-        ws2812FXDevices[i]->getWS2812FX()->service();
+        if (needsShow && !(ws2812FXDevices[i]->getWS2812FX()->service())) {
+          ws2812FXDevices[i]->getWS2812FX()->show();
+        }
       }
     }
   }

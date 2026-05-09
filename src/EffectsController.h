@@ -41,7 +41,6 @@
 #define WS2812FX_BRIGHTNESS 64
 
 #define UPDATE_INTERVAL_WS2812FX_EFFECTS 3
-#define UPDATE_INTERVAL_WS2812FX_AFTERGLOW 3
 #define UPDATE_INTERVAL_WS2812FX_BRIGHTNESS 10
 
 #define PPUC_MAX_WS2812FX_DEVICES 1
@@ -188,7 +187,6 @@ class EffectsController : public EventListener {
   WavePWMEffect* pwmEffect;
 
   unsigned long ws2812UpdateInterval = 0;
-  unsigned long ws2812AfterGlowUpdateInterval = 0;
   unsigned long brightnessUpdateInterval = 0;
 
   static EffectsController* effectsControllerInstance;
