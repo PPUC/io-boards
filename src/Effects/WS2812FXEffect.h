@@ -65,9 +65,13 @@ class WS2812FXEffect : public Effect {
 
   virtual void stop();
 
+  virtual void terminate() override;
+
   virtual void update();
 
  protected:
+  void blackoutSegment();
+
   WS2812FX* ws2812FX;
   uint8_t segment = 0;
   uint8_t mode;

@@ -17,12 +17,13 @@ void WS2812FXEffect::start(int r) {
 }
 
 void WS2812FXEffect::stop() {
+  blackoutSegment();
   Effect::stop();
-  ws2812FX->getSegment(segment)->mode = FX_MODE_STATIC;
-  ws2812FX->getSegment(segment)->colors[0] = RGBW_BLACK;
-  ws2812FX->getSegment(segment)->speed = 1;
-  ws2812FX->getSegment(segment)->options = NO_OPTIONS;
-  ws2812FX->resetSegmentRuntime(segment);
+}
+
+void WS2812FXEffect::terminate() {
+  blackoutSegment();
+  Effect::terminate();
 }
 
 void WS2812FXEffect::update() {
@@ -31,4 +32,12 @@ void WS2812FXEffect::update() {
   if (duration && duration < ms) {
     stop();
   }
+}
+
+void WS2812FXEffect::blackoutSegment() {
+  ws2812FX->getSegment(segment)->mode = FX_MODE_STATIC;
+  ws2812FX->getSegment(segment)->colors[0] = RGBW_BLACK;
+  ws2812FX->getSegment(segment)->speed = 1;
+  ws2812FX->getSegment(segment)->options = NO_OPTIONS;
+  ws2812FX->resetSegmentRuntime(segment);
 }
