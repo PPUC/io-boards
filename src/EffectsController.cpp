@@ -38,6 +38,12 @@ EffectsController::createCombinedGiAndLightMatrixWs2812FXDevice(int port) {
           ws2812FXDevice->getlastLED(), _eventDispatcher);
 
   giAndLightMatrix->off();
+  // WS2812FX creates an implicit active segment 0 over the full strip with the
+  // default red color. The combined GI/matrix device drives pixels directly,
+  // so that default segment must be cleared before any effect segments are
+  // configured. Otherwise a later effect service call will repaint the whole
+  // strip red.
+  giAndLightMatrix->getWS2812FX()->resetSegments();
 
   ws2812FXDevices[port] = giAndLightMatrix;
   delete ws2812FXDevice;
@@ -292,6 +298,7 @@ void EffectsController::handleEvent(ConfigEvent *event) {
                                config_neoPixelType),
                   0, config_values[1] - 1, _eventDispatcher);
               ws2812FXDevices[0]->getWS2812FX()->init();
+              ws2812FXDevices[0]->getWS2812FX()->resetSegments();
 
               // Brightness might be overwritten later.
               ws2812FXDevices[0]->setBrightness(config_values[3]);
