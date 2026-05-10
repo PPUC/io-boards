@@ -54,7 +54,6 @@ class EventDispatcher {
   void removeListener(EventListener* eventListener);
   bool getSwitchState(uint16_t number) const;
   void refreshDedicatedSwitchState(uint16_t number, bool state);
-  void clearDedicatedSwitchReportHistory();
 
   void dispatch(Event* event);
 

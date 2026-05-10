@@ -572,12 +572,6 @@ void EventDispatcher::refreshDedicatedSwitchState(uint16_t number,
   ppuc::v2::SetBitmapBit(localOwnedSwitchMask, index, true);
 }
 
-void EventDispatcher::clearDedicatedSwitchReportHistory() {
-  memset(localSwitchReportHistory, 0, sizeof(localSwitchReportHistory));
-  localSwitchReportHead = 0;
-  localSwitchReportTail = 0;
-}
-
 int16_t EventDispatcher::findMappedIndex(const uint16_t* table, uint16_t count,
                                          uint16_t number) const {
   for (uint16_t i = 0; i < count; ++i) {

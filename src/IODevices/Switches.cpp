@@ -70,6 +70,136 @@ void Switches::resetConfig() {
   memset(localFastSwitch, 0, sizeof(localFastSwitch));
 }
 
+bool Switches::startReader() {
+  if (!active || running) {
+    return running;
+  }
+
+  instance = this;
+  running = true;
+
+  uint offset;
+  pio_sm_config c;
+  if (!programLoaded) {
+    switch (numSwitches) {
+      case 4:
+        extern const pio_program_t active_low_4_switches_pio_program;
+        offset = pio_add_program(pio, &active_low_4_switches_pio_program);
+        c = active_low_4_switches_pio_program_get_default_config(offset);
+        break;
+
+      case 8:
+        extern const pio_program_t active_low_8_switches_pio_program;
+        offset = pio_add_program(pio, &active_low_8_switches_pio_program);
+        c = active_low_8_switches_pio_program_get_default_config(offset);
+        break;
+
+      case MAX_SWITCHES:
+      default:
+        extern const pio_program_t active_low_16_switches_pio_program;
+        offset = pio_add_program(pio, &active_low_16_switches_pio_program);
+        c = active_low_16_switches_pio_program_get_default_config(offset);
+        break;
+    }
+    programLoaded = true;
+    programOffset = offset;
+    loadedNumSwitches = numSwitches;
+  } else {
+    offset = programOffset;
+    switch (loadedNumSwitches) {
+      case 4: {
+        extern const pio_program_t active_low_4_switches_pio_program;
+        c = active_low_4_switches_pio_program_get_default_config(offset);
+        break;
+      }
+
+      case 8: {
+        extern const pio_program_t active_low_8_switches_pio_program;
+        c = active_low_8_switches_pio_program_get_default_config(offset);
+        break;
+      }
+
+      case MAX_SWITCHES:
+      default: {
+        extern const pio_program_t active_low_16_switches_pio_program;
+        c = active_low_16_switches_pio_program_get_default_config(offset);
+        break;
+      }
+    }
+  }
+
+  sm_config_set_in_pins(&c, SWITCHES_BASE_PIN);
+  if (MAX_SWITCHES == numSwitches) {
+    // Using GPIO 15-18 as switch inputs on IO_16_8_1 board requires
+    // resetting the sateful input after reading.
+    // Set begins at GPIO 15 for 4 pins.
+    sm_config_set_set_pins(&c, 15, 4);
+    // Side-set begins at GPIO 15.
+    sm_config_set_sideset_pins(&c, 15);
+  }
+  // Connect GPIOs to this PIO block
+  for (uint i = 0; i < numSwitches; i++) {
+    pio_gpio_init(pio, SWITCHES_BASE_PIN + i);
+  }
+  // Set the pin direction at the PIO
+  pio_sm_set_consecutive_pindirs(pio, sm, SWITCHES_BASE_PIN, numSwitches,
+                                 false);
+  sm_config_set_in_shift(&c, false, false, 0);
+  pio_sm_init(pio, sm, offset, &c);
+  irq_set_exclusive_handler(PIO0_IRQ_1, onSwitchChanges);
+  irq_set_enabled(PIO0_IRQ_1, true);
+  pio_set_irq1_source_enabled(pio, pis_interrupt1, true);
+  pio_sm_set_enabled(pio, sm, true);
+
+  return true;
+}
+
+bool Switches::refreshDedicatedSwitchStates() {
+  const uint32_t irqState = save_and_disable_interrupts();
+
+  bool sawChange = false;
+  uint16_t sampledStable = currentStable;
+
+  for (int i = 0; i <= last; i++) {
+    if (number[i] == 0) {
+      continue;
+    }
+
+    const uint32_t mask = 1u << (port[i] - SWITCHES_BASE_PIN);
+    const bool switchState = digitalRead(port[i]) == LOW;
+    const bool oldState = (currentStable & mask) != 0;
+    if (oldState == switchState) {
+      continue;
+    }
+
+    if (!sawChange) {
+      stopReader();
+      sawChange = true;
+    }
+
+    if (switchState) {
+      sampledStable |= mask;
+    } else {
+      sampledStable &= ~mask;
+    }
+    _eventDispatcher->refreshDedicatedSwitchState(number[i], switchState);
+    _eventDispatcher->dispatch(
+        new Event(EVENT_SOURCE_SWITCH, word(0, number[i]), switchState ? 1 : 0,
+                  localFastSwitch[number[i]]));
+  }
+
+  if (sawChange) {
+    currentStable = sampledStable;
+    latestRaw = sampledStable;
+    pioBaseline = sampledStable;
+    startReader();
+  } else {
+    restore_interrupts(irqState);
+  }
+
+  return sawChange;
+}
+
 void Switches::registerSwitch(byte p, byte n, uint8_t debounceTimeMs) {
   const int pinIndex = static_cast<int>(p) - SWITCHES_BASE_PIN;
   if (pinIndex < 0 || pinIndex >= numSwitches) {
@@ -100,9 +230,7 @@ void Switches::setDebounceMode(byte n, uint8_t mode) {
   }
 }
 
-void Switches::markLocalFastSwitch(byte n) {
-  localFastSwitch[n] = true;
-}
+void Switches::markLocalFastSwitch(byte n) { localFastSwitch[n] = true; }
 
 uint32_t Switches::debounceWindowUs(uint8_t index) const {
   uint32_t windowUs = static_cast<uint32_t>(debounceSetting[index]) * 1000u;
@@ -172,8 +300,7 @@ void Switches::flushPendingDebounce(uint32_t nowUs) {
       continue;
     }
 
-    const uint32_t debounceUs =
-        debounceWindowUs(static_cast<uint8_t>(i));
+    const uint32_t debounceUs = debounceWindowUs(static_cast<uint8_t>(i));
     const uint32_t lastAcceptedUs = debounceTimeUs[i][switchState ? 1 : 0];
     const uint32_t sinceUs = pendingDebounceSinceUs[i];
     const bool stableLongEnough =
@@ -213,9 +340,8 @@ void Switches::handleSwitchChanges(uint32_t raw) {
         const uint32_t lastAcceptedUs = debounceTimeUs[i][switchState ? 1 : 0];
         switch (debounceMode[i]) {
           case SWITCH_DEBOUNCE_FAST_FLIP:
-            if (switchState &&
-                (lastAcceptedUs == 0 ||
-                 (nowUs - lastAcceptedUs) >= debounceUs)) {
+            if (switchState && (lastAcceptedUs == 0 ||
+                                (nowUs - lastAcceptedUs) >= debounceUs)) {
               // Flipper button close must be as fast as possible. Opening is
               // still debounced below so contact bounce right after a press
               // cannot drop the flipper again.
@@ -230,8 +356,7 @@ void Switches::handleSwitchChanges(uint32_t raw) {
           case SWITCH_DEBOUNCE_SLOW_STABLE:
           case SWITCH_DEBOUNCE_STANDARD:
           default:
-            deferSwitchState(static_cast<uint8_t>(i), mask, switchState,
-                             nowUs);
+            deferSwitchState(static_cast<uint8_t>(i), mask, switchState, nowUs);
             break;
         }
       }
@@ -269,10 +394,9 @@ void Switches::handleEvent(Event* event) {
                                                 SWITCH_EVENT_QUEUE_SIZE);
         restore_interrupts(irqState);
 
-        _eventDispatcher->dispatch(new Event(EVENT_SOURCE_SWITCH,
-                                             word(0, pending.number),
-                                             pending.state,
-                                             localFastSwitch[pending.number]));
+        _eventDispatcher->dispatch(
+            new Event(EVENT_SOURCE_SWITCH, word(0, pending.number),
+                      pending.state, localFastSwitch[pending.number]));
       }
       break;
     }
@@ -292,71 +416,13 @@ void Switches::handleEvent(Event* event) {
           }
         }
 
-        if (!running) {
-          instance = this;
-          running = true;
-
-          uint offset;
-          pio_sm_config c;
-
-          switch (numSwitches) {
-            case 4:
-              extern const pio_program_t active_low_4_switches_pio_program;
-              offset = pio_add_program(pio, &active_low_4_switches_pio_program);
-              c = active_low_4_switches_pio_program_get_default_config(offset);
-              break;
-
-            case 8:
-              extern const pio_program_t active_low_8_switches_pio_program;
-              offset = pio_add_program(pio, &active_low_8_switches_pio_program);
-              c = active_low_8_switches_pio_program_get_default_config(offset);
-              break;
-
-            case MAX_SWITCHES:
-            default:
-              extern const pio_program_t active_low_16_switches_pio_program;
-              offset =
-                  pio_add_program(pio, &active_low_16_switches_pio_program);
-              c = active_low_16_switches_pio_program_get_default_config(offset);
-              break;
-          }
-          programLoaded = true;
-          programOffset = offset;
-          loadedNumSwitches = numSwitches;
-
-          sm_config_set_in_pins(&c, SWITCHES_BASE_PIN);
-          if (MAX_SWITCHES == numSwitches) {
-            // Using GPIO 15-18 as switch inputs on IO_16_8_1 board requires
-            // resetting the sateful input after reading.
-            // Set begins at GPIO 15 for 4 pins.
-            sm_config_set_set_pins(&c, 15, 4);
-            // Side-set begins at GPIO 15.
-            sm_config_set_sideset_pins(&c, 15);
-          }
-          // Connect GPIOs to this PIO block
-          for (uint i = 0; i < numSwitches; i++) {
-            pio_gpio_init(pio, SWITCHES_BASE_PIN + i);
-          }
-          // Set the pin direction at the PIO
-          pio_sm_set_consecutive_pindirs(pio, sm, SWITCHES_BASE_PIN,
-                                         numSwitches, false);
-          sm_config_set_in_shift(&c, false, false, 0);
-          pio_sm_init(pio, sm, offset, &c);
-          irq_set_exclusive_handler(PIO0_IRQ_1, onSwitchChanges);
-          irq_set_enabled(PIO0_IRQ_1, true);
-          pio_set_irq1_source_enabled(pio, pis_interrupt1, true);
-          pio_sm_set_enabled(pio, sm, true);
-        }
+        startReader();
       }
       break;
 
     case EVENT_REFRESH_SWITCHES:
       if (active) {
-        for (int i = 0; i <= last; i++) {
-          const bool switchState = digitalRead(port[i]) == LOW;
-          _eventDispatcher->refreshDedicatedSwitchState(number[i], switchState);
-        }
-        _eventDispatcher->clearDedicatedSwitchReportHistory();
+        refreshDedicatedSwitchStates();
       }
       break;
   }

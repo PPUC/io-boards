@@ -68,6 +68,8 @@ class Switches : public EventListener {
 
  private:
   void stopReader();
+  bool startReader();
+  bool refreshDedicatedSwitchStates();
   void acceptSwitchState(uint8_t index, uint32_t mask, bool switchState,
                          uint32_t nowUs);
   void deferSwitchState(uint8_t index, uint32_t mask, bool switchState,
