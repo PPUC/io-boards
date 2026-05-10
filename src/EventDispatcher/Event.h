@@ -27,6 +27,8 @@
 #define EVENT_POLL_EVENTS 80   // "P" Poll events command, mainly read switches
 #define EVENT_READ_SWITCHES \
   82  // "R" Read current state of all switches on i/o boards
+#define EVENT_REFRESH_SWITCHES \
+  94  // refresh direct dedicated switch inputs for a resend
 #define EVENT_SOURCE_SOLENOID 83  // "S" VPX/DOF/PUP includes flashers
 #define EVENT_SOURCE_SWITCH 87    // "W" VPX/DOF/PUP
 #define EVENT_PING 88             // "X"

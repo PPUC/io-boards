@@ -558,6 +558,26 @@ void EventDispatcher::sendConfigAckFrame(uint8_t boardId, uint8_t topic,
   delayMicroseconds(RS485_MODE_SWITCH_DELAY);
 }
 
+void EventDispatcher::refreshDedicatedSwitchState(uint16_t number,
+                                                  bool state) {
+  const int16_t mappedIndex =
+      findMappedIndex(switchIndexToNumber, runtimeConfig.switchBits, number);
+  if (mappedIndex < 0) {
+    return;
+  }
+
+  const uint16_t index = static_cast<uint16_t>(mappedIndex);
+  ppuc::v2::SetBitmapBit(switchStates, index, state);
+  ppuc::v2::SetBitmapBit(localReportSwitchStates, index, state);
+  ppuc::v2::SetBitmapBit(localOwnedSwitchMask, index, true);
+}
+
+void EventDispatcher::clearDedicatedSwitchReportHistory() {
+  memset(localSwitchReportHistory, 0, sizeof(localSwitchReportHistory));
+  localSwitchReportHead = 0;
+  localSwitchReportTail = 0;
+}
+
 int16_t EventDispatcher::findMappedIndex(const uint16_t* table, uint16_t count,
                                          uint16_t number) const {
   for (uint16_t i = 0; i < count; ++i) {
@@ -681,6 +701,10 @@ void EventDispatcher::forwardSwitchTokenIfSelected(uint8_t selectedBoard) {
   // Forward the token before running the heavier output/switch fanout logic on
   // core 0. Config ACKs are already fast; runtime replies need the same low
   // latency so switch polling does not depend on lamp/effect processing time.
+  if (shouldForceSwitchState) {
+    dispatch(new Event(EVENT_REFRESH_SWITCHES, 1, 1, true));
+  }
+
   if (haveQueuedLocalSnapshots || shouldForceSwitchState) {
     sendSwitchStateFrame(nextSwitchBoard);
   } else {

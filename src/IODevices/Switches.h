@@ -33,6 +33,7 @@ class Switches : public EventListener {
     _eventDispatcher = eD;
     _eventDispatcher->addListener(this, EVENT_POLL_EVENTS);
     _eventDispatcher->addListener(this, EVENT_READ_SWITCHES);
+    _eventDispatcher->addListener(this, EVENT_REFRESH_SWITCHES);
   }
 
   void setNumSwitches(uint8_t n) {

@@ -349,5 +349,15 @@ void Switches::handleEvent(Event* event) {
         }
       }
       break;
+
+    case EVENT_REFRESH_SWITCHES:
+      if (active) {
+        for (int i = 0; i <= last; i++) {
+          const bool switchState = digitalRead(port[i]) == LOW;
+          _eventDispatcher->refreshDedicatedSwitchState(number[i], switchState);
+        }
+        _eventDispatcher->clearDedicatedSwitchReportHistory();
+      }
+      break;
   }
 }
