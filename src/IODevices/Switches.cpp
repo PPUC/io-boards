@@ -155,8 +155,6 @@ bool Switches::startReader() {
 }
 
 bool Switches::refreshDedicatedSwitchStates() {
-  const uint32_t irqState = save_and_disable_interrupts();
-
   bool sawChange = false;
   uint16_t sampledStable = currentStable;
 
@@ -193,8 +191,6 @@ bool Switches::refreshDedicatedSwitchStates() {
     latestRaw = sampledStable;
     pioBaseline = sampledStable;
     startReader();
-  } else {
-    restore_interrupts(irqState);
   }
 
   return sawChange;
@@ -291,11 +287,8 @@ void Switches::flushPendingDebounce(uint32_t nowUs) {
     }
 
     const bool switchState = (pendingDebounceState & mask) != 0;
-    if (((latestRaw & mask) != 0) != switchState) {
-      pendingDebounceMask &= ~mask;
-      continue;
-    }
-    if (((currentStable & mask) != 0) == switchState) {
+    if (((latestRaw & mask) != 0) != switchState ||
+        ((currentStable & mask) != 0) == switchState) {
       pendingDebounceMask &= ~mask;
       continue;
     }
@@ -378,21 +371,39 @@ void Switches::handleSwitchChanges(uint32_t raw) {
 void Switches::handleEvent(Event* event) {
   switch (event->sourceId) {
     case EVENT_POLL_EVENTS: {
+      PendingSwitchEvent collectedEvents[SWITCH_EVENT_QUEUE_SIZE];
+      uint8_t collectedCount = 0;
+
+      // The IRQ handler may change values related to pending events while we're
+      // processing them, so we need to disable interrupts to guard the shared
+      // state. The relevant values are:
+      // pendingDebounceMask
+      // pendingDebounceState
+      // pendingDebounceSinceUs[]
+      // currentStable
+      // latestRaw
+      // pendingEventHead
+      // pendingEventTail
+      // pendingEvents[]
       const uint32_t irqState = save_and_disable_interrupts();
+
       flushPendingDebounce(micros());
-      restore_interrupts(irqState);
 
       while (pendingEventTail != pendingEventHead) {
-        const uint32_t irqState = save_and_disable_interrupts();
-        PendingSwitchEvent pending = pendingEvents[pendingEventTail];
+        collectedEvents[collectedCount++] = pendingEvents[pendingEventTail];
         pendingEventTail = static_cast<uint8_t>((pendingEventTail + 1) %
                                                 SWITCH_EVENT_QUEUE_SIZE);
-        restore_interrupts(irqState);
+      }
+      restore_interrupts(irqState);
 
+      // Now dispatch the collected events
+      for (uint8_t i = 0; i < collectedCount; ++i) {
+        const PendingSwitchEvent& pending = collectedEvents[i];
         _eventDispatcher->dispatch(
             new Event(EVENT_SOURCE_SWITCH, word(0, pending.number),
                       pending.state, localFastSwitch[pending.number]));
       }
+
       break;
     }
 
