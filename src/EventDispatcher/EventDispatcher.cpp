@@ -250,6 +250,7 @@ void EventDispatcher::clearSessionState() {
   lastHostFrameSequenceValid = false;
   sequenceGapDetected = false;
   parserResynced = false;
+  consecutiveSwitchNoChangeReplies = 0;
   transportErrorLatched = false;
   switchOverflow = false;
   applyingRemoteSwitchState = false;
@@ -290,6 +291,7 @@ void EventDispatcher::resetSessionState(
   lastHostFrameSequenceValid = false;
   sequenceGapDetected = false;
   parserResynced = false;
+  consecutiveSwitchNoChangeReplies = 0;
 
   for (uint16_t i = 0; i < runtimeConfig.coilBits; ++i) {
     coilIndexToNumber[i] = i;
@@ -672,14 +674,18 @@ void EventDispatcher::forwardSwitchTokenIfSelected(uint8_t selectedBoard) {
   }
   const bool haveQueuedLocalSnapshots =
       localSwitchReportHead != localSwitchReportTail;
+  const bool shouldForceSwitchState =
+      consecutiveSwitchNoChangeReplies >=
+      kMaxConsecutiveSwitchNoChangeReplies;
 
   // Forward the token before running the heavier output/switch fanout logic on
   // core 0. Config ACKs are already fast; runtime replies need the same low
   // latency so switch polling does not depend on lamp/effect processing time.
-  if (haveQueuedLocalSnapshots) {
+  if (haveQueuedLocalSnapshots || shouldForceSwitchState) {
     sendSwitchStateFrame(nextSwitchBoard);
   } else {
     sendSwitchNoChangeFrame(nextSwitchBoard);
+    ++consecutiveSwitchNoChangeReplies;
   }
 }
 
@@ -743,6 +749,7 @@ void EventDispatcher::sendSwitchStateFrame(byte nextBoard) {
     localSwitchReportTail = static_cast<uint8_t>(
         (localSwitchReportTail + 1) % SWITCH_REPORT_HISTORY_SIZE);
   }
+  consecutiveSwitchNoChangeReplies = 0;
   clearReportedStatusFlags();
   lastPoll = millis();
 }

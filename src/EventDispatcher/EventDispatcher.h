@@ -29,6 +29,8 @@
 #define SWITCH_REPORT_HISTORY_SIZE 32
 #endif
 
+static constexpr uint8_t kMaxConsecutiveSwitchNoChangeReplies = 10;
+
 class EventDispatcher {
  public:
   EventDispatcher();
@@ -111,6 +113,7 @@ class EventDispatcher {
   uint16_t lampIndexToNumber[ppuc::v2::kMaxLampBits];
   uint16_t switchIndexToNumber[ppuc::v2::kMaxSwitchBits];
   byte txSequence = 0;
+  uint8_t consecutiveSwitchNoChangeReplies = 0;
   ppuc::v2::RuntimeConfig runtimeConfig;
   bool debugEnabled = false;
   uint32_t debugLastPrintMs = 0;
