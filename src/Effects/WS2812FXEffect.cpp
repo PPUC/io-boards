@@ -17,7 +17,6 @@ void WS2812FXEffect::start(int r) {
 }
 
 void WS2812FXEffect::stop() {
-  blackoutSegment();
   Effect::stop();
 }
 
@@ -40,4 +39,5 @@ void WS2812FXEffect::blackoutSegment() {
   ws2812FX->getSegment(segment)->speed = 1;
   ws2812FX->getSegment(segment)->options = NO_OPTIONS;
   ws2812FX->resetSegmentRuntime(segment);
+  ws2812FX->service();
 }
