@@ -382,14 +382,9 @@ void Switches::handleEvent(Event* event) {
       flushPendingDebounce(micros());
       restore_interrupts(irqState);
 
-      while (true) {
-        PendingSwitchEvent pending;
+      while (pendingEventTail != pendingEventHead) {
         const uint32_t irqState = save_and_disable_interrupts();
-        if (pendingEventTail == pendingEventHead) {
-          restore_interrupts(irqState);
-          break;
-        }
-        pending = pendingEvents[pendingEventTail];
+        PendingSwitchEvent pending = pendingEvents[pendingEventTail];
         pendingEventTail = static_cast<uint8_t>((pendingEventTail + 1) %
                                                 SWITCH_EVENT_QUEUE_SIZE);
         restore_interrupts(irqState);
