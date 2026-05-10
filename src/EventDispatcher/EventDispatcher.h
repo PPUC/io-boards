@@ -12,10 +12,10 @@
 
 #include <queue>
 
+#include "../PPUCProtocolV2.h"
 #include "Event.h"
 #include "EventListener.h"
 #include "MultiCoreCrossLink.h"
-#include "../PPUCProtocolV2.h"
 
 #ifndef MAX_EVENT_LISTENERS
 #define MAX_EVENT_LISTENERS 32
@@ -29,7 +29,7 @@
 #define SWITCH_REPORT_HISTORY_SIZE 32
 #endif
 
-static constexpr uint8_t kMaxConsecutiveSwitchNoChangeReplies = 10;
+static constexpr uint8_t kMaxConsecutiveSwitchNoChangeReplies = 20;
 
 class EventDispatcher {
  public:
