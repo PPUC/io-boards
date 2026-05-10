@@ -588,18 +588,16 @@ void EventDispatcher::updateSwitchBitmap(Event *event) {
     ppuc::v2::SetBitmapBit(localOwnedSwitchMask, (uint16_t)mappedIndex, true);
 
     if (oldLocalState != newState) {
-      for (uint8_t repeat = 0; repeat < SWITCH_REPORT_REPEAT_COUNT; ++repeat) {
-        const uint8_t nextHead = static_cast<uint8_t>(
-            (localSwitchReportHead + 1) % SWITCH_REPORT_HISTORY_SIZE);
-        if (nextHead == localSwitchReportTail) {
-          switchOverflow = true;
-          localSwitchReportTail = static_cast<uint8_t>(
-              (localSwitchReportTail + 1) % SWITCH_REPORT_HISTORY_SIZE);
-        }
-        memcpy(localSwitchReportHistory[localSwitchReportHead],
-               localReportSwitchStates, sizeof(localReportSwitchStates));
-        localSwitchReportHead = nextHead;
+      const uint8_t nextHead = static_cast<uint8_t>(
+          (localSwitchReportHead + 1) % SWITCH_REPORT_HISTORY_SIZE);
+      if (nextHead == localSwitchReportTail) {
+        switchOverflow = true;
+        localSwitchReportTail = static_cast<uint8_t>(
+            (localSwitchReportTail + 1) % SWITCH_REPORT_HISTORY_SIZE);
       }
+      memcpy(localSwitchReportHistory[localSwitchReportHead],
+             localReportSwitchStates, sizeof(localReportSwitchStates));
+      localSwitchReportHead = nextHead;
     }
   }
 }

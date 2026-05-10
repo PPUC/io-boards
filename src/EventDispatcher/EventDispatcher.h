@@ -26,11 +26,7 @@
 #endif
 
 #ifndef SWITCH_REPORT_HISTORY_SIZE
-#define SWITCH_REPORT_HISTORY_SIZE 64
-#endif
-
-#ifndef SWITCH_REPORT_REPEAT_COUNT
-#define SWITCH_REPORT_REPEAT_COUNT 2
+#define SWITCH_REPORT_HISTORY_SIZE 32
 #endif
 
 class EventDispatcher {
