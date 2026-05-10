@@ -155,8 +155,9 @@ bool Switches::startReader() {
 }
 
 bool Switches::refreshDedicatedSwitchStates() {
+  uint16_t stableSnapshot = currentStable;
   bool sawChange = false;
-  uint16_t sampledStable = currentStable;
+  uint16_t sampledStable = stableSnapshot;
 
   for (int i = 0; i <= last; i++) {
     if (number[i] == 0) {
@@ -165,31 +166,32 @@ bool Switches::refreshDedicatedSwitchStates() {
 
     const uint32_t mask = 1u << (port[i] - SWITCHES_BASE_PIN);
     const bool switchState = digitalRead(port[i]) == LOW;
-    const bool oldState = (currentStable & mask) != 0;
-    if (oldState == switchState) {
-      continue;
-    }
-
-    if (!sawChange) {
-      stopReader();
-      sawChange = true;
-    }
-
     if (switchState) {
       sampledStable |= mask;
     } else {
       sampledStable &= ~mask;
     }
+
+    if (((stableSnapshot & mask) != 0) == switchState) {
+      continue;
+    }
+
+    sawChange = true;
     _eventDispatcher->refreshDedicatedSwitchState(number[i], switchState);
-    _eventDispatcher->dispatch(
-        new Event(EVENT_SOURCE_SWITCH, word(0, number[i]), switchState ? 1 : 0,
-                  localFastSwitch[number[i]]));
   }
 
   if (sawChange) {
+    const uint32_t irqState = save_and_disable_interrupts();
+    stopReader();
     currentStable = sampledStable;
     latestRaw = sampledStable;
     pioBaseline = sampledStable;
+    pendingDebounceMask = 0;
+    pendingDebounceState = 0;
+    memset(pendingDebounceSinceUs, 0, sizeof(pendingDebounceSinceUs));
+    pendingEventHead = 0;
+    pendingEventTail = 0;
+    restore_interrupts(irqState);
     startReader();
   }
 
@@ -210,6 +212,7 @@ void Switches::registerSwitch(byte p, byte n, uint8_t debounceTimeMs) {
   port[index] = p;
   number[index] = n;
   debounceSetting[index] = debounceTimeMs;
+  pinMode(p, INPUT);
   active = true;
 }
 
