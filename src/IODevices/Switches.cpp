@@ -68,6 +68,7 @@ void Switches::resetConfig() {
   pendingDebounceMask = 0;
   pendingDebounceState = 0;
   memset(localFastSwitch, 0, sizeof(localFastSwitch));
+  dedicatedSwitchStateChangedSinceCorrection = false;
 }
 
 bool Switches::startReader() {
@@ -191,11 +192,18 @@ bool Switches::refreshDedicatedSwitchStates() {
     memset(pendingDebounceSinceUs, 0, sizeof(pendingDebounceSinceUs));
     pendingEventHead = 0;
     pendingEventTail = 0;
+    dedicatedSwitchStateChangedSinceCorrection = false;
     restore_interrupts(irqState);
+    _eventDispatcher->resetSwitchNoChangeReplies();
     startReader();
+    return true;
   }
 
-  return sawChange;
+  if (dedicatedSwitchStateChangedSinceCorrection) {
+    dedicatedSwitchStateChangedSinceCorrection = false;
+  }
+  _eventDispatcher->resetSwitchNoChangeReplies();
+  return false;
 }
 
 void Switches::registerSwitch(byte p, byte n, uint8_t debounceTimeMs) {
@@ -258,6 +266,7 @@ void Switches::acceptSwitchState(uint8_t index, uint32_t mask, bool switchState,
     currentStable |= mask;
   else
     currentStable &= ~mask;
+  dedicatedSwitchStateChangedSinceCorrection = true;
   pendingDebounceMask &= ~mask;
   pendingDebounceSinceUs[index] = 0;
   enqueuePendingSwitchEvent(static_cast<uint8_t>(number[index]),

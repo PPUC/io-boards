@@ -110,6 +110,7 @@ class Switches : public EventListener {
   volatile uint8_t pendingEventHead = 0;
   volatile uint8_t pendingEventTail = 0;
   PendingSwitchEvent pendingEvents[SWITCH_EVENT_QUEUE_SIZE] = {};
+  volatile bool dedicatedSwitchStateChangedSinceCorrection = false;
   bool localFastSwitch[MAX_LOCAL_FAST_SWITCH_NUMBER + 1] = {false};
 
   EventDispatcher* _eventDispatcher;
