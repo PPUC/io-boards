@@ -61,13 +61,13 @@ class WS2812FXEffect : public Effect {
 
   virtual void setDevice(EffectDevice* effectDevice);
 
-  virtual void start(int repeat = 0);
+  virtual void start(int repeat = 0) override;
 
-  virtual void stop();
+  virtual void stop() override;
 
   virtual void terminate() override;
 
-  virtual void update();
+  virtual void update() override;
 
  protected:
   void blackoutSegment();

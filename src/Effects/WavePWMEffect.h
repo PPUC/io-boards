@@ -27,9 +27,9 @@ class WavePWMEffect : public Effect {
 
   virtual void setDevice(EffectDevice* effectDevice);
 
-  virtual void start(int repeat = 0);
+  virtual void start(int repeat = 0) override;
 
-  virtual void stop();
+  virtual void stop() override;
 
   virtual void update() = 0;
 
