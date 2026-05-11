@@ -241,9 +241,6 @@ void Switches::markLocalFastSwitch(byte n) { localFastSwitch[n] = true; }
 
 uint32_t Switches::debounceWindowUs(uint8_t index) const {
   uint32_t windowUs = static_cast<uint32_t>(debounceSetting[index]) * 1000u;
-  if (debounceMode[index] == SWITCH_DEBOUNCE_SLOW_STABLE) {
-    windowUs *= 4u;
-  }
   return windowUs;
 }
 
@@ -287,7 +284,7 @@ void Switches::deferSwitchState(uint8_t index, uint32_t mask, bool switchState,
   pendingDebounceMask |= mask;
 }
 
-void Switches::flushPendingDebounce(uint32_t nowUs) {
+void Switches::flushPendingDebounce(uint32_t nowUs, bool includeSlowStable) {
   if (pendingDebounceMask == 0) {
     return;
   }
@@ -302,6 +299,10 @@ void Switches::flushPendingDebounce(uint32_t nowUs) {
     if (((latestRaw & mask) != 0) != switchState ||
         ((currentStable & mask) != 0) == switchState) {
       pendingDebounceMask &= ~mask;
+      continue;
+    }
+
+    if (!includeSlowStable && debounceMode[i] == SWITCH_DEBOUNCE_SLOW_STABLE) {
       continue;
     }
 
@@ -329,7 +330,7 @@ void Switches::handleSwitchChanges(uint32_t raw) {
   // new raw transition arrived. Commit it against the previous raw sample
   // first so a valid quick press/release cannot be canceled by the release IRQ
   // before the normal poll loop gets a chance to flush it.
-  flushPendingDebounce(nowUs);
+  flushPendingDebounce(nowUs, false);
   latestRaw = static_cast<uint16_t>(raw);
   uint32_t changed = raw ^ currentStable;
   if (changed > 0) {
@@ -399,7 +400,7 @@ void Switches::handleEvent(Event* event) {
       // pendingEvents[]
       const uint32_t irqState = save_and_disable_interrupts();
 
-      flushPendingDebounce(micros());
+      flushPendingDebounce(micros(), true);
 
       while (pendingEventTail != pendingEventHead) {
         collectedEvents[collectedCount++] = pendingEvents[pendingEventTail];

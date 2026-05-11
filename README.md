@@ -115,9 +115,8 @@ are separate settings.
 Use `slowStable` for switches where false positives are much worse than a small
 delay.
 
-The firmware uses conservative stable-before-report behavior. In the current
-implementation, the effective debounce window is four times the configured
-debounce value.
+The firmware uses conservative stable-before-report behavior. The configured
+debounce value is the actual debounce window used by the firmware.
 
 Good defaults:
 

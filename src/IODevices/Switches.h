@@ -75,7 +75,7 @@ class Switches : public EventListener {
   void deferSwitchState(uint8_t index, uint32_t mask, bool switchState,
                         uint32_t nowUs);
   void enqueuePendingSwitchEvent(uint8_t switchNumber, uint8_t state);
-  void flushPendingDebounce(uint32_t nowUs);
+  void flushPendingDebounce(uint32_t nowUs, bool includeSlowStable);
   uint32_t debounceWindowUs(uint8_t index) const;
   int findRegisteredSwitch(byte p, byte n) const {
     for (int i = 0; i <= last; i++) {
