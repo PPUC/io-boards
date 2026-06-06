@@ -50,6 +50,7 @@ enum FrameType : uint8_t {
   kFrameConfigAck = 0x0A,
   kFrameRestart = 0x0B,
   kFrameTrigger = 0x0C,
+  kFrameSwitchRefresh = 0x0D,
 };
 
 enum MappingDomain : uint8_t {
@@ -192,6 +193,7 @@ constexpr size_t kTriggerPayloadBytes = sizeof(TriggerPayload);
 constexpr size_t kSwitchStatusBytes = 4;
 constexpr size_t kResetFrameBytes = kHeaderBytes + kCrcBytes;
 constexpr size_t kRestartFrameBytes = kHeaderBytes + kCrcBytes;
+constexpr size_t kSwitchRefreshFrameBytes = kHeaderBytes + kCrcBytes;
 constexpr size_t kSetupFrameBytes = kHeaderBytes + kSetupPayloadBytes + kCrcBytes;
 constexpr size_t kMappingFrameBytes = kHeaderBytes + kMappingPayloadBytes + kCrcBytes;
 constexpr size_t kConfigFrameBytes = kHeaderBytes + kConfigPayloadBytes + kCrcBytes;

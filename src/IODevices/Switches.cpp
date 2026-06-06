@@ -181,29 +181,25 @@ bool Switches::refreshDedicatedSwitchStates() {
     _eventDispatcher->refreshDedicatedSwitchState(number[i], switchState);
   }
 
-  if (sawChange) {
-    const uint32_t irqState = save_and_disable_interrupts();
-    stopReader();
-    currentStable = sampledStable;
-    latestRaw = sampledStable;
-    pioBaseline = sampledStable;
-    pendingDebounceMask = 0;
-    pendingDebounceState = 0;
-    memset(pendingDebounceSinceUs, 0, sizeof(pendingDebounceSinceUs));
-    pendingEventHead = 0;
-    pendingEventTail = 0;
-    dedicatedSwitchStateChangedSinceCorrection = false;
-    restore_interrupts(irqState);
-    _eventDispatcher->resetSwitchNoChangeReplies();
-    startReader();
-    return true;
-  }
+  const uint32_t irqState = save_and_disable_interrupts();
+  stopReader();
+  currentStable = sampledStable;
+  latestRaw = sampledStable;
+  pioBaseline = sampledStable;
+  pendingDebounceMask = 0;
+  pendingDebounceState = 0;
+  memset(pendingDebounceSinceUs, 0, sizeof(pendingDebounceSinceUs));
+  pendingEventHead = 0;
+  pendingEventTail = 0;
+  dedicatedSwitchStateChangedSinceCorrection = false;
+  restore_interrupts(irqState);
+  _eventDispatcher->resetSwitchNoChangeReplies();
+  startReader();
 
   if (dedicatedSwitchStateChangedSinceCorrection) {
     dedicatedSwitchStateChangedSinceCorrection = false;
   }
-  _eventDispatcher->resetSwitchNoChangeReplies();
-  return false;
+  return sawChange;
 }
 
 void Switches::registerSwitch(byte p, byte n, uint8_t debounceTimeMs) {

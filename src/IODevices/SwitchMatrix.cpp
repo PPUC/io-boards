@@ -24,6 +24,100 @@ void SwitchMatrix::stopReader() {
   running = false;
 }
 
+void SwitchMatrix::startReader() {
+  if (running) {
+    return;
+  }
+
+  instance = this;
+  running = true;
+
+  uint columns_offset;
+  pio_sm_config c_columns;
+  uint rows_offset;
+  pio_sm_config c_rows;
+
+  if (activeLow) {
+    extern const pio_program_t active_low_4_columns_pio_program;
+    columns_offset = pio_add_program(pio, &active_low_4_columns_pio_program);
+    c_columns =
+        active_low_4_columns_pio_program_get_default_config(columns_offset);
+
+    if (4 == numRows) {
+      extern const pio_program_t active_low_4_rows_pio_program;
+      rows_offset = pio_add_program(pio, &active_low_4_rows_pio_program);
+      c_rows = active_low_4_rows_pio_program_get_default_config(rows_offset);
+    } else {
+      extern const pio_program_t active_low_8_rows_pio_program;
+      rows_offset = pio_add_program(pio, &active_low_8_rows_pio_program);
+      c_rows = active_low_8_rows_pio_program_get_default_config(rows_offset);
+    }
+  } else {
+    extern const pio_program_t active_high_4_columns_pio_program;
+    columns_offset = pio_add_program(pio, &active_high_4_columns_pio_program);
+    c_columns =
+        active_high_4_columns_pio_program_get_default_config(columns_offset);
+
+    if (4 == numRows) {
+      extern const pio_program_t active_high_4_rows_pio_program;
+      rows_offset = pio_add_program(pio, &active_high_4_rows_pio_program);
+      c_rows = active_high_4_rows_pio_program_get_default_config(rows_offset);
+    } else {
+      extern const pio_program_t active_high_8_rows_pio_program;
+      rows_offset = pio_add_program(pio, &active_high_8_rows_pio_program);
+      c_rows = active_high_8_rows_pio_program_get_default_config(rows_offset);
+    }
+  }
+
+  columnsProgramLoaded = true;
+  rowsProgramLoaded = true;
+  columnsProgramOffset = columns_offset;
+  rowsProgramOffset = rows_offset;
+  loadedActiveLow = activeLow;
+  loadedNumRows = numRows;
+
+  sm_config_set_in_pins(&c_columns, COLUMNS_BASE_PIN);
+  for (uint i = 0; i < NUM_COLUMNS; i++) {
+    pio_gpio_init(pio, COLUMNS_BASE_PIN + i);
+  }
+  pio_sm_set_consecutive_pindirs(pio, sm_rows, COLUMNS_BASE_PIN, NUM_COLUMNS,
+                                 true);
+  sm_config_set_out_shift(&c_columns, false, false, 0);
+  pio_sm_init(pio, sm_columns, columns_offset, &c_columns);
+  pio_sm_set_enabled(pio, sm_columns, true);
+
+  sm_config_set_in_pins(&c_rows, COLUMNS_BASE_PIN - numRows);
+  for (uint i = 0; i < (numRows + NUM_COLUMNS); i++) {
+    pio_gpio_init(pio, COLUMNS_BASE_PIN - numRows + i);
+  }
+  pio_sm_set_consecutive_pindirs(pio, sm_rows, COLUMNS_BASE_PIN - numRows,
+                                 numRows + NUM_COLUMNS, false);
+  sm_config_set_in_shift(&c_rows, false, false, 0);
+  pio_sm_init(pio, sm_rows, rows_offset, &c_rows);
+  irq_set_exclusive_handler(PIO0_IRQ_0, onRowChanges);
+  irq_set_enabled(PIO0_IRQ_0, true);
+  pio_set_irq0_source_enabled(pio, pis_interrupt0, true);
+  pio_sm_set_enabled(pio, sm_rows, true);
+}
+
+void SwitchMatrix::resendStableStates() {
+  for (int column = 0; column < NUM_COLUMNS; column++) {
+    for (int row = 0; row < numRows; row++) {
+      const uint8_t pos = column * numRows + row;
+      if (mapping[pos] == 0) {
+        continue;
+      }
+
+      const uint32_t mask = 1u << ((NUM_COLUMNS - 1 - column) * numRows + row);
+      const bool rawBit = (lastStable & mask) != 0;
+      const bool switchState = activeLow ? !rawBit : rawBit;
+      _eventDispatcher->dispatch(
+          new Event(EVENT_SOURCE_SWITCH, word(0, mapping[pos]),
+                    switchState ? 1 : 0));
+    }
+  }
+}
+
 void SwitchMatrix::resetConfig() {
   stopReader();
 
@@ -167,95 +261,15 @@ void SwitchMatrix::handleEvent(Event* event) {
           }
         }
 
-        if (!running) {
-          instance = this;
-          running = true;
+        startReader();
+      }
+      break;
 
-          uint columns_offset;
-          pio_sm_config c_columns;
-          uint rows_offset;
-          pio_sm_config c_rows;
-
-          if (activeLow) {
-            extern const pio_program_t active_low_4_columns_pio_program;
-            columns_offset =
-                pio_add_program(pio, &active_low_4_columns_pio_program);
-            c_columns = active_low_4_columns_pio_program_get_default_config(
-                columns_offset);
-
-            if (4 == numRows) {
-              extern const pio_program_t active_low_4_rows_pio_program;
-              rows_offset =
-                  pio_add_program(pio, &active_low_4_rows_pio_program);
-              c_rows =
-                  active_low_4_rows_pio_program_get_default_config(rows_offset);
-            } else {  // 8 rows
-              extern const pio_program_t active_low_8_rows_pio_program;
-              rows_offset =
-                  pio_add_program(pio, &active_low_8_rows_pio_program);
-              c_rows =
-                  active_low_8_rows_pio_program_get_default_config(rows_offset);
-            }
-          } else {  // active high
-            extern const pio_program_t active_high_4_columns_pio_program;
-            columns_offset =
-                pio_add_program(pio, &active_high_4_columns_pio_program);
-            c_columns = active_high_4_columns_pio_program_get_default_config(
-                columns_offset);
-
-            if (4 == numRows) {
-              extern const pio_program_t active_high_4_rows_pio_program;
-              rows_offset =
-                  pio_add_program(pio, &active_high_4_rows_pio_program);
-              c_rows =
-                  active_high_4_rows_pio_program_get_default_config(
-                      rows_offset);
-            } else {  // 8 rows
-              extern const pio_program_t active_high_8_rows_pio_program;
-              rows_offset =
-                  pio_add_program(pio, &active_high_8_rows_pio_program);
-              c_rows =
-                  active_high_8_rows_pio_program_get_default_config(
-                      rows_offset);
-            }
-          }
-          columnsProgramLoaded = true;
-          rowsProgramLoaded = true;
-          columnsProgramOffset = columns_offset;
-          rowsProgramOffset = rows_offset;
-          loadedActiveLow = activeLow;
-          loadedNumRows = numRows;
-
-          // Columns
-          sm_config_set_in_pins(&c_columns, COLUMNS_BASE_PIN);
-          // Connect GPIOs to this PIO block
-          for (uint i = 0; i < NUM_COLUMNS; i++) {
-            pio_gpio_init(pio, COLUMNS_BASE_PIN + i);
-          }
-          // Set the pin direction at the PIO
-          pio_sm_set_consecutive_pindirs(pio, sm_rows, COLUMNS_BASE_PIN,
-                                         NUM_COLUMNS, true);
-          sm_config_set_out_shift(&c_columns, false, false, 0);
-          pio_sm_init(pio, sm_columns, columns_offset, &c_columns);
-          pio_sm_set_enabled(pio, sm_columns, true);
-
-          // Rows
-          sm_config_set_in_pins(&c_rows, COLUMNS_BASE_PIN - numRows);
-          // Connect GPIOs to this PIO block
-          for (uint i = 0; i < (numRows + NUM_COLUMNS); i++) {
-            pio_gpio_init(pio, COLUMNS_BASE_PIN - numRows + i);
-          }
-          // Set the pin direction at the PIO, we also read the 4 column pins
-          pio_sm_set_consecutive_pindirs(pio, sm_rows,
-                                         COLUMNS_BASE_PIN - numRows,
-                                         numRows + NUM_COLUMNS, false);
-          sm_config_set_in_shift(&c_rows, false, false, 0);
-          pio_sm_init(pio, sm_rows, rows_offset, &c_rows);
-          irq_set_exclusive_handler(PIO0_IRQ_0, onRowChanges);
-          irq_set_enabled(PIO0_IRQ_0, true);
-          pio_set_irq0_source_enabled(pio, pis_interrupt0, true);
-          pio_sm_set_enabled(pio, sm_rows, true);
-        }
+    case EVENT_REFRESH_SWITCHES:
+      if (active) {
+        stopReader();
+        resendStableStates();
+        startReader();
       }
       break;
   }

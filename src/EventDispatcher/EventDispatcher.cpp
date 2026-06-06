@@ -228,6 +228,7 @@ size_t EventDispatcher::getV2PayloadBytes(ppuc::v2::FrameType frameType) {
       return ppuc::v2::SwitchNoChangePayloadBytes();
     case ppuc::v2::kFrameTrigger:
       return ppuc::v2::kTriggerPayloadBytes;
+    case ppuc::v2::kFrameSwitchRefresh:
     case ppuc::v2::kFrameHeartbeat:
     case ppuc::v2::kFrameError:
     case ppuc::v2::kFrameReset:
@@ -362,10 +363,12 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
       frameType == ppuc::v2::kFrameConfig ||
       frameType == ppuc::v2::kFrameTrigger ||
       frameType == ppuc::v2::kFrameOutputState ||
+      frameType == ppuc::v2::kFrameSwitchRefresh ||
       frameType == ppuc::v2::kFrameHeartbeat ||
       frameType == ppuc::v2::kFrameError || frameType == ppuc::v2::kFrameReset ||
       frameType == ppuc::v2::kFrameRestart;
-  const bool hostOutputFrame = frameType == ppuc::v2::kFrameOutputState;
+  const bool hostPollFrame = frameType == ppuc::v2::kFrameOutputState ||
+                             frameType == ppuc::v2::kFrameSwitchRefresh;
 
   auto noteHostSequence = [&]() {
     if (lastHostFrameSequenceValid &&
@@ -375,7 +378,7 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
     }
     lastHostFrameSequenceSeen = incomingSequence;
     lastHostFrameSequenceValid = true;
-    if (hostOutputFrame) {
+    if (hostPollFrame) {
       lastHostSequenceSeen = incomingSequence;
     }
   };
@@ -470,6 +473,15 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
     applyOutputStates(&frame[payloadOffset], coilBytes,
                       &frame[payloadOffset + coilBytes], lampBytes,
                       &frame[payloadOffset + coilBytes + lampBytes]);
+    return true;
+  }
+
+  if (frameType == ppuc::v2::kFrameSwitchRefresh) {
+    if (!runtimeConfigValid || incomingEpoch != currentEpoch) {
+      return true;
+    }
+    forceNextSwitchStateReply = true;
+    forwardSwitchTokenIfSelected(frame[2]);
     return true;
   }
 
@@ -690,16 +702,19 @@ void EventDispatcher::forwardSwitchTokenIfSelected(uint8_t selectedBoard) {
   if (selectedBoard != board) {
     return;
   }
+  const bool shouldRefreshSwitches = forceNextSwitchStateReply;
+  forceNextSwitchStateReply = false;
   const bool haveQueuedLocalSnapshots =
       localSwitchReportHead != localSwitchReportTail;
   const bool shouldForceSwitchState =
-      consecutiveSwitchNoChangeReplies >=
-      kMaxConsecutiveSwitchNoChangeReplies;
+      shouldRefreshSwitches ||
+      consecutiveSwitchNoChangeReplies >= kMaxConsecutiveSwitchNoChangeReplies;
 
   // Forward the token before running the heavier output/switch fanout logic on
   // core 0. Config ACKs are already fast; runtime replies need the same low
   // latency so switch polling does not depend on lamp/effect processing time.
-  if (shouldForceSwitchState) {
+  if (shouldRefreshSwitches ||
+      consecutiveSwitchNoChangeReplies >= kMaxConsecutiveSwitchNoChangeReplies) {
     dispatch(new Event(EVENT_REFRESH_SWITCHES, 1, 1, true));
   }
 
@@ -837,7 +852,8 @@ bool EventDispatcher::handleV2Frame() {
   if (frameType != ppuc::v2::kFrameHeartbeat &&
       frameType != ppuc::v2::kFrameError &&
       frameType != ppuc::v2::kFrameReset &&
-      frameType != ppuc::v2::kFrameRestart && payloadBytes == 0 &&
+      frameType != ppuc::v2::kFrameRestart &&
+      frameType != ppuc::v2::kFrameSwitchRefresh && payloadBytes == 0 &&
       frameType != ppuc::v2::kFrameOutputState &&
       frameType != ppuc::v2::kFrameSwitchNoChange) {
     return false;

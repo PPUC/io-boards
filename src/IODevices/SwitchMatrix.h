@@ -30,6 +30,7 @@ class SwitchMatrix : public EventListener {
     _eventDispatcher = eD;
     _eventDispatcher->addListener(this, EVENT_POLL_EVENTS);
     _eventDispatcher->addListener(this, EVENT_READ_SWITCHES);
+    _eventDispatcher->addListener(this, EVENT_REFRESH_SWITCHES);
   }
 
   void setActiveLow() { activeLow = true; }
@@ -59,6 +60,8 @@ class SwitchMatrix : public EventListener {
 
   private:
   void stopReader();
+  void startReader();
+  void resendStableStates();
   byte boardId;
   bool activeLow = false;
   uint8_t numRows = 4;
