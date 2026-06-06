@@ -50,6 +50,26 @@ WIP
 
 WIP, see [PPUC.org](https://ppuc.org).
 
+## V2 Switch Refresh
+
+The v2 host can send `kFrameSwitchRefresh (0x0D)` as a zero-payload host frame.
+It uses the same `header.nextBoard` token chain as normal switch polling.
+
+When the selected board receives the refresh token it:
+
+* re-reads local switch state,
+* restarts local switch-reading state machines,
+* forces a full `SwitchStateFrame` reply even if no switch edge was queued.
+
+Dedicated switch inputs physically sample their GPIOs during refresh. Switch
+matrix inputs restart their PIO readers and resend their current stable states.
+The host consumes these replies like normal switch updates, so a previously
+missed trough or outhole change can still reach PinMAME.
+
+Switch refresh is intended as a safety net and is separate from host-side ball
+search. Ball search is implemented in `../ppuc` and only uses coils marked in
+game YAML.
+
 ## Switch Debounce Modes
 
 Dedicated switch inputs support a configurable debounce time in milliseconds and

@@ -86,6 +86,9 @@ Important constants:
 - `kFrameSwitchNoChange (0x09)`: token response when no switch bitmap changed
 - `kFrameConfigAck (0x0A)`: addressed-board acknowledgment for config frames
 - `kFrameRestart (0x0B)`: soft restart, clear board-local config/runtime state without reboot
+- `kFrameSwitchRefresh (0x0D)`: zero-payload host command that reuses the
+  switch token chain, forces selected boards to refresh switch readers, and
+  returns full switch state.
 
 Defined flags:
 
@@ -134,6 +137,10 @@ The verified `v2` flow between `libppuc` and the boards is:
    - `SwitchNoChangeFrame` otherwise
 9. The reply includes the next board token in its own `header.nextBoard`.
 10. The host continues reading chained replies until `nextBoard == kNoBoard`.
+
+The host may also send `SwitchRefreshFrame` with a switch token. The selected
+board restarts/re-reads switch inputs and replies with full switch state; the
+reply carries the next token just like normal polling.
 
 `ResetFrame` still exists, but it is now the hard-reboot recovery path rather
 than the normal startup workflow.
