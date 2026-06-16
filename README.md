@@ -42,6 +42,22 @@ These controllers integrate modified versions of other projects with the permiss
 The Effect Controller should be able to drive hundreds (or thousands?) of LEDs, PWM devices, ... in parallel in a
 non-blocking way.
 
+## Effect Stack
+
+The firmware effect stack arbitrates priority per effect target. For ordinary
+devices, the target is the physical `EffectDevice`.
+
+Addressable LED strips are different because one WS2812 strip can be divided
+into multiple WS2812FX segments. Each segment is treated as its own stack target:
+a higher-priority effect on one segment must not terminate, suspend, or replace
+an effect running on another segment of the same strip.
+
+Implementation detail: `Effect::deviceStackScope()` defaults to `0`, preserving
+the old per-device behavior for PWM, built-in LED, and other non-segmented
+effects. `WS2812FXEffect` overrides it with the segment number, and
+`EffectsController` keys running/suspended/replacement checks by
+`EffectDevice* + deviceStackScope()`.
+
 ### Homebrew machines
 
 WIP

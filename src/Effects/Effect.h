@@ -36,6 +36,8 @@ class Effect {
 
   virtual void setDevice(EffectDevice* effectDevice);
 
+  // Effects sharing one physical device may still need independent stack
+  // ownership, for example separate WS2812FX segments on one LED strip.
   virtual uint16_t deviceStackScope() const;
 
  protected:

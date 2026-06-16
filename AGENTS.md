@@ -44,6 +44,22 @@ Main files:
 - The firmware currently bridges `v2` bitmap frames back into legacy events for listeners. Do not remove that compatibility layer without updating the rest of the firmware.
 - The intended host-side counterpart is `../libppuc`. For `v2` protocol work, verify both repos together because the wire protocol is now `v2` only.
 
+## Effect Stack Notes
+
+- `EffectsController` arbitrates running, suspended, and duplicate effects by
+  effect stack target.
+- The default target is the physical `EffectDevice`, matching the original
+  per-device behavior for PWM and non-segmented effects.
+- WS2812 LED strips are segmented devices. `WS2812FXEffect` returns its segment
+  number from `deviceStackScope()`, so the effective stack target is
+  `EffectDevice* + segment`.
+- Preserve this behavior: a higher-priority effect on one LED strip segment
+  must not stop, suspend, or replace an effect on another segment of the same
+  strip.
+- If another future device has independently controllable subregions, give its
+  effect class a distinct `deviceStackScope()` rather than broadening the stack
+  key back to the whole device.
+
 ## V2 Communication Protocol
 
 Compared to `main`, branch `v2` replaces the old 7-byte event packets with framed RS485 messages defined in `src/PPUCProtocolV2.h`.

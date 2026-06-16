@@ -61,6 +61,8 @@ class WS2812FXEffect : public Effect {
 
   virtual void setDevice(EffectDevice* effectDevice);
 
+  // Segment number is part of the stack key so effects on different LED strip
+  // segments do not terminate or suspend each other.
   virtual uint16_t deviceStackScope() const override;
 
   virtual void start(int repeat = 0) override;
