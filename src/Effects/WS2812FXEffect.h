@@ -61,6 +61,8 @@ class WS2812FXEffect : public Effect {
 
   virtual void setDevice(EffectDevice* effectDevice);
 
+  virtual uint16_t deviceStackScope() const override;
+
   virtual void start(int repeat = 0) override;
 
   virtual void stop() override;

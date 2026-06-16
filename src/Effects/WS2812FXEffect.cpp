@@ -5,6 +5,8 @@ void WS2812FXEffect::setDevice(EffectDevice *effectDevice) {
   ws2812FX = (WS2812FX *)((WS2812FXDevice *)device)->getWS2812FX();
 }
 
+uint16_t WS2812FXEffect::deviceStackScope() const { return segment; }
+
 void WS2812FXEffect::start(int r) {
   Effect::start(r);
   ws2812FX->getSegment(segment)->mode = mode;

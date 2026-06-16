@@ -62,7 +62,10 @@ int EffectsController::findEffectContainer(
     if (!existing || !existing->event) {
       continue;
     }
-    if (existing->device == candidate->device &&
+    if (existing->device == candidate->device && existing->effect &&
+        candidate->effect &&
+        existing->effect->deviceStackScope() ==
+            candidate->effect->deviceStackScope() &&
         existing->event->sourceId == candidate->event->sourceId &&
         existing->event->eventId == candidate->event->eventId &&
         existing->event->value == candidate->event->value &&
@@ -76,18 +79,20 @@ int EffectsController::findEffectContainer(
   return -1;
 }
 
-int EffectsController::findRunningEffectOnDevice(
-    const EffectDevice *device) const {
-  if (!device) {
+int EffectsController::findRunningEffectForContainer(
+    const EffectContainer *candidate) const {
+  if (!candidate || !candidate->device || !candidate->effect) {
     return -1;
   }
 
   for (int i = 0; i <= stackCounter; i++) {
     const EffectContainer *container = stackEffectContainers[i];
-    if (!container) {
+    if (!container || !container->effect) {
       continue;
     }
-    if (container->device == device && container->effect &&
+    if (container->device == candidate->device &&
+        container->effect->deviceStackScope() ==
+            candidate->effect->deviceStackScope() &&
         container->effect->isRunning()) {
       return i;
     }
@@ -96,16 +101,20 @@ int EffectsController::findRunningEffectOnDevice(
   return -1;
 }
 
-int EffectsController::findBestSuspendedEffectForDevice(
-    const EffectDevice *device) const {
-  if (!device) {
+int EffectsController::findBestSuspendedEffectForContainer(
+    const EffectContainer *candidate) const {
+  if (!candidate || !candidate->device || !candidate->effect) {
     return -1;
   }
 
   int bestIndex = -1;
   for (int i = 0; i <= stackCounter; i++) {
     const EffectContainer *container = stackEffectContainers[i];
-    if (!container || container->device != device || !container->suspended) {
+    if (!container || !container->effect ||
+        container->device != candidate->device ||
+        container->effect->deviceStackScope() !=
+            candidate->effect->deviceStackScope() ||
+        !container->suspended) {
       continue;
     }
     if (bestIndex < 0 ||
@@ -120,14 +129,14 @@ int EffectsController::findBestSuspendedEffectForDevice(
 void EffectsController::resumeSuspendedEffects() {
   for (int i = 0; i <= stackCounter; i++) {
     EffectContainer *container = stackEffectContainers[i];
-    if (!container || !container->device) {
+    if (!container || !container->device || !container->effect) {
       continue;
     }
-    if (findRunningEffectOnDevice(container->device) >= 0) {
+    if (findRunningEffectForContainer(container) >= 0) {
       continue;
     }
 
-    const int resumeIndex = findBestSuspendedEffectForDevice(container->device);
+    const int resumeIndex = findBestSuspendedEffectForContainer(container);
     if (resumeIndex >= 0) {
       stackEffectContainers[resumeIndex]->suspended = false;
       stackEffectContainers[resumeIndex]->effect->start(
@@ -233,7 +242,7 @@ void EffectsController::handleEvent(Event *event) {
              -1 == stackEffectContainers[i]->mode  // -1 means any mode
              )) {
           const int runningIndex =
-              findRunningEffectOnDevice(stackEffectContainers[i]->device);
+              findRunningEffectForContainer(stackEffectContainers[i]);
           if (runningIndex >= 0) {
             if (stackEffectContainers[i]->priority >
                 stackEffectContainers[runningIndex]->priority) {

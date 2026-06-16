@@ -36,6 +36,8 @@ class Effect {
 
   virtual void setDevice(EffectDevice* effectDevice);
 
+  virtual uint16_t deviceStackScope() const;
+
  protected:
   void dispatch(Event* event);
 

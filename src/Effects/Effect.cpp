@@ -6,6 +6,8 @@ void Effect::setEventDispatcher(EventDispatcher* eD) { eventDispatcher = eD; }
 
 void Effect::setDevice(EffectDevice* effectDevice) { device = effectDevice; }
 
+uint16_t Effect::deviceStackScope() const { return 0; }
+
 void Effect::dispatch(Event* event) { eventDispatcher->dispatch(event); }
 
 bool Effect::isRunning() { return running; }
