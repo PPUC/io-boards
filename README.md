@@ -58,6 +58,42 @@ effects. `WS2812FXEffect` overrides it with the segment number, and
 `EffectsController` keys running/suspended/replacement checks by
 `EffectDevice* + deviceStackScope()`.
 
+## Built-in LED
+
+The board's built-in LED is also used as a startup and runtime status indicator
+in `src/main.cpp`.
+
+On power-up it runs a boot blink pattern. Each boot stage resets the pattern and
+blinks a pulse train whose number of pulses matches the current stage. The LED
+stays low between stages, blinks the pulses during startup work, and uses a
+longer pause before the next cycle. The boot stages are:
+
+1. `POWER_ON`
+2. `CORE0_BEGIN`
+3. `UART_READY`
+4. `USB_WAIT` when USB debug mode is enabled (DIP switch 3)
+5. `CORE1_RESTART`
+6. `CORE1_BEGIN`
+7. `CROSSLINK_READY`
+8. `EFFECTS_STARTED`
+9. `RUNTIME`
+
+After core 1 is up, the firmware keeps the boot pattern alive for about 4
+seconds in the runtime stage. After that boot window, the board waits for host
+configuration and indicates that with the ready pattern:
+
+* the LED stays on for about 1 second
+* then it turns off briefly for about 100 ms
+* then it repeats until the board is started for normal operation
+
+While configuration is being received, addressed config frames toggle the
+built-in LED through `EffectsController`. Each `ConfigEvent` whose `boardId`
+matches the local board address flips the LED state, so active configuration is
+visible as data-driven flicker on top of the waiting-for-config phase.
+
+Once configuration is complete and the board enters game runtime mode, the LED
+stays solid on during normal game play.
+
 ### Homebrew machines
 
 WIP
