@@ -200,6 +200,7 @@ void EffectsController::clearConfiguredEffects() {
   memset(config_values, 0, sizeof(config_values));
   config_neoPixelType = 0;
   config_payload = 0;
+  memset(config_payloads, 0, sizeof(config_payloads));
   ws1812Effect = nullptr;
   pwmEffect = nullptr;
   flickerState = false;
@@ -372,7 +373,10 @@ void EffectsController::handleEvent(ConfigEvent *event) {
               config_values[6] = 0;             // mode
               config_values[7] = 0;             // priority
               config_values[8] = 0;             // repeat
-              config_payload = 0;               // color
+              config_values[9] = 0;             // options
+              config_payload = 0;               // color 1
+              config_payloads[1] = 0;           // color 2
+              config_payloads[2] = 0;           // color 3
               ws1812Effect = nullptr;
               break;
             case CONFIG_TOPIC_LED_SEGMENT:
@@ -380,6 +384,12 @@ void EffectsController::handleEvent(ConfigEvent *event) {
               break;
             case CONFIG_TOPIC_COLOR:
               config_payload = event->value;
+              break;
+            case CONFIG_TOPIC_COLOR_2:
+              config_payloads[1] = event->value;
+              break;
+            case CONFIG_TOPIC_COLOR_3:
+              config_payloads[2] = event->value;
               break;
             case CONFIG_TOPIC_DURATION:
               config_values[2] = event->value;
@@ -399,12 +409,18 @@ void EffectsController::handleEvent(ConfigEvent *event) {
             case CONFIG_TOPIC_PRIORITY:
               config_values[7] = event->value;
               break;
+            case CONFIG_TOPIC_OPTIONS:
+              config_values[9] = event->value;
+              break;
             case CONFIG_TOPIC_REPEAT:
               config_values[8] = event->value;
+              config_payloads[0] = config_payload;
               ws1812Effect = new WS2812FXEffect(
-                  config_values[1], config_values[3], config_payload,
+                  config_values[1], config_values[3], config_payloads,
                   config_values[5],
-                  config_values[4] == 1 ? REVERSE : NO_OPTIONS,
+                  config_values[9] ? config_values[9]
+                                   : (config_values[4] == 1 ? REVERSE
+                                                            : NO_OPTIONS),
                   config_values[2]);
               break;
           }

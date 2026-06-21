@@ -88,6 +88,9 @@
 #define CONFIG_TOPIC_PRIORITY 91                    //
 #define CONFIG_TOPIC_REPEAT 92                      //
 #define CONFIG_TOPIC_SWITCH_REPLY_DELAY_US 93       //
+#define CONFIG_TOPIC_OPTIONS 94                     //
+#define CONFIG_TOPIC_COLOR_2 95                     //
+#define CONFIG_TOPIC_COLOR_3 96                     //
 #define CONFIG_TOPIC_NULL 99                        // NULL
 
 #define PWM_TYPE_SOLENOID 1  // Coil
