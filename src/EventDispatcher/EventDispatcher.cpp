@@ -456,10 +456,15 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
                index < runtimeConfig.switchBits) {
       switchIndexToNumber[index] = number;
     }
+    const bool wasMappingComplete = mappingComplete;
     if (receivedMappingFrames < expectedMappingFrames) {
       receivedMappingFrames++;
     }
     mappingComplete = receivedMappingFrames >= expectedMappingFrames;
+    if (!wasMappingComplete && mappingComplete) {
+      forceNextSwitchStateReply = true;
+      dispatch(new Event(EVENT_REFRESH_SWITCHES, 1, 1, true));
+    }
     return true;
   }
 
