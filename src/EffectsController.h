@@ -165,13 +165,13 @@ class EffectsController : public EventListener {
   WavePWMDevice* _shakerPWMDevice = nullptr;
   WavePWMDevice* _ledPWMDevice = nullptr;
   RgbStripDevice* _rgbStripeDevice = nullptr;
-  WS2812FXDevice* ws2812FXDevices[PPUC_MAX_WS2812FX_DEVICES];
+  WS2812FXDevice* ws2812FXDevices[PPUC_MAX_WS2812FX_DEVICES] = {nullptr};
   bool ws2812FXstates[PPUC_MAX_WS2812FX_DEVICES] = {0};
   bool ws2812FXsegments[PPUC_MAX_WS2812FX_DEVICES] = {0};
   byte ws2812FXbrightness[PPUC_MAX_WS2812FX_DEVICES] = {0};
   WS2812FXDevice* ws2812FXDeviceByPort[PPUC_MAX_EFFECT_PORTS] = {nullptr};
   WavePWMDevice* pwmEffectDeviceByPort[PPUC_MAX_EFFECT_PORTS] = {nullptr};
-  EffectContainer* stackEffectContainers[EFFECT_STACK_SIZE];
+  EffectContainer* stackEffectContainers[EFFECT_STACK_SIZE] = {nullptr};
   int stackCounter = -1;
   int builtInEffectCount = 0;
   bool flickerState = false;
@@ -186,8 +186,8 @@ class EffectsController : public EventListener {
   neoPixelType config_neoPixelType = 0;
   uint32_t config_payload = 0;
   uint32_t config_payloads[3] = {0};
-  WS2812FXEffect* ws1812Effect;
-  WavePWMEffect* pwmEffect;
+  WS2812FXEffect* ws1812Effect = nullptr;
+  WavePWMEffect* pwmEffect = nullptr;
 
   unsigned long ws2812UpdateInterval = 0;
   unsigned long brightnessUpdateInterval = 0;

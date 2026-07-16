@@ -180,10 +180,13 @@ void EffectsController::clearConfiguredEffects() {
   }
 
   for (int i = 0; i < PPUC_MAX_WS2812FX_DEVICES; i++) {
-    if (ws2812FXstates[i] && ws2812FXDevices[i]) {
+    if (ws2812FXDevices[i]) {
       ws2812FXDevices[i]->off();
+      delete ws2812FXDevices[i];
+      ws2812FXDevices[i] = nullptr;
     }
     ws2812FXstates[i] = false;
+    ws2812FXsegments[i] = false;
     ws2812FXbrightness[i] = 0;
   }
   memset(ws2812FXDeviceByPort, 0, sizeof(ws2812FXDeviceByPort));
