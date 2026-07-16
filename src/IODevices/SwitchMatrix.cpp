@@ -9,6 +9,27 @@
 
 SwitchMatrix* SwitchMatrix::instance = nullptr;
 
+bool SwitchMatrix::supportsRows(uint8_t n) const {
+  if (n == 0 || n > profile.maxRows || n >= 16) {
+    return false;
+  }
+  return (profile.supportedRowsMask & (1u << n)) != 0;
+}
+
+bool SwitchMatrix::setNumRows(uint8_t n) {
+  if (!supportsRows(n)) {
+    active = false;
+    return false;
+  }
+  numRows = n;
+  return true;
+}
+
+bool SwitchMatrix::isConfiguredGeometrySupported() const {
+  return profile.columns == 4 && profile.columns <= SWITCH_MATRIX_MAX_COLUMNS &&
+         supportsRows(numRows);
+}
+
 void SwitchMatrix::stopReader() {
   if (!running) {
     return;
@@ -25,19 +46,46 @@ void SwitchMatrix::stopReader() {
 }
 
 void SwitchMatrix::startReader() {
-  if (running) {
+  if (running || !active || !isConfiguredGeometrySupported()) {
     return;
   }
 
   instance = this;
   running = true;
 
-  uint columns_offset;
+  uint columns_offset = columnsProgramOffset;
   pio_sm_config c_columns;
-  uint rows_offset;
+  uint rows_offset = rowsProgramOffset;
   pio_sm_config c_rows;
 
-  if (activeLow) {
+  const bool reuseLoadedPrograms =
+      columnsProgramLoaded && rowsProgramLoaded &&
+      loadedActiveLow == activeLow && loadedNumRows == numRows;
+  if (reuseLoadedPrograms) {
+    if (activeLow) {
+      extern const pio_program_t active_low_4_columns_pio_program;
+      c_columns =
+          active_low_4_columns_pio_program_get_default_config(columns_offset);
+      if (4 == numRows) {
+        extern const pio_program_t active_low_4_rows_pio_program;
+        c_rows = active_low_4_rows_pio_program_get_default_config(rows_offset);
+      } else {
+        extern const pio_program_t active_low_8_rows_pio_program;
+        c_rows = active_low_8_rows_pio_program_get_default_config(rows_offset);
+      }
+    } else {
+      extern const pio_program_t active_high_4_columns_pio_program;
+      c_columns =
+          active_high_4_columns_pio_program_get_default_config(columns_offset);
+      if (4 == numRows) {
+        extern const pio_program_t active_high_4_rows_pio_program;
+        c_rows = active_high_4_rows_pio_program_get_default_config(rows_offset);
+      } else {
+        extern const pio_program_t active_high_8_rows_pio_program;
+        c_rows = active_high_8_rows_pio_program_get_default_config(rows_offset);
+      }
+    }
+  } else if (activeLow) {
     extern const pio_program_t active_low_4_columns_pio_program;
     columns_offset = pio_add_program(pio, &active_low_4_columns_pio_program);
     c_columns =
@@ -69,29 +117,32 @@ void SwitchMatrix::startReader() {
     }
   }
 
-  columnsProgramLoaded = true;
-  rowsProgramLoaded = true;
-  columnsProgramOffset = columns_offset;
-  rowsProgramOffset = rows_offset;
-  loadedActiveLow = activeLow;
-  loadedNumRows = numRows;
-
-  sm_config_set_in_pins(&c_columns, COLUMNS_BASE_PIN);
-  for (uint i = 0; i < NUM_COLUMNS; i++) {
-    pio_gpio_init(pio, COLUMNS_BASE_PIN + i);
+  if (!reuseLoadedPrograms) {
+    columnsProgramLoaded = true;
+    rowsProgramLoaded = true;
+    columnsProgramOffset = columns_offset;
+    rowsProgramOffset = rows_offset;
+    loadedActiveLow = activeLow;
+    loadedNumRows = numRows;
   }
-  pio_sm_set_consecutive_pindirs(pio, sm_rows, COLUMNS_BASE_PIN, NUM_COLUMNS,
-                                 true);
+
+  sm_config_set_in_pins(&c_columns, profile.columnsBasePin);
+  for (uint i = 0; i < profile.columns; i++) {
+    pio_gpio_init(pio, profile.columnsBasePin + i);
+  }
+  pio_sm_set_consecutive_pindirs(pio, sm_columns, profile.columnsBasePin,
+                                 profile.columns, true);
   sm_config_set_out_shift(&c_columns, false, false, 0);
   pio_sm_init(pio, sm_columns, columns_offset, &c_columns);
   pio_sm_set_enabled(pio, sm_columns, true);
 
-  sm_config_set_in_pins(&c_rows, COLUMNS_BASE_PIN - numRows);
-  for (uint i = 0; i < (numRows + NUM_COLUMNS); i++) {
-    pio_gpio_init(pio, COLUMNS_BASE_PIN - numRows + i);
+  const uint8_t rowsBasePin = profile.columnsBasePin - numRows;
+  sm_config_set_in_pins(&c_rows, rowsBasePin);
+  for (uint i = 0; i < (numRows + profile.columns); i++) {
+    pio_gpio_init(pio, rowsBasePin + i);
   }
-  pio_sm_set_consecutive_pindirs(pio, sm_rows, COLUMNS_BASE_PIN - numRows,
-                                 numRows + NUM_COLUMNS, false);
+  pio_sm_set_consecutive_pindirs(pio, sm_rows, rowsBasePin,
+                                 numRows + profile.columns, false);
   sm_config_set_in_shift(&c_rows, false, false, 0);
   pio_sm_init(pio, sm_rows, rows_offset, &c_rows);
   irq_set_exclusive_handler(PIO0_IRQ_0, onRowChanges);
@@ -101,14 +152,14 @@ void SwitchMatrix::startReader() {
 }
 
 void SwitchMatrix::resendStableStates() {
-  for (int column = 0; column < NUM_COLUMNS; column++) {
+  for (int column = 0; column < profile.columns; column++) {
     for (int row = 0; row < numRows; row++) {
       const uint8_t pos = column * numRows + row;
       if (mapping[pos] == 0) {
         continue;
       }
 
-      const uint32_t mask = 1u << ((NUM_COLUMNS - 1 - column) * numRows + row);
+      const uint32_t mask = 1u << ((profile.columns - 1 - column) * numRows + row);
       const bool rawBit = (lastStable & mask) != 0;
       const bool switchState = activeLow ? !rawBit : rawBit;
       _eventDispatcher->dispatch(
@@ -160,7 +211,7 @@ void SwitchMatrix::resetConfig() {
   }
 
   activeLow = false;
-  numRows = 4;
+  numRows = profile.maxRows >= 4 ? 4 : profile.maxRows;
   loadedActiveLow = false;
   loadedNumRows = 4;
   active = false;
@@ -173,7 +224,7 @@ void SwitchMatrix::resetConfig() {
 }
 
 void SwitchMatrix::registerSwitch(byte p, byte n) {
-  if (p < (NUM_COLUMNS * numRows)) {
+  if (isConfiguredGeometrySupported() && p < (profile.columns * numRows)) {
     mapping[p] = n;
     active = true;
   }
@@ -183,12 +234,12 @@ void SwitchMatrix::handleRowChanges(uint32_t raw) {
   absolute_time_t now = get_absolute_time();
   uint32_t changed = raw ^ lastStable;  // raw to raw comparison
 
-  for (int column = 0; column < NUM_COLUMNS; column++) {
+  for (int column = 0; column < profile.columns; column++) {
     for (int row = 0; row < numRows; row++) {
       uint8_t pos = column * numRows + row;
       if (mapping[pos] == 0) continue;  // Not registered
 
-      uint32_t mask = 1u << ((NUM_COLUMNS - 1 - column) * numRows + row);
+      uint32_t mask = 1u << ((profile.columns - 1 - column) * numRows + row);
 
       if (changed & mask) {
         // Convert RAW to logical pressed/released
@@ -254,7 +305,7 @@ void SwitchMatrix::handleEvent(Event* event) {
       if (active) {
         // First, send OFF for all switches then ON for the active ones using
         // the IRQ handler.
-        for (int i = 0; i < (NUM_COLUMNS * numRows); i++) {
+        for (int i = 0; i < (profile.columns * numRows); i++) {
           if (mapping[i] != 0) {
             _eventDispatcher->dispatch(
                 new Event(EVENT_SOURCE_SWITCH, word(0, mapping[i]), 0));

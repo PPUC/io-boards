@@ -12,11 +12,17 @@
 #include "hardware/pio.h"
 #include "hardware/sync.h"
 
-#define COLUMNS_BASE_PIN 15 // GPIO 15-18 for columns, the only pins with required hardware on IO_16_8_1 board
-#define NUM_COLUMNS 4
-#define MAX_ROWS 8
+#define SWITCH_MATRIX_MAX_COLUMNS 10
+#define SWITCH_MATRIX_MAX_ROWS 8
 #define MATRIX_SWITCH_DEBOUNCE 2
 #define MATRIX_SWITCH_EVENT_QUEUE_SIZE 32
+
+struct SwitchMatrixProfile {
+  uint8_t columns;
+  uint8_t maxRows;
+  uint8_t columnsBasePin;
+  uint16_t supportedRowsMask;
+};
 
 struct PendingMatrixSwitchEvent {
   uint8_t number;
@@ -25,18 +31,24 @@ struct PendingMatrixSwitchEvent {
 
 class SwitchMatrix : public EventListener {
  public:
-  SwitchMatrix(byte bId, EventDispatcher* eD) {
+  SwitchMatrix(byte bId, EventDispatcher* eD, const SwitchMatrixProfile& p) {
     boardId = bId;
     _eventDispatcher = eD;
+    profile = p;
+    numRows = profile.maxRows >= 4 ? 4 : profile.maxRows;
     _eventDispatcher->addListener(this, EVENT_POLL_EVENTS);
     _eventDispatcher->addListener(this, EVENT_READ_SWITCHES);
     _eventDispatcher->addListener(this, EVENT_REFRESH_SWITCHES);
   }
 
   void setActiveLow() { activeLow = true; }
-  void setNumRows(uint8_t n) { numRows = n; }
+  bool setNumRows(uint8_t n);
   void registerSwitch(byte p, byte n);
   void resetConfig();
+  uint8_t columns() const { return profile.columns; }
+  uint8_t maxRows() const { return profile.maxRows; }
+  uint8_t matrixPinsUsed() const { return profile.columns + numRows; }
+  bool supportsRows(uint8_t n) const;
 
   void handleEvent(Event* event);
 
@@ -54,6 +66,10 @@ class SwitchMatrix : public EventListener {
     // IRQ0 clear
     pio0_hw->irq = 1u << 0;
 
+    if (!instance ||
+        pio_sm_is_rx_fifo_empty(instance->pio, instance->sm_rows)) {
+      return;
+    }
     uint32_t raw = pio_sm_get_blocking(instance->pio, instance->sm_rows);
     instance->handleRowChanges(raw);
   }
@@ -62,7 +78,9 @@ class SwitchMatrix : public EventListener {
   void stopReader();
   void startReader();
   void resendStableStates();
+  bool isConfiguredGeometrySupported() const;
   byte boardId;
+  SwitchMatrixProfile profile = {0, 0, 0, 0};
   bool activeLow = false;
   uint8_t numRows = 4;
   bool running = false;
@@ -74,12 +92,12 @@ class SwitchMatrix : public EventListener {
   bool loadedActiveLow = false;
   uint8_t loadedNumRows = 4;
 
-  byte mapping[NUM_COLUMNS * MAX_ROWS] = {0};
+  byte mapping[SWITCH_MATRIX_MAX_COLUMNS * SWITCH_MATRIX_MAX_ROWS] = {0};
   uint32_t lastStable = 0;
   volatile uint8_t pendingEventHead = 0;
   volatile uint8_t pendingEventTail = 0;
   PendingMatrixSwitchEvent pendingEvents[MATRIX_SWITCH_EVENT_QUEUE_SIZE] = {};
-  absolute_time_t debounceTime[NUM_COLUMNS * MAX_ROWS][2] = {0};
+  absolute_time_t debounceTime[SWITCH_MATRIX_MAX_COLUMNS * SWITCH_MATRIX_MAX_ROWS][2] = {0};
   EventDispatcher* _eventDispatcher;
 };
 

@@ -15,6 +15,19 @@ uint8_t decodeBoardSelectorValue(int raw) {
   return static_cast<uint8_t>(16 - static_cast<int>((raw + 29.23) / 58.46));
 }
 
+SwitchMatrixProfile switchMatrixProfileForController(int controllerType) {
+  switch (controllerType) {
+    case CONTROLLER_16_8_1:
+    default:
+      return SwitchMatrixProfile{
+          4,              // columns
+          8,              // maxRows
+          15,             // columnsBasePin, GPIO 15-18
+          (1u << 4) | (1u << 8),
+      };
+  }
+}
+
 [[noreturn]] void performBoardReboot() {
   // Stop the second core first so the chip does not reboot with core 1 still
   // executing stale firmware state while core 0 is tearing down UART/RS485.
@@ -103,7 +116,9 @@ void IOBoardController::begin() {
     _eventDispatcher->setMultiCoreCrossLink(_multiCoreCrossLink);
     _pwmDevices = new PwmDevices(_eventDispatcher);
     _switches = new Switches(boardId, _eventDispatcher);
-    _switchMatrix = new SwitchMatrix(boardId, _eventDispatcher);
+    _switchMatrix = new SwitchMatrix(
+        boardId, _eventDispatcher,
+        switchMatrixProfileForController(controllerType));
     // Adjust PWM properties if needed.
     analogWriteFreq(500);
     analogWriteResolution(8);
@@ -218,8 +233,12 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
             break;
           case CONFIG_TOPIC_NUM_ROWS:
             rows = (uint8_t)event->value;
-            _switchMatrix->setNumRows(rows);
-            _switches->setNumSwitches(MAX_SWITCHES - NUM_COLUMNS - rows);
+            if (_switchMatrix->setNumRows(rows)) {
+              const uint8_t matrixPinsUsed = _switchMatrix->matrixPinsUsed();
+              _switches->setNumSwitches(matrixPinsUsed < MAX_SWITCHES
+                                            ? MAX_SWITCHES - matrixPinsUsed
+                                            : 0);
+            }
             break;
           case CONFIG_TOPIC_PORT:
             port = event->value;
