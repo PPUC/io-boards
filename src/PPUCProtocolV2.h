@@ -299,6 +299,163 @@ inline void SetPackedNibble(uint8_t* data, uint8_t index, uint8_t value) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Wire codec
+// ---------------------------------------------------------------------------
+//
+// Every multi-byte field on the bus is big-endian, and until now both sides
+// open-coded that: libppuc shifted bytes into a buffer by hand, the firmware
+// reassembled them with word() by hand. Two hand-written implementations of one
+// format is exactly where drift happens, and no test could catch the two
+// disagreeing because neither shared any code.
+//
+// These helpers are the single definition. They are header-only and operate on
+// caller-provided buffers, so they add no allocation, no linkage and nothing
+// the RP2040 cannot afford.
+//
+// Layout, for reference:
+//   [0] sync  [1] typeAndFlags  [2] nextBoard  [3] sequence  [4] epoch
+//   [5..]     payload
+//   [last-1], [last]  CRC-16/CCITT over header + payload, big-endian
+
+inline void WriteU16(uint8_t* p, uint16_t value) {
+  p[0] = static_cast<uint8_t>((value >> 8) & 0xFF);
+  p[1] = static_cast<uint8_t>(value & 0xFF);
+}
+
+inline uint16_t ReadU16(const uint8_t* p) {
+  return static_cast<uint16_t>((static_cast<uint16_t>(p[0]) << 8) | p[1]);
+}
+
+inline void WriteU32(uint8_t* p, uint32_t value) {
+  p[0] = static_cast<uint8_t>((value >> 24) & 0xFF);
+  p[1] = static_cast<uint8_t>((value >> 16) & 0xFF);
+  p[2] = static_cast<uint8_t>((value >> 8) & 0xFF);
+  p[3] = static_cast<uint8_t>(value & 0xFF);
+}
+
+inline uint32_t ReadU32(const uint8_t* p) {
+  return (static_cast<uint32_t>(p[0]) << 24) |
+         (static_cast<uint32_t>(p[1]) << 16) |
+         (static_cast<uint32_t>(p[2]) << 8) | static_cast<uint32_t>(p[3]);
+}
+
+inline void WriteHeader(uint8_t* frame, FrameType type, uint8_t flags,
+                        uint8_t nextBoard, uint8_t sequence, uint8_t epoch) {
+  frame[0] = kSyncByte;
+  frame[1] = ComposeTypeAndFlags(type, flags);
+  frame[2] = nextBoard;
+  frame[3] = sequence;
+  frame[4] = epoch;
+}
+
+// Returns false when the sync byte is wrong, which is the caller's cue to
+// resynchronise rather than trust the rest of the buffer.
+inline bool ReadHeader(const uint8_t* frame, FrameHeader& out) {
+  if (frame[0] != kSyncByte) {
+    return false;
+  }
+  out.sync = frame[0];
+  out.typeAndFlags = frame[1];
+  out.nextBoard = frame[2];
+  out.sequence = frame[3];
+  out.epoch = frame[4];
+  return true;
+}
+
+// Appends the CRC over header + payload. Returns the total frame length, so a
+// caller can write `const size_t len = AppendCrc(buf, kHeaderBytes + payload);`
+inline size_t AppendCrc(uint8_t* frame, size_t headerAndPayloadBytes) {
+  const uint16_t crc = Crc16Ccitt(frame, headerAndPayloadBytes);
+  WriteU16(frame + headerAndPayloadBytes, crc);
+  return headerAndPayloadBytes + kCrcBytes;
+}
+
+// Verifies a complete frame, CRC included. `totalBytes` counts the CRC.
+inline bool VerifyCrc(const uint8_t* frame, size_t totalBytes) {
+  if (totalBytes < kHeaderBytes + kCrcBytes) {
+    return false;
+  }
+  const size_t bodyBytes = totalBytes - kCrcBytes;
+  return ReadU16(frame + bodyBytes) == Crc16Ccitt(frame, bodyBytes);
+}
+
+// --- payloads with multi-byte fields ---------------------------------------
+
+inline void WriteSetupPayload(uint8_t* payload, const RuntimeConfig& cfg) {
+  WriteU16(payload, cfg.coilBits);
+  WriteU16(payload + 2, cfg.lampBits);
+  WriteU16(payload + 4, cfg.switchBits);
+}
+
+inline void ReadSetupPayload(const uint8_t* payload, RuntimeConfig& cfg) {
+  cfg.coilBits = ReadU16(payload);
+  cfg.lampBits = ReadU16(payload + 2);
+  cfg.switchBits = ReadU16(payload + 4);
+}
+
+inline void WriteMappingPayload(uint8_t* payload, uint8_t domain, uint16_t index,
+                                uint16_t number) {
+  payload[0] = domain;
+  payload[1] = 0;  // reserved
+  WriteU16(payload + 2, index);
+  WriteU16(payload + 4, number);
+}
+
+inline void ReadMappingPayload(const uint8_t* payload, uint8_t& domain,
+                               uint16_t& index, uint16_t& number) {
+  domain = payload[0];
+  index = ReadU16(payload + 2);
+  number = ReadU16(payload + 4);
+}
+
+inline void WriteConfigPayload(uint8_t* payload, uint8_t boardId, uint8_t topic,
+                               uint8_t index, uint8_t key, uint32_t value) {
+  payload[0] = boardId;
+  payload[1] = topic;
+  payload[2] = index;
+  payload[3] = key;
+  WriteU32(payload + 4, value);
+}
+
+inline void ReadConfigPayload(const uint8_t* payload, uint8_t& boardId,
+                              uint8_t& topic, uint8_t& index, uint8_t& key,
+                              uint32_t& value) {
+  boardId = payload[0];
+  topic = payload[1];
+  index = payload[2];
+  key = payload[3];
+  value = ReadU32(payload + 4);
+}
+
+// --- whole-frame builders ---------------------------------------------------
+// Each returns the total frame length including CRC.
+
+inline size_t BuildSetupFrame(uint8_t* frame, uint8_t nextBoard,
+                              uint8_t sequence, uint8_t epoch,
+                              const RuntimeConfig& cfg) {
+  WriteHeader(frame, kFrameSetup, kFlagKeyframe, nextBoard, sequence, epoch);
+  WriteSetupPayload(frame + kHeaderBytes, cfg);
+  return AppendCrc(frame, kHeaderBytes + kSetupPayloadBytes);
+}
+
+inline size_t BuildMappingFrame(uint8_t* frame, uint8_t nextBoard,
+                                uint8_t sequence, uint8_t epoch, uint8_t domain,
+                                uint16_t index, uint16_t number) {
+  WriteHeader(frame, kFrameMapping, kFlagKeyframe, nextBoard, sequence, epoch);
+  WriteMappingPayload(frame + kHeaderBytes, domain, index, number);
+  return AppendCrc(frame, kHeaderBytes + kMappingPayloadBytes);
+}
+
+inline size_t BuildConfigFrame(uint8_t* frame, uint8_t nextBoard,
+                               uint8_t sequence, uint8_t epoch, uint8_t boardId,
+                               uint8_t topic, uint8_t index, uint8_t key,
+                               uint32_t value) {
+  WriteHeader(frame, kFrameConfig, kFlagKeyframe, nextBoard, sequence, epoch);
+  WriteConfigPayload(frame + kHeaderBytes, boardId, topic, index, key, value);
+  return AppendCrc(frame, kHeaderBytes + kConfigPayloadBytes);
+}
+
 inline uint8_t GetPackedNibble(const uint8_t* data, uint8_t index) {
   const uint8_t byteIndex = index / 2u;
   if ((index & 1u) == 0) {

@@ -377,6 +377,155 @@ Result CheckGiClamping() {
   return Pass();
 }
 
+
+// --- wire codec -------------------------------------------------------------
+
+Result CheckBigEndianPrimitives() {
+  uint8_t buf[4] = {0, 0, 0, 0};
+
+  WriteU16(buf, 0x1234);
+  if (buf[0] != 0x12 || buf[1] != 0x34) {
+    return Fail("WriteU16 must be big-endian: got " + Num(buf[0]) + "," +
+                Num(buf[1]));
+  }
+  if (ReadU16(buf) != 0x1234) return Fail("ReadU16 did not round-trip");
+
+  WriteU32(buf, 0x12345678u);
+  if (buf[0] != 0x12 || buf[1] != 0x34 || buf[2] != 0x56 || buf[3] != 0x78) {
+    return Fail("WriteU32 must be big-endian");
+  }
+  if (ReadU32(buf) != 0x12345678u) return Fail("ReadU32 did not round-trip");
+
+  // Edges: a value with the high bit set must not sign-extend.
+  WriteU16(buf, 0xFFFF);
+  if (ReadU16(buf) != 0xFFFF) return Fail("ReadU16 mishandles 0xFFFF");
+  WriteU32(buf, 0xFFFFFFFFu);
+  if (ReadU32(buf) != 0xFFFFFFFFu) return Fail("ReadU32 mishandles 0xFFFFFFFF");
+  return Pass();
+}
+
+Result CheckMappingFrameByteLayout() {
+  // Pins the exact bytes on the wire. libppuc built this frame by hand before
+  // the codec existed; these positions are what deployed boards already parse,
+  // so a change here is a breaking protocol change, not a refactor.
+  uint8_t frame[kMappingFrameBytes];
+  const size_t len = BuildMappingFrame(frame, kNoBoard, /*seq*/ 0x2A,
+                                       /*epoch*/ 0x07, kDomainLamp,
+                                       /*index*/ 0x0102, /*number*/ 0x0304);
+
+  if (len != kMappingFrameBytes) {
+    return Fail("BuildMappingFrame returned " + Num(len) + ", expected " +
+                Num(kMappingFrameBytes));
+  }
+  if (frame[0] != kSyncByte) return Fail("byte 0 must be the sync byte");
+  if (frame[1] != (kFrameMapping | kFlagKeyframe)) {
+    return Fail("byte 1 must be type|flags, got " + Num(frame[1]));
+  }
+  if (frame[2] != kNoBoard) return Fail("byte 2 must be nextBoard");
+  if (frame[3] != 0x2A) return Fail("byte 3 must be the sequence");
+  if (frame[4] != 0x07) return Fail("byte 4 must be the epoch");
+  if (frame[5] != kDomainLamp) return Fail("byte 5 must be the mapping domain");
+  if (frame[6] != 0) return Fail("byte 6 is reserved and must be zero");
+  if (frame[7] != 0x01 || frame[8] != 0x02) {
+    return Fail("bytes 7-8 must be the index, big-endian");
+  }
+  if (frame[9] != 0x03 || frame[10] != 0x04) {
+    return Fail("bytes 9-10 must be the number, big-endian");
+  }
+  if (!VerifyCrc(frame, len)) return Fail("the frame failed its own CRC check");
+  return Pass();
+}
+
+Result CheckSetupFrameByteLayout() {
+  uint8_t frame[kSetupFrameBytes];
+  RuntimeConfig cfg;
+  cfg.coilBits = 0x0018;   // 24
+  cfg.lampBits = 0x0040;   // 64
+  cfg.switchBits = 0x0038; // 56
+
+  const size_t len = BuildSetupFrame(frame, kNoBoard, 1, 1, cfg);
+  if (len != kSetupFrameBytes) return Fail("BuildSetupFrame length wrong");
+  if (frame[1] != (kFrameSetup | kFlagKeyframe)) return Fail("setup type byte wrong");
+  if (frame[5] != 0x00 || frame[6] != 0x18) return Fail("coilBits must be big-endian");
+  if (frame[7] != 0x00 || frame[8] != 0x40) return Fail("lampBits must be big-endian");
+  if (frame[9] != 0x00 || frame[10] != 0x38) return Fail("switchBits must be big-endian");
+  if (!VerifyCrc(frame, len)) return Fail("setup frame failed its own CRC check");
+
+  RuntimeConfig decoded;
+  ReadSetupPayload(frame + kHeaderBytes, decoded);
+  if (decoded.coilBits != cfg.coilBits || decoded.lampBits != cfg.lampBits ||
+      decoded.switchBits != cfg.switchBits) {
+    return Fail("setup payload did not round-trip");
+  }
+  return Pass();
+}
+
+Result CheckConfigFrameByteLayout() {
+  uint8_t frame[kConfigFrameBytes];
+  const size_t len = BuildConfigFrame(frame, kNoBoard, 5, 2, /*board*/ 3,
+                                      /*topic*/ 115, /*index*/ 9, /*key*/ 77,
+                                      /*value*/ 0xDEADBEEFu);
+  if (len != kConfigFrameBytes) return Fail("BuildConfigFrame length wrong");
+  if (frame[5] != 3) return Fail("byte 5 must be the board id");
+  if (frame[6] != 115) return Fail("byte 6 must be the topic");
+  if (frame[7] != 9) return Fail("byte 7 must be the index");
+  if (frame[8] != 77) return Fail("byte 8 must be the key");
+  if (frame[9] != 0xDE || frame[10] != 0xAD || frame[11] != 0xBE ||
+      frame[12] != 0xEF) {
+    return Fail("bytes 9-12 must be the 32-bit value, big-endian");
+  }
+  if (!VerifyCrc(frame, len)) return Fail("config frame failed its own CRC check");
+
+  uint8_t board, topic, index, key;
+  uint32_t value;
+  ReadConfigPayload(frame + kHeaderBytes, board, topic, index, key, value);
+  if (board != 3 || topic != 115 || index != 9 || key != 77 ||
+      value != 0xDEADBEEFu) {
+    return Fail("config payload did not round-trip");
+  }
+  return Pass();
+}
+
+Result CheckHeaderRoundTrip() {
+  uint8_t frame[kMappingFrameBytes];
+  BuildMappingFrame(frame, 3, 99, 4, kDomainCoil, 7, 42);
+
+  FrameHeader header;
+  if (!ReadHeader(frame, header)) return Fail("ReadHeader rejected a valid frame");
+  if (header.nextBoard != 3) return Fail("nextBoard did not round-trip");
+  if (header.sequence != 99) return Fail("sequence did not round-trip");
+  if (header.epoch != 4) return Fail("epoch did not round-trip");
+  if (ExtractType(header.typeAndFlags) != kFrameMapping) {
+    return Fail("frame type did not round-trip");
+  }
+
+  // A bad sync byte must be refused so the caller resynchronises.
+  frame[0] = 0x00;
+  if (ReadHeader(frame, header)) return Fail("ReadHeader accepted a bad sync byte");
+  return Pass();
+}
+
+Result CheckCrcRejectsTamperedFrames() {
+  uint8_t frame[kConfigFrameBytes];
+  const size_t len = BuildConfigFrame(frame, kNoBoard, 1, 1, 2, 3, 4, 5, 6);
+  if (!VerifyCrc(frame, len)) return Fail("a freshly built frame failed its CRC");
+
+  // Every byte of header and payload must be covered by the CRC.
+  for (size_t i = 0; i < len - kCrcBytes; ++i) {
+    frame[i] ^= 0x01;
+    const bool stillValid = VerifyCrc(frame, len);
+    frame[i] ^= 0x01;
+    if (stillValid) {
+      return Fail("tampering with byte " + Num(i) + " was not detected");
+    }
+  }
+
+  // A truncated frame must not be accepted.
+  if (VerifyCrc(frame, kHeaderBytes + kCrcBytes - 1)) {
+    return Fail("a frame shorter than header+CRC was accepted");
+  }
+  return Pass();
+}
 }  // namespace
 
 const Case kCases[] = {
@@ -397,6 +546,12 @@ const Case kCases[] = {
     {"GI nibble round trip", CheckGiNibbleRoundTrip},
     {"GI nibbles independent", CheckGiNibblesAreIndependent},
     {"GI clamping", CheckGiClamping},
+    {"big-endian primitives", CheckBigEndianPrimitives},
+    {"MappingFrame byte layout", CheckMappingFrameByteLayout},
+    {"SetupFrame byte layout", CheckSetupFrameByteLayout},
+    {"ConfigFrame byte layout", CheckConfigFrameByteLayout},
+    {"header round trip", CheckHeaderRoundTrip},
+    {"CRC rejects tampered frames", CheckCrcRejectsTamperedFrames},
 };
 
 const size_t kCaseCount = sizeof(kCases) / sizeof(kCases[0]);
