@@ -34,6 +34,31 @@ jobs:
             exit 1
           fi
 
+  test:
+    name: Unit tests (native)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Cache pip
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+      - name: Cache PlatformIO
+        uses: actions/cache@v5
+        with:
+          path: ~/.platformio
+          key: ${{ runner.os }}-platformio-native
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install --upgrade platformio
+      - name: Run host-side unit tests
+        run: pio test -e native
+
   pio-run:
     name: Build and upload firmware
     runs-on: ubuntu-latest
