@@ -2,47 +2,208 @@
 
 ## Scope
 
-This repository contains the firmware for PPUC IO Boards used to drive pinball machines.
+This repository contains the firmware for PPUC IO Boards used to drive pinball
+machines.
 
-- Treat `src/`, `platformio.ini`, `library.json`, and the checked-in documentation as the project.
-- Ignore any `*.ino` files in the repository root. They are not part of this firmware and must not influence code changes, reviews, or testing.
-- The active hardware target is the RP2040-based IO board built with PlatformIO and the Earle Philhower Arduino core.
+- Treat `src/`, `platformio.ini`, `library.json`, and the checked-in
+  documentation as the project.
+- Ignore any `*.ino` files in the repository root. They are legacy and must not
+  influence code changes, reviews, or testing.
+- The active hardware target is the RP2040-based IO board built with PlatformIO
+  and the Earle Philhower Arduino core.
+- `main` is the baseline. Feature branches such as `switch_matrix_refactoring`
+  are work in progress and are not part of a pinned build.
+
+This repo is the **source of truth for the RS485 wire protocol**. The host-side
+counterpart is `../libppuc`, which copies the shared headers
+(`PPUCProtocolV2.h`, `PPUCTimings.h`, `PPUCPlatforms.h`,
+`EventDispatcher/Event.h`) into its own `third-party/include/io-boards/` at
+dependency-staging time, pinned by `IO_BOARDS_SHA` in
+`../libppuc/platforms/config.sh`. A protocol change here only reaches a host
+build after that pin is bumped.
 
 ## Project Overview
 
-The firmware runs on a dual-core RP2040 board.
+The firmware runs on a dual-core RP2040.
 
-- Core 0 owns `IOBoardController` and the RS485 bus.
+- Core 0 owns `IOBoardController`, `EventDispatcher`, and the RS485 bus.
 - Core 1 runs `EffectsController`.
-- The two controllers exchange events through `MultiCoreCrossLink`.
-- The board ID is read from the analog DIP/resistor ladder on GPIO 28 in `IOBoardController`.
-- `main.cpp` initializes RS485 on `Serial1`, starts core 1, and enables USB serial only when the debug DIP bit is set.
+- The two cores exchange events through `MultiCoreCrossLink`.
+- The board address is read from the analog DIP/resistor ladder on GPIO 28 in
+  `IOBoardController`.
+- `main.cpp` sets `SYS_CLK_MHZ 200`, maps the UART explicitly, starts core 1,
+  and enables USB serial only when the debug DIP bit is set.
 
 Main files:
 
-- `src/main.cpp`: board boot, RS485 startup, watchdog, core split.
-- `src/IOBoardController.*`: local hardware registration and config handling for switches, switch matrix, and PWM outputs.
-- `src/EventDispatcher/*`: event routing, RS485 protocol handling, multicore forwarding.
-- `src/PPUCProtocolV2.h`: `v2` wire protocol constants and helpers.
-- `src/IODevices/*`: physical switch, switch-matrix, and PWM device implementations.
+- `src/main.cpp`: boot staging, built-in-LED status patterns, RS485 startup,
+  watchdog, core split.
+- `src/PPUCProtocolV2.h`: `v2` wire protocol constants, frame types, payload
+  structs, CRC helpers.
+- `src/EventDispatcher/*`: frame parsing/emission, mapping tables, switch token
+  chain, epoch/session handling, bridging of `v2` bitmaps into internal
+  `Event`/`ConfigEvent` objects, `V2DBG` counters.
+- `src/IOBoardController.*`: board address, local hardware registration, config
+  topic handling for switches, switch matrix, and PWM outputs.
+- `src/IODevices/*`: dedicated switches (`SwitchesPIO/*.pio`), switch matrix
+  (`SwitchMatrixPIO/*.pio`, `SwitchMatrix8x16.pio`), PWM outputs including
+  fast-flip safety.
+- `src/EffectDevices/*`, `src/Effects/*`, `src/EffectsController.*`: the core-1
+  effect engine.
+- `src/PPUC.h`: firmware version macros, parsed by CI to validate release tags.
 
 ## Build And Validation
 
 - Default build target: `platformio.ini` env `IO_16_8_1`.
-- Baud rate for the current `v2` protocol is `115200` (`ppuc::v2::kBaudRate`).
-- Planned follow-up: migrate the runtime baseline to `250000` once restart and
-  reset behavior are trustworthy again.
-- When validating protocol work, prefer firmware-level checks first:
-  - `pio run`
-  - targeted inspection of `EventDispatcher` debug counters over USB debug mode
-- Be careful with watchdog behavior: when USB debug is disabled, high-power outputs are shut off if polling stalls.
+- `pio run` to build, `pio run --target upload` to flash. If port
+  auto-detection fails, use `pio device list` and `pio run --target upload
+  --device <port>`.
+- Library dependencies come from `platformio.ini`: `mkalkbrenner/WavePWM`,
+  `PPUC/Adafruit_NeoPixel` (pinned), `PPUC/WS2812FX` (pinned), `Bounce2`,
+  `RPI_PICO_TimerInterrupt`.
+- CI (`.github/workflows/io-boards.yml`) builds the `IO_16_8_1` matrix entry,
+  runs nightly, and fails a `vX.Y.Z` tag that does not match
+  `FIRMWARE_VERSION_*` in `src/PPUC.h`.
+- There are **no automated tests**. CI only proves that the firmware compiles.
+  Adding a host-side protocol conformance test against `PPUCProtocolV2.h` is a
+  stabilization goal.
+- When validating protocol work, prefer firmware-level checks first: `pio run`,
+  then targeted inspection of the `V2DBG` counters over USB debug mode.
+- Careful with watchdog behavior: when USB debug is disabled, high-power outputs
+  are shut off if polling stalls.
+- USB debug mode changes timing enough to mask hardware and reset problems. A
+  healthy debug-mode run is not proof that non-debug startup is healthy.
 
 ## Working Rules
 
-- Preserve the current event-driven architecture. Most device logic still expects legacy `Event` / `ConfigEvent` objects even on `v2`.
-- When changing protocol code, inspect both `src/PPUCProtocolV2.h` and `src/EventDispatcher/EventDispatcher.cpp`.
-- The firmware currently bridges `v2` bitmap frames back into legacy events for listeners. Do not remove that compatibility layer without updating the rest of the firmware.
-- The intended host-side counterpart is `../libppuc`. For `v2` protocol work, verify both repos together because the wire protocol is now `v2` only.
+- Preserve the current event-driven architecture. Most device logic still
+  expects legacy `Event` / `ConfigEvent` objects even on `v2`; the firmware
+  bridges `v2` bitmap frames back into those events for listeners. Do not remove
+  that compatibility layer without updating the rest of the firmware.
+- When changing protocol code, inspect both `src/PPUCProtocolV2.h` and
+  `src/EventDispatcher/EventDispatcher.cpp`.
+- For `v2` protocol work, verify against `../libppuc` as well — the wire
+  protocol is `v2` only and both sides must move together.
+- New board-local config topics need matching config generation in `../libppuc`
+  and matching UI/export in `../config-tool`.
+- Format with `.clang-format` before committing.
+
+## V2 Communication Protocol
+
+### Transport
+
+- RS485 UART on `Serial1`, TX `GPIO0`, RX `GPIO1`, DE `GPIO2` (explicit mux
+  setup in `main.cpp` — keep it).
+- Baud: `115200` (`ppuc::v2::kBaudRate`). Planned follow-up: `250000` once
+  restart/reset behavior is trustworthy.
+- Sync byte `0xA5`, 5-byte header, 16-bit CCITT CRC over header + payload.
+
+Header layout: `sync`, `typeAndFlags`, `nextBoard`, `sequence`, `epoch`.
+
+Key constants:
+
+- `kNoBoard = 0xFF`, `kMaxBoards = 8`
+- `kMaxCoilBits = 64`, `kMaxLampBits = 256`, `kMaxSwitchBits = 256`
+- defaults announced before `SetupFrame`: 24 coil bits, 64 lamp bits,
+  64 switch bits
+- `kGiStrings = 5`, `kGiLevelBits = 4`, `kMaxGiLevel = 8`
+
+### Frame Types
+
+- `kFrameOutputState (0x01)`: full output snapshot — coils, lamps, packed GI
+- `kFrameSwitchState (0x02)`: full switch bitmap from one board, with status
+  byte
+- `kFrameHeartbeat (0x03)`: reserved, not implemented
+- `kFrameError (0x04)`: reserved, not implemented
+- `kFrameSetup (0x05)`: announces runtime bitmap sizes
+- `kFrameMapping (0x06)`: binds dense bitmap indexes to logical numbers
+- `kFrameReset (0x07)`: hard reboot
+- `kFrameConfig (0x08)`: config tuple `(boardId, topic, index, key, value)`
+- `kFrameSwitchNoChange (0x09)`: token response when nothing changed
+- `kFrameConfigAck (0x0A)`: addressed-board acknowledgment
+- `kFrameRestart (0x0B)`: soft restart, clears board-local config/runtime state
+  without reboot
+- `kFrameTrigger (0x0C)`: host-injected runtime event, delivered to listeners as
+  an ordinary `Event(source, number, value)` — this is how host Lua rules reach
+  board-local effects (`EVENT_SOURCE_EFFECT`)
+- `kFrameSwitchRefresh (0x0D)`: zero-payload command that reuses the switch
+  token chain and forces a full switch-state reply
+
+Flags: `kFlagKeyframe = 0x10`, `kFlagDelta = 0x20`, `kFlagError = 0x80`.
+`kFlagDelta` is defined but unused — all state transfer is full-snapshot.
+
+Switch status flags returned with switch replies: `kStatusInSync`,
+`kStatusNeedsSetup`, `kStatusMappingIncomplete`, `kStatusSequenceGap`,
+`kStatusParserResynced`, `kStatusSwitchOverflow`. The host uses these to decide
+whether a session resync is needed.
+
+### Runtime Model
+
+The `v2` protocol is bitmap-based.
+
+- Coils, lamps, and switches are addressed by dense bitmap index on the wire.
+- `SetupFrame` defines how many bits are active per domain for the current game.
+- `MappingFrame` binds each dense index to the logical number used by the rest
+  of the firmware; `EventDispatcher` stores `coilIndexToNumber`,
+  `lampIndexToNumber`, `switchIndexToNumber`.
+- Wire bitmap size does not need to match the highest logical number. Logical
+  numbers may be sparse and high; coils specifically are mapped into a dense
+  64-slot block.
+- GI uses 5 fixed runtime slots with packed 4-bit levels (`0..8`, `0` = off),
+  unpacked into real `EVENT_SOURCE_GI` events. GI stays separate from lamps
+  because one addressable LED string may mix lamps, GI, and flashers.
+- Incoming output bitmaps are edge-diffed against the previous snapshot; only
+  changed bits synthesize legacy events (`EVENT_SOURCE_SOLENOID`,
+  `EVENT_SOURCE_LIGHT`).
+- Local switch events are mirrored into the dense `switchStates` bitmap;
+  incoming switch bitmaps from other boards are turned back into local fast
+  switch events for listeners.
+- Frames carrying an epoch that does not match the current session epoch are
+  ignored for runtime purposes.
+
+### Bus Flow
+
+1. Host sends `RestartFrame` to turn outputs off and clear session/config state
+   without rebooting.
+2. Host sends `ConfigFrame`s to register board-local hardware behavior.
+3. The addressed board acknowledges accepted config with `ConfigAck`. This is
+   also how the host detects board presence.
+4. Host sends `SetupFrame`, then all `MappingFrame`s.
+5. Host repeatedly sends `OutputStateFrame`s with the full coil/lamp/GI
+   snapshot.
+6. `header.nextBoard` in an output frame acts as the poll token. If it matches
+   the local board id, the board replies once:
+   - `SwitchStateFrame` if any switch changed since its last reply
+   - `SwitchNoChangeFrame` otherwise
+7. The reply carries the next board token in its own `header.nextBoard`; the
+   host reads chained replies until `nextBoard == kNoBoard`.
+
+`SwitchRefreshFrame` uses the same token chain: the selected board re-reads its
+switch inputs, restarts its local switch readers, and replies with full state.
+
+`ResetFrame` remains available as the hard-reboot recovery path only.
+
+Important implementation details:
+
+- Boards never broadcast switches on their own; they only answer the token.
+- `switchDirty` decides between a real bitmap and `SwitchNoChange`.
+- The host restarts the chain from the first registered switch board on every
+  output cycle; it does not rotate the first token.
+- Frames carry no sender board ID, so chain integrity relies on token order.
+- The host may synthesize `SwitchState`/`SwitchNoChange` frames on behalf of
+  missing (virtual) boards. Firmware must treat those exactly like frames from
+  a real board.
+
+### Debug Counters
+
+With USB debug enabled, `EventDispatcher` prints a `V2DBG` line once per second:
+
+```
+V2DBG board= rx= rx_crc_fail= raw= raw_a5= raw_ff= tx= tx_nochange= xcore_drop=
+```
+
+These are the fastest way to tell whether a problem is framing, CRC, token flow,
+or cross-core event loss.
 
 ## Effect Stack Notes
 
@@ -53,262 +214,104 @@ Main files:
 - WS2812 LED strips are segmented devices. `WS2812FXEffect` returns its segment
   number from `deviceStackScope()`, so the effective stack target is
   `EffectDevice* + segment`.
-- Preserve this behavior: a higher-priority effect on one LED strip segment
-  must not stop, suspend, or replace an effect on another segment of the same
-  strip.
-- If another future device has independently controllable subregions, give its
-  effect class a distinct `deviceStackScope()` rather than broadening the stack
-  key back to the whole device.
-
-## V2 Communication Protocol
-
-Compared to `main`, branch `v2` replaces the old 7-byte event packets with framed RS485 messages defined in `src/PPUCProtocolV2.h`.
-
-### Transport
-
-- RS485 UART on `Serial1`
-- Baud: `115200`
-- Planned target baud after the current bring-up phase: `250000`
-- Sync byte: `0xA5`
-- Header size: 5 bytes
-- CRC: 16-bit CCITT over header + payload
-
-Frame header layout:
-
-1. `sync`
-2. `typeAndFlags`
-3. `nextBoard`
-4. `sequence`
-5. `epoch`
-
-Important constants:
-
-- `kNoBoard = 0xFF`
-- `kMaxBoards = 8`
-- current hard limits in code: up to 256 coil bits, 256 lamp bits, 256 switch bits
-- practical target for this project: 64 coil slots should be enough, with higher logical coil numbers mapped into that dense 64-slot bitmap by `MappingFrame`
-
-### Frame Types
-
-- `kFrameOutputState (0x01)`: full output snapshot, coils followed by lamps
-  and packed GI levels
-- `kFrameSwitchState (0x02)`: full switch bitmap sent by one board
-- `kFrameHeartbeat (0x03)`: reserved/no payload
-- `kFrameError (0x04)`: reserved/no payload
-- `kFrameSetup (0x05)`: announces runtime bitmap sizes
-- `kFrameMapping (0x06)`: maps dense bitmap indexes to logical coil/lamp/switch numbers
-- `kFrameReset (0x07)`: resets boards
-- `kFrameConfig (0x08)`: carries legacy config tuples `(boardId, topic, index, key, value)`
-- `kFrameSwitchNoChange (0x09)`: token response when no switch bitmap changed
-- `kFrameConfigAck (0x0A)`: addressed-board acknowledgment for config frames
-- `kFrameRestart (0x0B)`: soft restart, clear board-local config/runtime state without reboot
-- `kFrameSwitchRefresh (0x0D)`: zero-payload host command that reuses the
-  switch token chain, forces selected boards to refresh switch readers, and
-  returns full switch state.
-
-Defined flags:
-
-- `kFlagKeyframe = 0x10`
-- `kFlagDelta = 0x20`
-- `kFlagError = 0x80`
-
-Right now the firmware consumes full snapshots. `kFlagDelta` exists in the protocol definition but is not implemented in the board logic.
-
-### Runtime Model
-
-The `v2` protocol is bitmap-based.
-
-- Coils, lamps, and switches are addressed by dense bitmap index on the wire.
-- GI uses 5 fixed runtime slots, one per GI string, with packed 4-bit levels.
-- `SetupFrame` defines how many bits are active for each domain for the current game.
-- `MappingFrame` binds each dense index to the legacy logical number used by the rest of the firmware.
-- `EventDispatcher` stores that mapping in `coilIndexToNumber`, `lampIndexToNumber`, and `switchIndexToNumber`.
-
-Implication:
-
-- Wire-level bitmap size does not need to match the highest logical number.
-- Logical device numbers may be sparse and high, as long as they are mapped into a compact dense bitmap.
-- For coils specifically, the intended direction is a dense block of 64 wire slots, not 256, even if logical coil numbers are higher.
-
-This is the compatibility strategy:
-
-- Incoming output bitmaps are edge-diffed against the previous snapshot.
-- For each changed bit, the firmware synthesizes legacy `Event` objects such as `EVENT_SOURCE_SOLENOID` and `EVENT_SOURCE_LIGHT`.
-- Local switch events are mirrored into the dense `switchStates` bitmap.
-- Incoming switch bitmaps are turned back into local fast switch events for listeners.
-
-### Bus Flow
-
-The verified `v2` flow between `libppuc` and the boards is:
-
-1. Host sends `RestartFrame` to turn outputs off and clear session/config state without rebooting the RP2040.
-2. Host sends `ConfigFrame`s to register board-local hardware behavior.
-3. The addressed board acknowledges accepted config with `ConfigAck`.
-4. Host sends `SetupFrame`.
-5. Host sends `MappingFrame`s.
-6. Host repeatedly sends `OutputStateFrame`s containing the full coil/lamp snapshot.
-7. `header.nextBoard` in an output frame acts as the poll token.
-8. If `nextBoard == this boardId`, the board replies once:
-   - `SwitchStateFrame` if any switch changed since the last reply
-   - `SwitchNoChangeFrame` otherwise
-9. The reply includes the next board token in its own `header.nextBoard`.
-10. The host continues reading chained replies until `nextBoard == kNoBoard`.
-
-The host may also send `SwitchRefreshFrame` with a switch token. The selected
-board restarts/re-reads switch inputs and replies with full switch state; the
-reply carries the next token just like normal polling.
-
-`ResetFrame` still exists, but it is now the hard-reboot recovery path rather
-than the normal startup workflow.
-
-Important implementation detail:
-
-- The board does not independently broadcast switches to the host.
-- It only responds when selected by the token in the incoming output frame.
-- `switchDirty` is the gate that decides whether the board emits a real switch bitmap or `SwitchNoChange`.
-- `libppuc` restarts polling from the first registered switch board on every output cycle.
-
-### Runtime Cycle Summary
-
-Ignoring setup and configuration, the steady-state `v2` runtime cycle is:
-
-1. The CPU sends one full `OutputStateFrame` containing the complete coil and lamp snapshot for the current game.
-2. All boards read that frame in parallel.
-3. Each board applies the full output snapshot to its local state and generates internal legacy events only for changed bits.
-4. Boards that monitor switches continuously mirror local switch changes into their RAM switch bitmap.
-5. The output frame selects the first switch board by placing its board number into `header.nextBoard`.
-6. The selected board replies once:
-   - `SwitchStateFrame` with its full current switch bitmap when something changed since its last reply
-   - `SwitchNoChangeFrame` otherwise
-7. That reply carries the next switch-board token in its own `header.nextBoard`.
-8. The CPU and all boards consume each switch reply and update their switch state accordingly.
-9. The chain continues until a reply carries `kNoBoard`.
-10. Then the next CPU output frame begins a new runtime cycle.
-
-Important clarifications:
-
-- Only boards registered as switch boards participate in the reply chain.
-- Not every board transmits during every cycle.
-- The CPU always restarts the chain from the first registered switch board; it does not rotate the first token between cycles.
-- Frames do not contain an explicit sender board ID, so the chain is tracked by `nextBoard` token order.
-
-### GI Transport
-
-General Illumination is part of the `v2` runtime output payload.
-
-- There are 5 fixed GI string slots.
-- Each GI string carries a packed 4-bit brightness value.
-- Valid values are `0..8`, where `0` means off.
-- Firmware unpacks GI values and emits real `EVENT_SOURCE_GI` events.
-
-This keeps GI separate from lamps, which matters because one addressable LED string may mix lamps, GI, and flashers.
-
-### DMA Cutover
-
-`v2` currently has a two-stage receive path in `EventDispatcher`.
-
-- Bootstrap/fallback path: blocking parser reads framed messages before DMA is active.
-- After a valid `SetupFrame`, the board attempts to claim two DMA channels and switches to DMA-based UART RX/TX.
-- If DMA setup fails, the blocking parser remains the fallback path.
-- Debug counters printed in USB debug mode:
-  - `cutover_ok`
-  - `cutover_fail`
-  - `rx`
-  - `rx_crc_fail`
-  - `rx_sync_fail`
-  - `rx_dma_restart`
-  - `rx_dma_timeout`
-  - `tx`
-  - `tx_nochange`
-  - `tx_fallback`
-
-These counters are the fastest way to diagnose whether the issue is framing, CRC, DMA startup, or token flow.
-
-## Confirmed Multi-Board Runtime Finding
-
-- Real-machine testing showed that host-side V2 switch-chain timing affects visible lamp animation quality, not only switch test.
-- After loosening `libppuc` switch-reply timing and making resync less aggressive, the lamp attract-mode animation became visibly correct and much faster.
-- Treat the board firmware and host timing together as one system. If switch-chain timing is too aggressive, the host can churn sessions often enough to disturb normal output updates.
-- For larger games with more boards, expect the timing sweet spot to move. Do not assume a single fixed timeout is ideal for every cabinet.
-- Latest real-machine result: Time Warp attract mode ran for `1h40m4s` with no communication error messages from the host.
-- Treat the current non-DMA firmware path plus present host timing as the strongest known-good multi-board runtime baseline so far.
-- Do not change switch-reply timing or fallback TX behavior casually while the remaining work is focused on coil test and virtualized cabinet switches.
-- A later firmware change also improved the board-side runtime path by
-  forwarding the switch token before heavier output/switch fanout work on core
-  0. That reduced the reply-delay margin needed on real hardware
-  substantially.
-
-Firmware-side implications:
-
-- Board-to-host switch reply fallback TX timing is sensitive.
-- The fallback switch reply path currently avoids `HardwareSerial::flush()` and uses a bounded wire-time delay before switching RS485 back to RX.
-- Keep that behavior unless there is a proven replacement, because earlier `flush()` behavior was correlated with board freezes during switch reply.
-
-## Known Gaps And Risks
-
-- The `v2` protocol path is now validated enough for normal startup/runtime on
-  the good boards, and the preferred restart path is now `RestartFrame`
-  without reboot. Hard reboot recovery via `ResetFrame` is still not fully
-  robust on every board.
-- Startup on the wire is now `v2` only; the remaining legacy boundary is
-  internal event bridging inside firmware.
-- `kFrameHeartbeat` and `kFrameError` are defined but effectively placeholders in the current firmware.
-- Sequence numbers are generated and parsed but are not yet used for replay detection, loss handling, or synchronization checks.
-- `kFlagDelta` is defined but not used; all practical state transfer is keyframe/full-snapshot based.
-- The frame format has no sender board ID, so switch-chain validation relies on token order (`nextBoard`) rather than explicit sender identity.
-- GI strings are fixed-size in the runtime payload rather than dynamically mapped like coils, lamps, and switches.
-- The 16-switch PIO reader has special handling for the last four stateful inputs. Regressions there are easy to miss because the other 12 inputs can still appear healthy.
+- **Preserve this:** a higher-priority effect on one LED strip segment must not
+  stop, suspend, or replace an effect on another segment of the same strip.
+- If a future device has independently controllable subregions, give its effect
+  class a distinct `deviceStackScope()` rather than broadening the stack key
+  back to the whole device.
 
 ## Fast-Flip Safety
 
-- Fast-switch driven solenoids need explicit board-local safety behavior.
-- Real-machine testing exposed a dangerous failure mode:
-  - a stuck fast-flip switch on a kicker or jet bumper can repeatedly refire
-    the coil
-  - this can overheat the coil badly enough to risk hardware damage if cabinet
-    power is not cut quickly
-- This safety must live in firmware, not only in the host:
-  - fast-flip reactions are board-local and latency-sensitive
-  - the board must stay safe even if the host is busy, delayed, or temporarily
-    disconnected
+Fast-switch driven solenoids need explicit board-local safety behavior. Real
+machine testing exposed a dangerous failure mode: a stuck fast-flip switch on a
+kicker or jet bumper can repeatedly refire the coil and overheat it badly enough
+to risk hardware damage.
 
-Current intended firmware semantics in `src/IODevices/PwmDevices.*`:
+This safety must live in firmware, not only in the host — fast-flip reactions
+are board-local and latency-sensitive, and the board must stay safe even if the
+host is busy, delayed, or disconnected.
+
+Semantics in `src/IODevices/PwmDevices.*`:
 
 - A fast-switch solenoid with `MinPulseTime` ignores switch toggles during that
   protected pulse window after activation.
 - If the fast switch opens during `MinPulseTime`, the coil is not turned off
-  immediately; it is turned off once the minimum pulse has elapsed.
+  immediately; it turns off once the minimum pulse has elapsed.
 - A fast-switch solenoid with `MaxPulseTime` is forced off when that limit is
   reached, even if the switch is still closed.
 - After such a max-pulse timeout, the coil must not refire until the switch has
   opened again and then closed again.
-- This logic is keyed by logical switch number, so fast switches may still live
-  on other physical boards; the safety behavior is not limited to same-board
-  switch/coil pairs.
+- The logic is keyed by logical switch number, so fast switches may live on
+  other boards; the safety is not limited to same-board switch/coil pairs.
 
-When changing fast-switch, PWM, or switch-event logic, preserve these safety
-properties unless the replacement behavior is clearly safer and has been
+Preserve these properties unless the replacement is clearly safer and has been
 validated on real hardware.
+
+## Switch Debounce Modes
+
+Configured per switch as `debounce` (ms) plus `debounceMode`, exported by
+`../config-tool` and sent by `../libppuc` as `CONFIG_TOPIC_DEBOUNCE_TIME` and
+`CONFIG_TOPIC_MODE` under `CONFIG_TOPIC_SWITCHES`.
+
+- `standard` — report an edge only after the new state survived the debounce
+  window. Default for playfield switches.
+- `fastFlip` — accept the close edge immediately, require the open edge to
+  survive the window. For flipper and magna-save buttons.
+- `slowStable` — conservative stable-before-report. For tilt, coin door,
+  trough, drop-target bank switches.
+
+Debounce mode and local PWM fast-switch activation are **separate settings**.
+A slingshot can use `standard` debounce and still fire locally via its fast
+activation switch. See `README.md` for per-switch-type value recommendations.
+
+## Board-Local Timing And Performance
+
+- The switch token is forwarded *before* heavier runtime output/switch fanout
+  work on core 0. This reduced the switch-reply margin needed on real hardware
+  substantially. Keep that ordering.
+- The fallback switch-reply TX path deliberately avoids
+  `HardwareSerial::flush()` and uses a bounded wire-time delay before switching
+  RS485 back to RX. Earlier `flush()` behavior correlated with board freezes
+  during switch reply.
+- Board-side reply latency and host-side timing are one system. If switch-chain
+  timing is too aggressive, the host churns sessions often enough to disturb
+  normal output updates and visibly degrade lamp animation.
+- Best known-good evidence: Time Warp attract mode ran `1h40m4s` with no
+  communication errors reported by the host.
+- Protocol hardening must not cost throughput or latency. The bus carries a full
+  snapshot plus the complete switch chain every 4 ms; extra per-frame bytes or
+  round trips are a real cost. Measure output-frame cadence and switch-reply
+  latency on hardware before and after.
+
+## Known Gaps And Risks
+
+- **Hard reset recovery is still not fully robust.** Soft `RestartFrame` is the
+  normal path; some boards still fail to recover from a true `ResetFrame`
+  without a power cycle. This is the top unresolved transport problem.
+- `kFrameHeartbeat` and `kFrameError` are defined but are placeholders.
+- `sequence` is generated and parsed but not used for replay detection, loss
+  handling, or synchronization checks.
+- `kFlagDelta` is defined but unused.
+- Frames carry no sender board ID; switch-chain validation relies on token
+  order.
+- GI strings are fixed-size in the runtime payload rather than dynamically
+  mapped like coils, lamps, and switches.
+- UART DMA RX has been **removed**. The blocking framed parser is the only RX
+  path. Older notes describing a DMA cutover and `cutover_ok`/`rx_dma_*`
+  counters are obsolete.
+- The 16-switch PIO reader has special handling for the last four stateful
+  inputs (GPIO 15-18, see `src/IODevices/Switches.cpp`). Regressions there are
+  easy to miss because the other 12 inputs still look healthy.
+- Only `IO_16_8_1` is built, although `../config-tool` also knows `Out_8x10`.
 
 ## Next Bring-Up Focus
 
-When resuming work on `v2`, start here:
-
-1. Re-test restart/reset recovery first. The main unresolved issue is still
-   that some boards can wedge across host restarts.
-2. Use USB debug mode on one board and inspect `V2DBG` counters while driving
+1. Re-test restart/reset recovery first; boards wedging across host restarts is
+   the main open issue.
+2. Use USB debug mode on one board and watch the `V2DBG` counters while driving
    known restart and switch-poll scenarios.
-3. If the last four dedicated switch inputs on IO_16_8_1 stop reporting,
-   inspect both:
-   - `src/IODevices/Switches.cpp` registration/range checks
-   - the 16-switch PIO stateful-pin reset path for GPIO 15-18
-4. If runtime animation or switch latency regresses again, coordinate timing
-   changes with `libppuc` before changing board protocol logic.
-
-## Virtual Board Notes
-
-- The first implementation slice of virtual missing boards is host-side only in `libppuc`.
-- Real boards remain authoritative for physically present switches.
-- Missing configured switch boards may later be virtualized by the host, with all of their switches initialized open.
-- Missing configured switch boards are now synthesized by the host as ordinary `SwitchState` / `SwitchNoChange` frames in the logical switch chain.
-- Firmware should treat those frames exactly like frames from a real board; it must not care whether the sender was physical or virtual.
+3. If the last four dedicated switch inputs stop reporting, inspect both
+   `src/IODevices/Switches.cpp` registration/range checks and the 16-switch PIO
+   stateful-pin reset path for GPIO 15-18.
+4. If runtime animation or switch latency regresses, coordinate timing changes
+   with `../libppuc` before changing board protocol logic.
