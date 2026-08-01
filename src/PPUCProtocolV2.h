@@ -202,6 +202,25 @@ constexpr size_t kConfigAckFrameBytes = kHeaderBytes + kConfigAckPayloadBytes + 
 constexpr size_t kSwitchFrameBytes = kHeaderBytes + kSwitchPayloadBytes + kCrcBytes;
 constexpr size_t kTriggerFrameBytes = kHeaderBytes + kTriggerPayloadBytes + kCrcBytes;
 
+// The wire format is deliberately assembled byte at a time, never by copying a
+// struct, so that host endianness, struct padding and alignment cannot affect
+// it. The structs above describe the layout for readers; they are not
+// serialized.
+//
+// The frame size constants are nevertheless derived from sizeof() on those
+// structs. If a compiler or ABI padded one, the frame *length* would change
+// while the layout did not, and frames would go out the wrong size. These
+// assertions pin the sizes to their wire values so that fails at compile time
+// on the offending platform rather than silently on the bus.
+static_assert(sizeof(FrameHeader) == 5, "FrameHeader must be 5 bytes on the wire");
+static_assert(kSetupPayloadBytes == 6, "SetupPayload must be 6 bytes on the wire");
+static_assert(kMappingPayloadBytes == 6, "MappingPayload must be 6 bytes on the wire");
+static_assert(kConfigPayloadBytes == 8, "ConfigPayload must be 8 bytes on the wire");
+static_assert(kConfigAckPayloadBytes == 8, "ConfigAckPayload must be 8 bytes on the wire");
+static_assert(kTriggerPayloadBytes == 4, "TriggerPayload must be 4 bytes on the wire");
+static_assert(kSwitchStatusBytes == 4, "the switch status prefix is 4 bytes on the wire");
+static_assert(kGiBytes == 3, "5 GI strings at 4 bits each pack into 3 bytes");
+
 struct RuntimeConfig {
   uint16_t coilBits = kDefaultCoilBits;
   uint16_t lampBits = kDefaultLampBits;

@@ -639,6 +639,59 @@ Result CheckOutputStateLayout() {
   if (!VerifyCrc(frame, len)) return Fail("output frame failed its own CRC");
   return Pass();
 }
+
+Result CheckWireSizesAreNotStructPadding() {
+  // Companion to the static_asserts in the header. The wire format is built
+  // byte at a time so endianness and packing cannot affect the *layout*, but
+  // the frame length constants come from sizeof() on structs that are never
+  // serialized. Padding would change the length while the layout stayed right.
+  const struct {
+    size_t actual;
+    size_t wire;
+    const char* name;
+  } kExpected[] = {
+      {kSetupPayloadBytes, 6, "SetupPayload"},
+      {kMappingPayloadBytes, 6, "MappingPayload"},
+      {kConfigPayloadBytes, 8, "ConfigPayload"},
+      {kConfigAckPayloadBytes, 8, "ConfigAckPayload"},
+      {kTriggerPayloadBytes, 4, "TriggerPayload"},
+      {kSwitchStatusBytes, 4, "switch status prefix"},
+      {kGiBytes, 3, "GI payload"},
+  };
+
+  for (const auto& e : kExpected) {
+    if (e.actual != e.wire) {
+      return Fail(std::string(e.name) + " is " + Num(e.actual) +
+                  " bytes but the wire format is " + Num(e.wire) +
+                  ". This compiler is padding a payload struct, so frames "
+                  "would be sent at the wrong length.");
+    }
+  }
+  return Pass();
+}
+
+Result CheckCodecIsEndianIndependent() {
+  // Writing a known value and reading back the individual bytes proves the
+  // codec does not depend on host byte order: the assertions are on byte
+  // positions, which are identical on a big- or little-endian host.
+  uint8_t buf[8];
+  WriteU32(buf, 0x01020304u);
+  if (buf[0] != 0x01 || buf[1] != 0x02 || buf[2] != 0x03 || buf[3] != 0x04) {
+    return Fail("WriteU32 produced host byte order rather than big-endian");
+  }
+
+  // And reading a hand-laid big-endian buffer must give the same value on any
+  // host, which is what makes an x86 laptop and an RP2040 interoperate.
+  const uint8_t wire[4] = {0x0A, 0x0B, 0x0C, 0x0D};
+  if (ReadU32(wire) != 0x0A0B0C0Du) {
+    return Fail("ReadU32 did not decode a big-endian buffer correctly");
+  }
+  const uint8_t wire16[2] = {0x0A, 0x0B};
+  if (ReadU16(wire16) != 0x0A0Bu) {
+    return Fail("ReadU16 did not decode a big-endian buffer correctly");
+  }
+  return Pass();
+}
 }  // namespace
 
 const Case kCases[] = {
@@ -669,6 +722,8 @@ const Case kCases[] = {
     {"TriggerFrame byte layout", CheckTriggerFrameLayout},
     {"switch reply layout", CheckSwitchReplyLayout},
     {"OutputState layout", CheckOutputStateLayout},
+    {"wire sizes are not struct padding", CheckWireSizesAreNotStructPadding},
+    {"codec is endian independent", CheckCodecIsEndianIndependent},
 };
 
 const size_t kCaseCount = sizeof(kCases) / sizeof(kCases[0]);
