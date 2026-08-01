@@ -340,7 +340,7 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
   const uint8_t incomingEpoch = frame[4];
   const size_t payloadOffset = ppuc::v2::kHeaderBytes;
   const size_t crcOffset = ppuc::v2::kHeaderBytes + payloadBytes;
-  uint16_t receivedCrc = word(frame[crcOffset], frame[crcOffset + 1]);
+  uint16_t receivedCrc = ppuc::v2::ReadU16(&frame[crcOffset]);
   uint16_t expectedCrc =
       ppuc::v2::Crc16Ccitt(frame, ppuc::v2::kHeaderBytes + payloadBytes);
   if (receivedCrc != expectedCrc) {
@@ -385,11 +385,7 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
 
   if (frameType == ppuc::v2::kFrameSetup) {
     ppuc::v2::RuntimeConfig newConfig;
-    newConfig.coilBits = word(frame[payloadOffset], frame[payloadOffset + 1]);
-    newConfig.lampBits =
-        word(frame[payloadOffset + 2], frame[payloadOffset + 3]);
-    newConfig.switchBits =
-        word(frame[payloadOffset + 4], frame[payloadOffset + 5]);
+    ppuc::v2::ReadSetupPayload(&frame[payloadOffset], newConfig);
     if (ppuc::v2::IsValidRuntimeConfig(newConfig)) {
       resetSessionState(incomingEpoch, newConfig);
       if (!v2RuntimeInitialized) {
@@ -441,11 +437,10 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
     if (!runtimeConfigValid || incomingEpoch != currentEpoch) {
       return true;
     }
-    const uint8_t domain = frame[payloadOffset];
-    const uint16_t index =
-        word(frame[payloadOffset + 2], frame[payloadOffset + 3]);
-    const uint16_t number =
-        word(frame[payloadOffset + 4], frame[payloadOffset + 5]);
+    uint8_t domain;
+    uint16_t index;
+    uint16_t number;
+    ppuc::v2::ReadMappingPayload(&frame[payloadOffset], domain, index, number);
 
     if (domain == ppuc::v2::kDomainCoil && index < runtimeConfig.coilBits) {
       coilIndexToNumber[index] = number;
@@ -508,26 +503,24 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
       return true;
     }
 
-    const uint8_t source = frame[payloadOffset];
-    const uint16_t number =
-        word(frame[payloadOffset + 1], frame[payloadOffset + 2]);
-    const uint8_t value = frame[payloadOffset + 3];
+    uint8_t source;
+    uint16_t number;
+    uint8_t value;
+    ppuc::v2::ReadTriggerPayload(&frame[payloadOffset], source, number, value);
     callListeners(new Event(source, number, value), true);
     return true;
   }
 
   if (frameType == ppuc::v2::kFrameConfig) {
-    const uint8_t targetBoard = frame[payloadOffset];
-    const uint8_t topic = frame[payloadOffset + 1];
-    const uint8_t index = frame[payloadOffset + 2];
-    const uint8_t key = frame[payloadOffset + 3];
-    callListeners(
-        new ConfigEvent(targetBoard, topic, index, key,
-                        (((uint32_t)frame[payloadOffset + 4]) << 24) |
-                            (((uint32_t)frame[payloadOffset + 5]) << 16) |
-                            (((uint32_t)frame[payloadOffset + 6]) << 8) |
-                            ((uint32_t)frame[payloadOffset + 7])),
-        true);
+    uint8_t targetBoard;
+    uint8_t topic;
+    uint8_t index;
+    uint8_t key;
+    uint32_t configValue;
+    ppuc::v2::ReadConfigPayload(&frame[payloadOffset], targetBoard, topic, index,
+                                key, configValue);
+    callListeners(new ConfigEvent(targetBoard, topic, index, key, configValue),
+                  true);
     if (targetBoard == board) {
       sendConfigAckFrame(targetBoard, topic, index, key,
                          ppuc::v2::kConfigAckAccepted);
@@ -542,25 +535,9 @@ void EventDispatcher::sendConfigAckFrame(uint8_t boardId, uint8_t topic,
                                          uint8_t index, uint8_t key,
                                          uint8_t status) {
   byte frame[ppuc::v2::kConfigAckFrameBytes];
-  frame[0] = ppuc::v2::kSyncByte;
-  frame[1] = ppuc::v2::ComposeTypeAndFlags(ppuc::v2::kFrameConfigAck,
-                                           ppuc::v2::kFlagNone);
-  frame[2] = ppuc::v2::kNoBoard;
-  frame[3] = txSequence++;
-  frame[4] = currentEpoch;
-  frame[5] = boardId;
-  frame[6] = topic;
-  frame[7] = index;
-  frame[8] = key;
-  frame[9] = status;
-  frame[10] = 0;
-  frame[11] = 0;
-  frame[12] = 0;
-  const uint16_t crc =
-      ppuc::v2::Crc16Ccitt(frame, ppuc::v2::kHeaderBytes +
-                                      ppuc::v2::kConfigAckPayloadBytes);
-  frame[13] = highByte(crc);
-  frame[14] = lowByte(crc);
+  ppuc::v2::BuildConfigAckFrame(frame, ppuc::v2::kNoBoard, txSequence++,
+                                currentEpoch, boardId, topic, index, key,
+                                status);
 
   digitalWrite(rs485Pin, HIGH);  // Write.
   delayMicroseconds(RS485_MODE_SWITCH_DELAY);
@@ -737,26 +714,18 @@ void EventDispatcher::sendSwitchStateFrame(byte nextBoard) {
       ppuc::v2::kHeaderBytes + payloadBytes + ppuc::v2::kCrcBytes;
 
   byte* frame = v2TxBuffer;
-  frame[0] = ppuc::v2::kSyncByte;
-  frame[1] = ppuc::v2::ComposeTypeAndFlags(ppuc::v2::kFrameSwitchState,
-                                           ppuc::v2::kFlagKeyframe);
-  frame[2] = nextBoard;
-  frame[3] = txSequence++;
-  frame[4] = currentEpoch;
-  frame[5] = currentEpoch;
-  frame[6] = lastHostSequenceSeen;
-  frame[7] = currentStatusFlags();
-  frame[8] = 0;
+  ppuc::v2::WriteHeader(frame, ppuc::v2::kFrameSwitchState,
+                        ppuc::v2::kFlagKeyframe, nextBoard, txSequence++,
+                        currentEpoch);
+  ppuc::v2::WriteSwitchStatus(&frame[ppuc::v2::kHeaderBytes], currentEpoch,
+                              lastHostSequenceSeen, currentStatusFlags());
   memcpy(&frame[9], switchStates, switchBytes);
   if (localSwitchReportHead != localSwitchReportTail) {
     ApplyMaskedBitmap(&frame[9], localSwitchReportHistory[localSwitchReportTail],
                       localOwnedSwitchMask, switchBytes);
   }
 
-  uint16_t crc =
-      ppuc::v2::Crc16Ccitt(frame, ppuc::v2::kHeaderBytes + payloadBytes);
-  frame[9 + switchBytes] = highByte(crc);
-  frame[10 + switchBytes] = lowByte(crc);
+  ppuc::v2::AppendCrc(frame, ppuc::v2::kHeaderBytes + payloadBytes);
 
   const uint32_t derivedPostTxSettleUs = switchReplyDelayUs / 4u;
   // Keep the post-TX settle tied to the configured pre-reply delay, but cap it
@@ -793,20 +762,9 @@ void EventDispatcher::sendSwitchStateFrame(byte nextBoard) {
 
 void EventDispatcher::sendSwitchNoChangeFrame(byte nextBoard) {
   byte* frame = v2TxBuffer;
-  frame[0] = ppuc::v2::kSyncByte;
-  frame[1] = ppuc::v2::ComposeTypeAndFlags(ppuc::v2::kFrameSwitchNoChange,
-                                           ppuc::v2::kFlagNone);
-  frame[2] = nextBoard;
-  frame[3] = txSequence++;
-  frame[4] = currentEpoch;
-  frame[5] = currentEpoch;
-  frame[6] = lastHostSequenceSeen;
-  frame[7] = currentStatusFlags();
-  frame[8] = 0;
-  uint16_t crc = ppuc::v2::Crc16Ccitt(
-      frame, ppuc::v2::kHeaderBytes + ppuc::v2::SwitchNoChangePayloadBytes());
-  frame[9] = highByte(crc);
-  frame[10] = lowByte(crc);
+  ppuc::v2::BuildSwitchReplyFrame(
+      frame, /*sendState*/ false, nextBoard, txSequence++, currentEpoch,
+      currentEpoch, lastHostSequenceSeen, currentStatusFlags(), nullptr, 0);
 
   const uint32_t derivedPostTxSettleUs = switchReplyDelayUs / 4u;
   // Keep the post-TX settle tied to the configured pre-reply delay, but cap it

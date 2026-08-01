@@ -456,6 +456,138 @@ inline size_t BuildConfigFrame(uint8_t* frame, uint8_t nextBoard,
   return AppendCrc(frame, kHeaderBytes + kConfigPayloadBytes);
 }
 
+inline void WriteConfigAckPayload(uint8_t* payload, uint8_t boardId,
+                                  uint8_t topic, uint8_t index, uint8_t key,
+                                  uint8_t status) {
+  payload[0] = boardId;
+  payload[1] = topic;
+  payload[2] = index;
+  payload[3] = key;
+  payload[4] = status;
+  payload[5] = 0;  // reserved
+  payload[6] = 0;
+  payload[7] = 0;
+}
+
+inline void ReadConfigAckPayload(const uint8_t* payload, uint8_t& boardId,
+                                 uint8_t& topic, uint8_t& index, uint8_t& key,
+                                 uint8_t& status) {
+  boardId = payload[0];
+  topic = payload[1];
+  index = payload[2];
+  key = payload[3];
+  status = payload[4];
+}
+
+inline size_t BuildConfigAckFrame(uint8_t* frame, uint8_t nextBoard,
+                                  uint8_t sequence, uint8_t epoch,
+                                  uint8_t boardId, uint8_t topic, uint8_t index,
+                                  uint8_t key, uint8_t status) {
+  WriteHeader(frame, kFrameConfigAck, kFlagNone, nextBoard, sequence, epoch);
+  WriteConfigAckPayload(frame + kHeaderBytes, boardId, topic, index, key,
+                        status);
+  return AppendCrc(frame, kHeaderBytes + kConfigAckPayloadBytes);
+}
+
+// Reset, Restart and SwitchRefresh carry no payload.
+inline size_t BuildBareFrame(uint8_t* frame, FrameType type, uint8_t flags,
+                             uint8_t nextBoard, uint8_t sequence,
+                             uint8_t epoch) {
+  WriteHeader(frame, type, flags, nextBoard, sequence, epoch);
+  return AppendCrc(frame, kHeaderBytes);
+}
+
+inline void WriteTriggerPayload(uint8_t* payload, uint8_t source,
+                                uint16_t number, uint8_t value) {
+  payload[0] = source;
+  WriteU16(payload + 1, number);
+  payload[3] = value;
+}
+
+inline void ReadTriggerPayload(const uint8_t* payload, uint8_t& source,
+                               uint16_t& number, uint8_t& value) {
+  source = payload[0];
+  number = ReadU16(payload + 1);
+  value = payload[3];
+}
+
+inline size_t BuildTriggerFrame(uint8_t* frame, uint8_t nextBoard,
+                                uint8_t sequence, uint8_t epoch, uint8_t source,
+                                uint16_t number, uint8_t value) {
+  WriteHeader(frame, kFrameTrigger, kFlagNone, nextBoard, sequence, epoch);
+  WriteTriggerPayload(frame + kHeaderBytes, source, number, value);
+  return AppendCrc(frame, kHeaderBytes + kTriggerPayloadBytes);
+}
+
+// The switch status prefix carried by both switch reply variants.
+inline void WriteSwitchStatus(uint8_t* payload, uint8_t epochSeen,
+                              uint8_t lastHostSequenceSeen, uint8_t flags) {
+  payload[0] = epochSeen;
+  payload[1] = lastHostSequenceSeen;
+  payload[2] = flags;
+  payload[3] = 0;  // reserved
+}
+
+inline void ReadSwitchStatus(const uint8_t* payload, uint8_t& epochSeen,
+                             uint8_t& lastHostSequenceSeen, uint8_t& flags) {
+  epochSeen = payload[0];
+  lastHostSequenceSeen = payload[1];
+  flags = payload[2];
+}
+
+// A SwitchNoChange reply is the status prefix alone; a SwitchState reply
+// appends the switch bitmap. Pass switchBytes == 0 for no-change.
+inline size_t BuildSwitchReplyFrame(uint8_t* frame, bool sendState,
+                                    uint8_t nextBoard, uint8_t sequence,
+                                    uint8_t epoch, uint8_t epochSeen,
+                                    uint8_t lastHostSequenceSeen, uint8_t flags,
+                                    const uint8_t* switchBitmap,
+                                    size_t switchBytes) {
+  WriteHeader(frame, sendState ? kFrameSwitchState : kFrameSwitchNoChange,
+              sendState ? kFlagKeyframe : kFlagNone, nextBoard, sequence,
+              epoch);
+  WriteSwitchStatus(frame + kHeaderBytes, epochSeen, lastHostSequenceSeen,
+                    flags);
+
+  size_t payloadBytes = kSwitchStatusBytes;
+  if (sendState && switchBitmap != nullptr) {
+    for (size_t i = 0; i < switchBytes; ++i) {
+      frame[kHeaderBytes + kSwitchStatusBytes + i] = switchBitmap[i];
+    }
+    payloadBytes += switchBytes;
+  }
+  return AppendCrc(frame, kHeaderBytes + payloadBytes);
+}
+
+// OutputState is variable length: dense coil bitmap, dense lamp bitmap, then
+// packed GI levels. giLevels is one byte per string, clamped on the way in.
+inline void WriteOutputPayload(uint8_t* payload, const RuntimeConfig& cfg,
+                               const uint8_t* coils, const uint8_t* lamps,
+                               const uint8_t* giLevels) {
+  const size_t coilBytes = BitsToBytes(cfg.coilBits);
+  const size_t lampBytes = BitsToBytes(cfg.lampBits);
+
+  for (size_t i = 0; i < coilBytes; ++i) payload[i] = coils[i];
+  for (size_t i = 0; i < lampBytes; ++i) payload[coilBytes + i] = lamps[i];
+
+  uint8_t* gi = payload + coilBytes + lampBytes;
+  for (size_t i = 0; i < kGiBytes; ++i) gi[i] = 0;
+  for (uint8_t s = 0; s < kGiStrings; ++s) {
+    SetPackedNibble(gi, s, ClampGiLevel(giLevels[s]));
+  }
+}
+
+inline size_t BuildOutputStateFrame(uint8_t* frame, uint8_t nextBoard,
+                                    uint8_t sequence, uint8_t epoch,
+                                    const RuntimeConfig& cfg,
+                                    const uint8_t* coils, const uint8_t* lamps,
+                                    const uint8_t* giLevels) {
+  WriteHeader(frame, kFrameOutputState, kFlagKeyframe, nextBoard, sequence,
+              epoch);
+  WriteOutputPayload(frame + kHeaderBytes, cfg, coils, lamps, giLevels);
+  return AppendCrc(frame, kHeaderBytes + OutputPayloadBytes(cfg));
+}
+
 inline uint8_t GetPackedNibble(const uint8_t* data, uint8_t index) {
   const uint8_t byteIndex = index / 2u;
   if ((index & 1u) == 0) {

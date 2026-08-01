@@ -526,6 +526,119 @@ Result CheckCrcRejectsTamperedFrames() {
   }
   return Pass();
 }
+
+Result CheckBareFrameLayout() {
+  uint8_t frame[kResetFrameBytes];
+  const size_t len = BuildBareFrame(frame, kFrameReset, kFlagNone, kNoBoard,
+                                    /*seq*/ 11, /*epoch*/ 3);
+  if (len != kResetFrameBytes) return Fail("bare frame length wrong");
+  if (frame[1] != kFrameReset) return Fail("Reset must carry no flags");
+  if (frame[3] != 11 || frame[4] != 3) return Fail("sequence/epoch wrong");
+  if (!VerifyCrc(frame, len)) return Fail("bare frame failed its own CRC");
+  return Pass();
+}
+
+Result CheckTriggerFrameLayout() {
+  uint8_t frame[kTriggerFrameBytes];
+  const size_t len = BuildTriggerFrame(frame, kNoBoard, 4, 1, /*source*/ 'F',
+                                       /*number*/ 0x0142, /*value*/ 9);
+  if (len != kTriggerFrameBytes) return Fail("trigger frame length wrong");
+  if (frame[1] != kFrameTrigger) return Fail("Trigger must carry no flags");
+  if (frame[5] != 'F') return Fail("byte 5 must be the event source");
+  if (frame[6] != 0x01 || frame[7] != 0x42) {
+    return Fail("bytes 6-7 must be the number, big-endian");
+  }
+  if (frame[8] != 9) return Fail("byte 8 must be the value");
+  if (!VerifyCrc(frame, len)) return Fail("trigger frame failed its own CRC");
+
+  uint8_t source, value;
+  uint16_t number;
+  ReadTriggerPayload(frame + kHeaderBytes, source, number, value);
+  if (source != 'F' || number != 0x0142 || value != 9) {
+    return Fail("trigger payload did not round-trip");
+  }
+  return Pass();
+}
+
+Result CheckSwitchReplyLayout() {
+  uint8_t bitmap[8] = {0xAA, 0x55, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06};
+  uint8_t frame[kHeaderBytes + kSwitchStatusBytes + kMaxSwitchBytes + kCrcBytes];
+
+  // No-change: status prefix only.
+  size_t len = BuildSwitchReplyFrame(frame, /*sendState*/ false, 2, 7, 1, 1, 7,
+                                     kStatusInSync, nullptr, 0);
+  if (len != kHeaderBytes + kSwitchStatusBytes + kCrcBytes) {
+    return Fail("SwitchNoChange length wrong: " + Num(len));
+  }
+  if (frame[1] != kFrameSwitchNoChange) return Fail("no-change must carry no flags");
+  if (frame[5] != 1) return Fail("byte 5 must be epochSeen");
+  if (frame[6] != 7) return Fail("byte 6 must be lastHostSequenceSeen");
+  if (frame[7] != kStatusInSync) return Fail("byte 7 must be the status flags");
+  if (frame[8] != 0) return Fail("byte 8 is reserved and must be zero");
+  if (!VerifyCrc(frame, len)) return Fail("no-change frame failed its own CRC");
+
+  // State: status prefix plus the bitmap.
+  len = BuildSwitchReplyFrame(frame, /*sendState*/ true, 2, 7, 1, 1, 7,
+                              kStatusInSync, bitmap, sizeof(bitmap));
+  if (len != kHeaderBytes + kSwitchStatusBytes + sizeof(bitmap) + kCrcBytes) {
+    return Fail("SwitchState length wrong: " + Num(len));
+  }
+  if (frame[1] != (kFrameSwitchState | kFlagKeyframe)) {
+    return Fail("SwitchState must be a keyframe");
+  }
+  for (size_t i = 0; i < sizeof(bitmap); ++i) {
+    if (frame[kHeaderBytes + kSwitchStatusBytes + i] != bitmap[i]) {
+      return Fail("switch bitmap byte " + Num(i) + " was not copied verbatim");
+    }
+  }
+  if (!VerifyCrc(frame, len)) return Fail("switch state frame failed its own CRC");
+  return Pass();
+}
+
+Result CheckOutputStateLayout() {
+  RuntimeConfig cfg;
+  cfg.coilBits = 24;   // 3 bytes
+  cfg.lampBits = 64;   // 8 bytes
+  cfg.switchBits = 64;
+
+  uint8_t coils[3] = {0x01, 0x02, 0x03};
+  uint8_t lamps[8] = {0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80};
+  uint8_t gi[kGiStrings] = {0, 1, 8, 15, 4};  // 15 must clamp to 8
+
+  uint8_t frame[kHeaderBytes + kMaxCoilBytes + kMaxLampBytes + kGiBytes + kCrcBytes];
+  const size_t len = BuildOutputStateFrame(frame, /*nextBoard*/ 1, 33, 2, cfg,
+                                           coils, lamps, gi);
+
+  if (len != OutputFrameBytes(cfg)) {
+    return Fail("output frame length " + Num(len) + " != OutputFrameBytes " +
+                Num(OutputFrameBytes(cfg)));
+  }
+  if (frame[1] != (kFrameOutputState | kFlagKeyframe)) {
+    return Fail("OutputState must be a keyframe");
+  }
+  for (size_t i = 0; i < sizeof(coils); ++i) {
+    if (frame[kHeaderBytes + i] != coils[i]) {
+      return Fail("coil byte " + Num(i) + " not copied verbatim");
+    }
+  }
+  for (size_t i = 0; i < sizeof(lamps); ++i) {
+    if (frame[kHeaderBytes + sizeof(coils) + i] != lamps[i]) {
+      return Fail("lamp byte " + Num(i) + " not copied verbatim");
+    }
+  }
+
+  const uint8_t* giOut = frame + kHeaderBytes + sizeof(coils) + sizeof(lamps);
+  const uint8_t wantGi[kGiStrings] = {0, 1, 8, kMaxGiLevel, 4};
+  for (uint8_t s = 0; s < kGiStrings; ++s) {
+    if (GetPackedNibble(giOut, s) != wantGi[s]) {
+      return Fail("GI string " + Num(s) + " encoded as " +
+                  Num(GetPackedNibble(giOut, s)) + ", expected " +
+                  Num(wantGi[s]) + " (out-of-range levels must clamp)");
+    }
+  }
+  if (!VerifyCrc(frame, len)) return Fail("output frame failed its own CRC");
+  return Pass();
+}
 }  // namespace
 
 const Case kCases[] = {
@@ -552,6 +665,10 @@ const Case kCases[] = {
     {"ConfigFrame byte layout", CheckConfigFrameByteLayout},
     {"header round trip", CheckHeaderRoundTrip},
     {"CRC rejects tampered frames", CheckCrcRejectsTamperedFrames},
+    {"bare frame layout", CheckBareFrameLayout},
+    {"TriggerFrame byte layout", CheckTriggerFrameLayout},
+    {"switch reply layout", CheckSwitchReplyLayout},
+    {"OutputState layout", CheckOutputStateLayout},
 };
 
 const size_t kCaseCount = sizeof(kCases) / sizeof(kCases[0]);
