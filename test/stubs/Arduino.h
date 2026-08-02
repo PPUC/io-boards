@@ -25,12 +25,20 @@ using boolean = bool;
 #define INPUT_PULLUP 2
 #define LED_BUILTIN 25
 
-#ifndef min
-#define min(a, b) std::min((a), (b))
-#endif
-#ifndef max
-#define max(a, b) std::max((a), (b))
-#endif
+// Deliberately NO min/max macros here.
+//
+// Arduino traditionally defines them as function-like macros, which is hostile
+// to the C++ standard library: libstdc++ headers call std::min(...) internally,
+// and a `min` macro rewrites that to std::std::min(...). It compiled on macOS
+// (libc++ does not hit those paths) and failed on Linux with libstdc++ - the
+// kind of divergence only CI finds.
+//
+// Nothing in the code under test calls bare min()/max(), so the safest shim is
+// none at all. If a future device does need them, add inline function
+// templates rather than macros:
+//
+//   template <typename T, typename U>
+//   constexpr auto min(T a, U b) -> decltype(a < b ? a : b) { ... }
 
 // --- Time -------------------------------------------------------------------
 // Driven by the test rather than by a real clock, so pulse timing can be
