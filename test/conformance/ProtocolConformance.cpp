@@ -18,6 +18,19 @@ Result Fail(const std::string& detail) { return Result{false, detail}; }
 
 std::string Num(long long v) { return std::to_string(v); }
 
+// Packs a type/flag pair the way the wire format does.
+//
+// Deliberately not ComposeTypeAndFlags(): this suite exists to pin the wire
+// format, so it must not derive its expectations from the helper it is
+// checking. The explicit casts also keep GCC quiet - a bare
+// `kFrameMapping | kFlagKeyframe` is a bitwise op between two distinct
+// enumeration types, which C++20 deprecates
+// (-Wdeprecated-enum-enum-conversion).
+uint8_t Packed(FrameType type, FrameFlag flag) {
+  return static_cast<uint8_t>(static_cast<uint8_t>(type) |
+                              static_cast<uint8_t>(flag));
+}
+
 // --- constants and sizing ---------------------------------------------------
 
 Result CheckWireConstants() {
@@ -418,7 +431,7 @@ Result CheckMappingFrameByteLayout() {
                 Num(kMappingFrameBytes));
   }
   if (frame[0] != kSyncByte) return Fail("byte 0 must be the sync byte");
-  if (frame[1] != (kFrameMapping | kFlagKeyframe)) {
+  if (frame[1] != Packed(kFrameMapping, kFlagKeyframe)) {
     return Fail("byte 1 must be type|flags, got " + Num(frame[1]));
   }
   if (frame[2] != kNoBoard) return Fail("byte 2 must be nextBoard");
@@ -445,7 +458,7 @@ Result CheckSetupFrameByteLayout() {
 
   const size_t len = BuildSetupFrame(frame, kNoBoard, 1, 1, cfg);
   if (len != kSetupFrameBytes) return Fail("BuildSetupFrame length wrong");
-  if (frame[1] != (kFrameSetup | kFlagKeyframe)) return Fail("setup type byte wrong");
+  if (frame[1] != Packed(kFrameSetup, kFlagKeyframe)) return Fail("setup type byte wrong");
   if (frame[5] != 0x00 || frame[6] != 0x18) return Fail("coilBits must be big-endian");
   if (frame[7] != 0x00 || frame[8] != 0x40) return Fail("lampBits must be big-endian");
   if (frame[9] != 0x00 || frame[10] != 0x38) return Fail("switchBits must be big-endian");
@@ -583,7 +596,7 @@ Result CheckSwitchReplyLayout() {
   if (len != kHeaderBytes + kSwitchStatusBytes + sizeof(bitmap) + kCrcBytes) {
     return Fail("SwitchState length wrong: " + Num(len));
   }
-  if (frame[1] != (kFrameSwitchState | kFlagKeyframe)) {
+  if (frame[1] != Packed(kFrameSwitchState, kFlagKeyframe)) {
     return Fail("SwitchState must be a keyframe");
   }
   for (size_t i = 0; i < sizeof(bitmap); ++i) {
@@ -613,7 +626,7 @@ Result CheckOutputStateLayout() {
     return Fail("output frame length " + Num(len) + " != OutputFrameBytes " +
                 Num(OutputFrameBytes(cfg)));
   }
-  if (frame[1] != (kFrameOutputState | kFlagKeyframe)) {
+  if (frame[1] != Packed(kFrameOutputState, kFlagKeyframe)) {
     return Fail("OutputState must be a keyframe");
   }
   for (size_t i = 0; i < sizeof(coils); ++i) {
