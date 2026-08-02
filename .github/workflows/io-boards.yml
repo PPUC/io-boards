@@ -43,12 +43,21 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          key: ${{ runner.os }}-pip-platformio
+          restore-keys: |
+            ${{ runner.os }}-pip-
       - name: Cache PlatformIO
         uses: actions/cache@v5
         with:
           path: ~/.platformio
-          key: ${{ runner.os }}-platformio-native
+          # platformio.ini decides which platforms and toolchains get
+          # downloaded, so it is what should invalidate this cache. The key
+          # used to hash '**/lockfiles', which matches no file in this repo -
+          # hashFiles then returns an empty string, leaving a constant key that
+          # is written once and never refreshed again.
+          key: ${{ runner.os }}-platformio-native-${{ hashFiles('platformio.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-platformio-native-
       - uses: actions/setup-python@v6
         with:
           python-version: '3.x'
@@ -77,7 +86,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          key: ${{ runner.os }}-pip-platformio
           restore-keys: |
             ${{ runner.os }}-pip-
 
@@ -85,7 +94,12 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.platformio
-          key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
+          # See the note in the test job: the previous key hashed a glob that
+          # matches nothing, so it never changed. platformio.ini is what
+          # actually determines the toolchains this job downloads.
+          key: ${{ runner.os }}-platformio-${{ hashFiles('platformio.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-platformio-
 
       - name: Set up Python
         uses: actions/setup-python@v6
