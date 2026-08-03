@@ -8,7 +8,9 @@
 
 #include "../EventDispatcher/Event.h"
 #include "../EventDispatcher/EventDispatcher.h"
+#include "PioAllocation.h"
 #include "hardware/gpio.h"
+#include "hardware/irq.h"
 #include "hardware/pio.h"
 #include "hardware/sync.h"
 
@@ -56,18 +58,25 @@ class SwitchMatrix : public EventListener {
 
   void handleRowChanges(uint32_t raw);
 
-  PIO pio = pio0;
-  int sm_columns = 0;
-  int sm_rows = 1;
+  // Claimed together on one PIO block at program-load time. Both state
+  // machines must share a block: the columns machine drives the column pins
+  // and the rows machine waits on those same pins, and a GPIO can only be
+  // routed to one PIO block at a time.
+  PIO pio = nullptr;
+  uint sm_columns = 0;
+  uint sm_rows = 0;
 
   static SwitchMatrix* instance;
 
   static void __not_in_flash_func(onRowChanges)() {
-    // IRQ0 clear
-    pio0_hw->irq = 1u << 0;
+    if (!instance || !instance->pio) {
+      return;
+    }
 
-    if (!instance ||
-        pio_sm_is_rx_fifo_empty(instance->pio, instance->sm_rows)) {
+    // IRQ0 clear, on whichever block this matrix was allocated on
+    instance->pio->irq = 1u << 0;
+
+    if (pio_sm_is_rx_fifo_empty(instance->pio, instance->sm_rows)) {
       return;
     }
     uint32_t raw = pio_sm_get_blocking(instance->pio, instance->sm_rows);
@@ -77,6 +86,7 @@ class SwitchMatrix : public EventListener {
   private:
   void stopReader();
   void startReader();
+  void releasePrograms();
   void resendStableStates();
   bool isConfiguredGeometrySupported() const;
   byte boardId;

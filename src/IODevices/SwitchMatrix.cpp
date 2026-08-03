@@ -9,6 +9,26 @@
 
 SwitchMatrix* SwitchMatrix::instance = nullptr;
 
+namespace {
+
+// One place decides which program a given geometry needs, so the load and the
+// unload can never disagree about what is on the block.
+const pio_program_t* matrixColumnsProgram(bool activeLow) {
+  return activeLow ? &active_low_4_columns_pio_program
+                   : &active_high_4_columns_pio_program;
+}
+
+const pio_program_t* matrixRowsProgram(bool activeLow, uint8_t numRows) {
+  if (activeLow) {
+    return (4 == numRows) ? &active_low_4_rows_pio_program
+                          : &active_low_8_rows_pio_program;
+  }
+  return (4 == numRows) ? &active_high_4_rows_pio_program
+                        : &active_high_8_rows_pio_program;
+}
+
+}  // namespace
+
 bool SwitchMatrix::supportsRows(uint8_t n) const {
   if (n == 0 || n > profile.maxRows || n >= 16) {
     return false;
@@ -35,14 +55,54 @@ void SwitchMatrix::stopReader() {
     return;
   }
 
+  const int irqNum = pio_get_irq_num(pio, 0);
   pio_sm_set_enabled(pio, sm_columns, false);
   pio_sm_set_enabled(pio, sm_rows, false);
   pio_set_irq0_source_enabled(pio, pis_interrupt0, false);
-  irq_set_enabled(PIO0_IRQ_0, false);
+  irq_set_enabled(irqNum, false);
+  // Take the handler off as well: a later start may land on the other PIO
+  // block, and this one would otherwise still fire into a stopped matrix.
+  irq_remove_handler(irqNum, onRowChanges);
   if (instance == this) {
     instance = nullptr;
   }
   running = false;
+}
+
+void SwitchMatrix::releasePrograms() {
+  if (!columnsProgramLoaded && !rowsProgramLoaded) {
+    return;
+  }
+
+  PioSlot slots[2];
+  uint count = 0;
+
+  if (columnsProgramLoaded) {
+    slots[count].program = matrixColumnsProgram(loadedActiveLow);
+    slots[count].pio = pio;
+    slots[count].sm = sm_columns;
+    slots[count].offset = columnsProgramOffset;
+    slots[count].claimed = true;
+    count++;
+  }
+  if (rowsProgramLoaded) {
+    slots[count].program = matrixRowsProgram(loadedActiveLow, loadedNumRows);
+    slots[count].pio = pio;
+    slots[count].sm = sm_rows;
+    slots[count].offset = rowsProgramOffset;
+    slots[count].claimed = true;
+    count++;
+  }
+
+  pioReleaseSlots(slots, count);
+
+  columnsProgramLoaded = false;
+  rowsProgramLoaded = false;
+  columnsProgramOffset = 0;
+  rowsProgramOffset = 0;
+  pio = nullptr;
+  sm_columns = 0;
+  sm_rows = 0;
 }
 
 void SwitchMatrix::startReader() {
@@ -53,77 +113,61 @@ void SwitchMatrix::startReader() {
   instance = this;
   running = true;
 
-  uint columns_offset = columnsProgramOffset;
-  pio_sm_config c_columns;
-  uint rows_offset = rowsProgramOffset;
-  pio_sm_config c_rows;
-
   const bool reuseLoadedPrograms =
       columnsProgramLoaded && rowsProgramLoaded &&
       loadedActiveLow == activeLow && loadedNumRows == numRows;
-  if (reuseLoadedPrograms) {
-    if (activeLow) {
-      extern const pio_program_t active_low_4_columns_pio_program;
-      c_columns =
-          active_low_4_columns_pio_program_get_default_config(columns_offset);
-      if (4 == numRows) {
-        extern const pio_program_t active_low_4_rows_pio_program;
-        c_rows = active_low_4_rows_pio_program_get_default_config(rows_offset);
-      } else {
-        extern const pio_program_t active_low_8_rows_pio_program;
-        c_rows = active_low_8_rows_pio_program_get_default_config(rows_offset);
-      }
-    } else {
-      extern const pio_program_t active_high_4_columns_pio_program;
-      c_columns =
-          active_high_4_columns_pio_program_get_default_config(columns_offset);
-      if (4 == numRows) {
-        extern const pio_program_t active_high_4_rows_pio_program;
-        c_rows = active_high_4_rows_pio_program_get_default_config(rows_offset);
-      } else {
-        extern const pio_program_t active_high_8_rows_pio_program;
-        c_rows = active_high_8_rows_pio_program_get_default_config(rows_offset);
-      }
-    }
-  } else if (activeLow) {
-    extern const pio_program_t active_low_4_columns_pio_program;
-    columns_offset = pio_add_program(pio, &active_low_4_columns_pio_program);
-    c_columns =
-        active_low_4_columns_pio_program_get_default_config(columns_offset);
-
-    if (4 == numRows) {
-      extern const pio_program_t active_low_4_rows_pio_program;
-      rows_offset = pio_add_program(pio, &active_low_4_rows_pio_program);
-      c_rows = active_low_4_rows_pio_program_get_default_config(rows_offset);
-    } else {
-      extern const pio_program_t active_low_8_rows_pio_program;
-      rows_offset = pio_add_program(pio, &active_low_8_rows_pio_program);
-      c_rows = active_low_8_rows_pio_program_get_default_config(rows_offset);
-    }
-  } else {
-    extern const pio_program_t active_high_4_columns_pio_program;
-    columns_offset = pio_add_program(pio, &active_high_4_columns_pio_program);
-    c_columns =
-        active_high_4_columns_pio_program_get_default_config(columns_offset);
-
-    if (4 == numRows) {
-      extern const pio_program_t active_high_4_rows_pio_program;
-      rows_offset = pio_add_program(pio, &active_high_4_rows_pio_program);
-      c_rows = active_high_4_rows_pio_program_get_default_config(rows_offset);
-    } else {
-      extern const pio_program_t active_high_8_rows_pio_program;
-      rows_offset = pio_add_program(pio, &active_high_8_rows_pio_program);
-      c_rows = active_high_8_rows_pio_program_get_default_config(rows_offset);
-    }
-  }
 
   if (!reuseLoadedPrograms) {
+    // Polarity or row count changed, so the loaded programs are the wrong
+    // ones. Give them back before claiming the new pair: the previous code
+    // added the new programs on top and leaked the old instruction space on
+    // every reconfiguration.
+    releasePrograms();
+
+    PioSlot slots[2];
+    slots[0].program = matrixColumnsProgram(activeLow);
+    slots[1].program = matrixRowsProgram(activeLow, numRows);
+    if (!pioClaimSlots(slots, 2)) {
+      // No single block can host both state machines. Report it where it can
+      // be seen - EVENT_ERROR fast-blinks the on-board LED - rather than
+      // leaving a matrix that never reports a switch.
+      _eventDispatcher->dispatch(new Event(EVENT_ERROR));
+      instance = nullptr;
+      running = false;
+      return;
+    }
+
+    pio = slots[0].pio;
+    sm_columns = slots[0].sm;
+    columnsProgramOffset = slots[0].offset;
+    sm_rows = slots[1].sm;
+    rowsProgramOffset = slots[1].offset;
     columnsProgramLoaded = true;
     rowsProgramLoaded = true;
-    columnsProgramOffset = columns_offset;
-    rowsProgramOffset = rows_offset;
     loadedActiveLow = activeLow;
     loadedNumRows = numRows;
+  }
+
+  const uint columns_offset = columnsProgramOffset;
+  const uint rows_offset = rowsProgramOffset;
+
+  pio_sm_config c_columns =
+      loadedActiveLow
+          ? active_low_4_columns_pio_program_get_default_config(columns_offset)
+          : active_high_4_columns_pio_program_get_default_config(
+                columns_offset);
+
+  pio_sm_config c_rows;
+  if (loadedActiveLow) {
+    c_rows =
+        (4 == loadedNumRows)
+            ? active_low_4_rows_pio_program_get_default_config(rows_offset)
+            : active_low_8_rows_pio_program_get_default_config(rows_offset);
+  } else {
+    c_rows =
+        (4 == loadedNumRows)
+            ? active_high_4_rows_pio_program_get_default_config(rows_offset)
+            : active_high_8_rows_pio_program_get_default_config(rows_offset);
   }
 
   sm_config_set_in_pins(&c_columns, profile.columnsBasePin);
@@ -145,8 +189,9 @@ void SwitchMatrix::startReader() {
                                  numRows + profile.columns, false);
   sm_config_set_in_shift(&c_rows, false, false, 0);
   pio_sm_init(pio, sm_rows, rows_offset, &c_rows);
-  irq_set_exclusive_handler(PIO0_IRQ_0, onRowChanges);
-  irq_set_enabled(PIO0_IRQ_0, true);
+  const int irqNum = pio_get_irq_num(pio, 0);
+  irq_set_exclusive_handler(irqNum, onRowChanges);
+  irq_set_enabled(irqNum, true);
   pio_set_irq0_source_enabled(pio, pis_interrupt0, true);
   pio_sm_set_enabled(pio, sm_rows, true);
 }
@@ -172,43 +217,7 @@ void SwitchMatrix::resendStableStates() {
 void SwitchMatrix::resetConfig() {
   stopReader();
 
-  if (columnsProgramLoaded) {
-    if (loadedActiveLow) {
-      extern const pio_program_t active_low_4_columns_pio_program;
-      pio_remove_program(pio, &active_low_4_columns_pio_program,
-                         columnsProgramOffset);
-    } else {
-      extern const pio_program_t active_high_4_columns_pio_program;
-      pio_remove_program(pio, &active_high_4_columns_pio_program,
-                         columnsProgramOffset);
-    }
-    columnsProgramLoaded = false;
-  }
-
-  if (rowsProgramLoaded) {
-    if (loadedActiveLow) {
-      if (loadedNumRows == 4) {
-        extern const pio_program_t active_low_4_rows_pio_program;
-        pio_remove_program(pio, &active_low_4_rows_pio_program,
-                           rowsProgramOffset);
-      } else {
-        extern const pio_program_t active_low_8_rows_pio_program;
-        pio_remove_program(pio, &active_low_8_rows_pio_program,
-                           rowsProgramOffset);
-      }
-    } else {
-      if (loadedNumRows == 4) {
-        extern const pio_program_t active_high_4_rows_pio_program;
-        pio_remove_program(pio, &active_high_4_rows_pio_program,
-                           rowsProgramOffset);
-      } else {
-        extern const pio_program_t active_high_8_rows_pio_program;
-        pio_remove_program(pio, &active_high_8_rows_pio_program,
-                           rowsProgramOffset);
-      }
-    }
-    rowsProgramLoaded = false;
-  }
+  releasePrograms();
 
   activeLow = false;
   numRows = profile.maxRows >= 4 ? 4 : profile.maxRows;

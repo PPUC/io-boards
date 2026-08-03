@@ -6,14 +6,38 @@
 
 Switches* Switches::instance = nullptr;
 
+namespace {
+
+// The PIO program for a given switch count. Having one place answer this
+// keeps the load and the unload from ever disagreeing about which program is
+// on the block - they used to be two independent switch statements.
+const pio_program_t* switchesProgramFor(uint8_t numSwitches) {
+  switch (numSwitches) {
+    case 4:
+      return &active_low_4_switches_pio_program;
+    case 8:
+      return &active_low_8_switches_pio_program;
+    case MAX_SWITCHES:
+    default:
+      return &active_low_16_switches_pio_program;
+  }
+}
+
+}  // namespace
+
 void Switches::stopReader() {
   if (!running) {
     return;
   }
 
+  const int irqNum = pio_get_irq_num(pio, 1);
   pio_sm_set_enabled(pio, sm, false);
   pio_set_irq1_source_enabled(pio, pis_interrupt1, false);
-  irq_set_enabled(PIO0_IRQ_1, false);
+  irq_set_enabled(irqNum, false);
+  // The handler has to come off too: a later start may land on the other PIO
+  // block, and leaving this one installed would fire it for a reader that is
+  // no longer there.
+  irq_remove_handler(irqNum, onSwitchChanges);
   if (instance == this) {
     instance = nullptr;
   }
@@ -24,27 +48,17 @@ void Switches::resetConfig() {
   stopReader();
 
   if (programLoaded) {
-    switch (loadedNumSwitches) {
-      case 4: {
-        extern const pio_program_t active_low_4_switches_pio_program;
-        pio_remove_program(pio, &active_low_4_switches_pio_program,
-                           programOffset);
-        break;
-      }
-      case 8: {
-        extern const pio_program_t active_low_8_switches_pio_program;
-        pio_remove_program(pio, &active_low_8_switches_pio_program,
-                           programOffset);
-        break;
-      }
-      case MAX_SWITCHES:
-      default: {
-        extern const pio_program_t active_low_16_switches_pio_program;
-        pio_remove_program(pio, &active_low_16_switches_pio_program,
-                           programOffset);
-        break;
-      }
-    }
+    PioSlot slot;
+    slot.program = switchesProgramFor(loadedNumSwitches);
+    slot.pio = pio;
+    slot.sm = sm;
+    slot.offset = programOffset;
+    slot.claimed = true;
+    pioReleaseSlots(&slot, 1);
+
+    pio = nullptr;
+    sm = 0;
+    programOffset = 0;
     programLoaded = false;
   }
 
@@ -79,54 +93,42 @@ bool Switches::startReader() {
   instance = this;
   running = true;
 
-  uint offset;
-  pio_sm_config c;
   if (!programLoaded) {
-    switch (numSwitches) {
-      case 4:
-        extern const pio_program_t active_low_4_switches_pio_program;
-        offset = pio_add_program(pio, &active_low_4_switches_pio_program);
-        c = active_low_4_switches_pio_program_get_default_config(offset);
-        break;
-
-      case 8:
-        extern const pio_program_t active_low_8_switches_pio_program;
-        offset = pio_add_program(pio, &active_low_8_switches_pio_program);
-        c = active_low_8_switches_pio_program_get_default_config(offset);
-        break;
-
-      case MAX_SWITCHES:
-      default:
-        extern const pio_program_t active_low_16_switches_pio_program;
-        offset = pio_add_program(pio, &active_low_16_switches_pio_program);
-        c = active_low_16_switches_pio_program_get_default_config(offset);
-        break;
+    PioSlot slot;
+    slot.program = switchesProgramFor(numSwitches);
+    if (!pioClaimSlots(&slot, 1)) {
+      // No state machine or program space left anywhere. Say so where it can
+      // be seen: EVENT_ERROR fast-blinks the on-board LED for as long as the
+      // board runs. The alternative is the failure this replaces - a switch
+      // reader that silently never reports.
+      _eventDispatcher->dispatch(new Event(EVENT_ERROR));
+      instance = nullptr;
+      running = false;
+      return false;
     }
+
+    pio = slot.pio;
+    sm = slot.sm;
+    programOffset = slot.offset;
     programLoaded = true;
-    programOffset = offset;
     loadedNumSwitches = numSwitches;
-  } else {
-    offset = programOffset;
-    switch (loadedNumSwitches) {
-      case 4: {
-        extern const pio_program_t active_low_4_switches_pio_program;
-        c = active_low_4_switches_pio_program_get_default_config(offset);
-        break;
-      }
+  }
 
-      case 8: {
-        extern const pio_program_t active_low_8_switches_pio_program;
-        c = active_low_8_switches_pio_program_get_default_config(offset);
-        break;
-      }
+  const uint offset = programOffset;
+  pio_sm_config c;
+  switch (loadedNumSwitches) {
+    case 4:
+      c = active_low_4_switches_pio_program_get_default_config(offset);
+      break;
 
-      case MAX_SWITCHES:
-      default: {
-        extern const pio_program_t active_low_16_switches_pio_program;
-        c = active_low_16_switches_pio_program_get_default_config(offset);
-        break;
-      }
-    }
+    case 8:
+      c = active_low_8_switches_pio_program_get_default_config(offset);
+      break;
+
+    case MAX_SWITCHES:
+    default:
+      c = active_low_16_switches_pio_program_get_default_config(offset);
+      break;
   }
 
   sm_config_set_in_pins(&c, SWITCHES_BASE_PIN);
@@ -147,8 +149,9 @@ bool Switches::startReader() {
                                  false);
   sm_config_set_in_shift(&c, false, false, 0);
   pio_sm_init(pio, sm, offset, &c);
-  irq_set_exclusive_handler(PIO0_IRQ_1, onSwitchChanges);
-  irq_set_enabled(PIO0_IRQ_1, true);
+  const int irqNum = pio_get_irq_num(pio, 1);
+  irq_set_exclusive_handler(irqNum, onSwitchChanges);
+  irq_set_enabled(irqNum, true);
   pio_set_irq1_source_enabled(pio, pis_interrupt1, true);
   pio_sm_set_enabled(pio, sm, true);
 

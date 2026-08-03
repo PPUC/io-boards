@@ -12,7 +12,9 @@
 
 #include "../EventDispatcher/Event.h"
 #include "../EventDispatcher/EventDispatcher.h"
+#include "PioAllocation.h"
 #include "hardware/gpio.h"
+#include "hardware/irq.h"
 #include "hardware/pio.h"
 #include "hardware/sync.h"
 
@@ -51,15 +53,22 @@ class Switches : public EventListener {
 
   void handleSwitchChanges(uint32_t raw);
 
-  PIO pio = pio0;
-  int sm = 2;  // State machine 0 and 1 are used by SwitchMatrix
+  // Claimed at program-load time rather than hardcoded, so an unconfigured
+  // matrix costs this reader nothing and both PIO blocks are available.
+  PIO pio = nullptr;
+  uint sm = 0;
   uint16_t validSwitchMask = (1u << MAX_SWITCHES) - 1;
   static Switches* instance;
   uint8_t numSwitches = MAX_SWITCHES;
 
   static void __not_in_flash_func(onSwitchChanges)() {
-    // re-enable IRQ1 for next switch change (clear IRQ 1)
-    pio0_hw->irq = 1u << 1;
+    if (!instance || !instance->pio) {
+      return;
+    }
+
+    // re-enable IRQ1 for next switch change (clear IRQ 1) on whichever block
+    // this reader was allocated on
+    instance->pio->irq = 1u << 1;
 
     // Get 32 bit from FIFO
     uint32_t raw = pio_sm_get(instance->pio, instance->sm);
