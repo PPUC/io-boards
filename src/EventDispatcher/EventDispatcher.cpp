@@ -2,15 +2,59 @@
 
 #include <string.h>
 
+#include "hardware/sync.h"  // save_and_disable_interrupts
+#include "hardware/uart.h"  // uart0, UART_UARTFR_BUSY_BITS
+#include "pico/time.h"      // make_timeout_time_us, time_reached
+
 namespace {
 constexpr uint32_t kSerialBaudRate = ppuc::v2::kBaudRate;
 
 uint32_t FrameWireTimeUs(size_t frameBytes) {
-  // Approximate 8N1 UART wire time. Add a small guard so we can safely switch
-  // RS485 direction back to RX without relying on HardwareSerial::flush(),
-  // which appears to hang in the board-to-host switch reply path.
+  // Approximate 8N1 UART wire time, plus a guard. Only used as an upper bound
+  // for ReleaseBusAfterTx() now that the driver is released on a completion
+  // signal rather than on this estimate.
   const uint32_t bits = static_cast<uint32_t>(frameBytes) * 10;
   return (bits * 1000000u) / kSerialBaudRate + 200;
+}
+
+// Releases the RS485 driver as soon as the UART has shifted the last bit out.
+//
+// This used to wait FrameWireTimeUs() and then drop DE. Because write() only
+// has to reach the 32-byte TX FIFO, that estimate expires roughly its 200 us
+// guard *after* the frame is actually gone, so every board held the bus 200 us
+// longer than necessary - straight into the window where the next board, having
+// just received the frame naming it, starts to transmit.
+//
+// Deliberately not HardwareSerial::flush(). That takes the SerialUART core
+// mutex, and CoreMutex either blocks until the other core lets go or, when this
+// core already owns it, returns having waited for nothing. The first explains
+// the "flush() appears to hang" note this code carried; the second is worse,
+// because it would drop DE mid-frame with no sign at all. Waiting on the UART's
+// own BUSY flag has neither failure mode.
+//
+// Serial1 is HW UART 0 (GPIO 0/1, set in main.cpp), so uart0 is the instance
+// behind hwSerial.
+//
+// The wait is bounded: a wedged UART must never stall the board, so on timeout
+// it gives up and releases anyway, which is exactly the old behaviour.
+void ReleaseBusAfterTx(byte rs485Pin, size_t frameBytes) {
+  const absolute_time_t deadline =
+      make_timeout_time_us(FrameWireTimeUs(frameBytes));
+  while (uart_get_hw(uart0)->fr & UART_UARTFR_BUSY_BITS) {
+    if (time_reached(deadline)) {
+      break;
+    }
+    tight_loop_contents();
+  }
+
+  // Mask interrupts across the release itself. A dedicated-switch change raises
+  // a PIO IRQ, and Switches::onSwitchChanges walks every registered switch; if
+  // it lands between the last bit and this write, the board keeps driving the
+  // bus for the duration of the handler. Masking cannot prevent an IRQ that has
+  // already started, but it stops one from opening this gap.
+  const uint32_t irqState = save_and_disable_interrupts();
+  digitalWrite(rs485Pin, LOW);  // Read.
+  restore_interrupts(irqState);
 }
 }
 
@@ -542,8 +586,7 @@ void EventDispatcher::sendConfigAckFrame(uint8_t boardId, uint8_t topic,
   digitalWrite(rs485Pin, HIGH);  // Write.
   delayMicroseconds(RS485_MODE_SWITCH_DELAY);
   hwSerial->write(frame, sizeof(frame));
-  delayMicroseconds(FrameWireTimeUs(sizeof(frame)));
-  digitalWrite(rs485Pin, LOW);  // Read.
+  ReleaseBusAfterTx(rs485Pin, sizeof(frame));
   delayMicroseconds(RS485_MODE_SWITCH_DELAY);
 }
 
@@ -740,8 +783,7 @@ void EventDispatcher::sendSwitchStateFrame(byte nextBoard) {
   digitalWrite(rs485Pin, HIGH);  // Write.
   delayMicroseconds(RS485_MODE_SWITCH_DELAY);
   hwSerial->write(frame, frameBytes);
-  delayMicroseconds(FrameWireTimeUs(frameBytes));
-  digitalWrite(rs485Pin, LOW);  // Read.
+  ReleaseBusAfterTx(rs485Pin, frameBytes);
   delayMicroseconds(RS485_MODE_SWITCH_DELAY);
   if (postTxSettleUs > 0) {
     delayMicroseconds(postTxSettleUs);
@@ -779,8 +821,7 @@ void EventDispatcher::sendSwitchNoChangeFrame(byte nextBoard) {
   digitalWrite(rs485Pin, HIGH);  // Write.
   delayMicroseconds(RS485_MODE_SWITCH_DELAY);
   hwSerial->write(frame, ppuc::v2::SwitchNoChangeFrameBytes());
-  delayMicroseconds(FrameWireTimeUs(ppuc::v2::SwitchNoChangeFrameBytes()));
-  digitalWrite(rs485Pin, LOW);  // Read.
+  ReleaseBusAfterTx(rs485Pin, ppuc::v2::SwitchNoChangeFrameBytes());
   delayMicroseconds(RS485_MODE_SWITCH_DELAY);
   if (postTxSettleUs > 0) {
     delayMicroseconds(postTxSettleUs);

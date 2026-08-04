@@ -147,10 +147,18 @@ void setup() {
   digitalWrite(RS485_MODE_PIN, LOW);  // Read mode
   delayWithBootPattern(5);
   // Configure UART1 on GPIO 0 and 1 explicitly seems to fix some strange connection issues.
-  gpio_set_function(0, GPIO_FUNC_UART);
-  gpio_set_function(1, GPIO_FUNC_UART);
-  Serial1.setTX(0);
-  Serial1.setRX(1);
+  // EventDispatcher::ReleaseBusAfterTx() polls uart0's BUSY flag directly to
+  // decide when the frame has left the wire. GPIO 0/1 are UART0 on the RP2040,
+  // so that only holds while the RS485 UART lives on these pins. Polling the
+  // wrong UART would read "idle" immediately and drop the driver mid-frame.
+  static_assert(RS485_TX_PIN == 0 && RS485_RX_PIN == 1,
+                "RS485 UART must be uart0 on GPIO 0/1, or "
+                "ReleaseBusAfterTx() has to be updated with it");
+
+  gpio_set_function(RS485_TX_PIN, GPIO_FUNC_UART);
+  gpio_set_function(RS485_RX_PIN, GPIO_FUNC_UART);
+  Serial1.setTX(RS485_TX_PIN);
+  Serial1.setRX(RS485_RX_PIN);
   Serial1.begin(ppuc::v2::kBaudRate);
   setBootStage(BOOT_STAGE_UART_READY);
   // Empty RX FIFO after reboot
