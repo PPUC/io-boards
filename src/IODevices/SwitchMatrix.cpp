@@ -349,14 +349,18 @@ void SwitchMatrix::handleEvent(Event* event) {
       // The CPU requested all current states. Usually this event is sent when
       // the game gets started.
       if (active) {
-        // First, send OFF for all switches then ON for the active ones using
-        // the IRQ handler.
-        for (int i = 0; i < (profile.columns * numRows); i++) {
-          if (mapping[i] != 0) {
-            _eventDispatcher->dispatch(
-                new Event(EVENT_SOURCE_SWITCH, word(0, mapping[i]), 0));
-          }
-        }
+        // Report the state each switch is actually in, the way Switches does.
+        //
+        // This used to send 0 for every mapped switch and leave the ON events
+        // to the IRQ handler. The handler only fires on *change*, and by then
+        // lastStable already matches reality, so nothing changed and no ON ever
+        // followed: a closed switch stayed reported as open for the rest of the
+        // session. A trough with balls sitting in it would read empty at game
+        // start.
+        //
+        // Before the first scan lastStable holds the seeded idle pattern, so
+        // this correctly reports all-open then too.
+        resendStableStates();
 
         startReader();
       }
