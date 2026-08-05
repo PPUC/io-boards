@@ -66,7 +66,31 @@ enum FrameType : uint8_t {
 enum AdminCommand : uint8_t {
   kAdminVersionQuery = 0x01,   // host -> board
   kAdminVersionReport = 0x02,  // board -> host
+  kAdminUpdateBegin = 0x03,    // host -> board: image size and CRC
+  kAdminUpdateBeginAck = 0x04, // board -> host: staging ready, or refused
+  kAdminUpdateChunk = 0x05,    // host -> board: offset + image bytes
+  kAdminUpdateChunkAck = 0x06, // board -> host: offset accepted, or error
+  kAdminUpdateCommit = 0x07,   // host -> board: verify and install
+  kAdminUpdateResult = 0x08,   // board -> host: outcome
 };
+
+// Why a board refused, or how an update ended. Reported rather than inferred
+// from silence, so a refusal is distinguishable from a board that is simply
+// not answering.
+enum AdminUpdateStatus : uint8_t {
+  kUpdateOk = 0x00,
+  kUpdateBusy = 0x01,           // an update is already in progress
+  kUpdateTooLarge = 0x02,       // image will not fit the staging area
+  kUpdateBadOffset = 0x03,      // chunk arrived out of order or out of range
+  kUpdateCrcMismatch = 0x04,    // staged image does not match the announced CRC
+  kUpdateNotStaged = 0x05,      // commit without a complete transfer
+  kUpdateWriteFailed = 0x06,    // flash refused the write
+  kUpdateUnsupported = 0x07,    // this board cannot self-update
+};
+
+// One chunk carries exactly one UF2 block's payload, which is what the image
+// is made of, so no repacking is needed on either side.
+constexpr size_t kAdminChunkBytes = 256;
 
 // Version of the administration contract itself, independent of the frame
 // format. A board reports it so a host can tell what it is able to ask for.
@@ -76,6 +100,7 @@ constexpr uint8_t kAdminProtocolMinor = 0;
 // What a board is willing to do, reported in a version report.
 enum AdminCapability : uint8_t {
   kAdminCapabilityVersionReport = 0x01,
+  kAdminCapabilityFirmwareUpdate = 0x02,
 };
 
 enum MappingDomain : uint8_t {
@@ -611,6 +636,106 @@ inline size_t BuildVersionReportFrame(uint8_t* frame, uint8_t boardId,
   data[kAdminVersionCapabilities] = capabilities;
   return BuildAdminFrame(frame, kAdminVersionReport, boardId, kNoBoard,
                          sequence, epoch, data);
+}
+
+// --- firmware update ---------------------------------------------------------
+//
+// Update frames reuse the admin envelope's command/boardId prefix and then
+// carry their own payload, so their sizes are computed rather than fixed. The
+// chunk frame is the only large one on the bus.
+
+constexpr size_t kAdminPrefixBytes = 2;  // command, boardId
+constexpr size_t kUpdateBeginBodyBytes = 6;   // size (4) + crc (2)
+constexpr size_t kUpdateAckBodyBytes = 5;     // status (1) + offset (4)
+constexpr size_t kUpdateChunkHeadBytes = 6;   // offset (4) + length (2)
+
+constexpr size_t kUpdateBeginFrameBytes =
+    kHeaderBytes + kAdminPrefixBytes + kUpdateBeginBodyBytes + kCrcBytes;
+constexpr size_t kUpdateAckFrameBytes =
+    kHeaderBytes + kAdminPrefixBytes + kUpdateAckBodyBytes + kCrcBytes;
+constexpr size_t kUpdateChunkMaxFrameBytes = kHeaderBytes + kAdminPrefixBytes +
+                                             kUpdateChunkHeadBytes +
+                                             kAdminChunkBytes + kCrcBytes;
+constexpr size_t kUpdateCommitFrameBytes =
+    kHeaderBytes + kAdminPrefixBytes + kCrcBytes;
+
+inline size_t BuildUpdateBeginFrame(uint8_t* frame, uint8_t boardId,
+                                    uint8_t sequence, uint8_t epoch,
+                                    uint32_t imageBytes, uint16_t imageCrc) {
+  WriteHeader(frame, kFrameAdmin, kFlagNone, kNoBoard, sequence, epoch);
+  uint8_t* p = frame + kHeaderBytes;
+  p[0] = kAdminUpdateBegin;
+  p[1] = boardId;
+  WriteU32(&p[2], imageBytes);
+  WriteU16(&p[6], imageCrc);
+  return AppendCrc(frame, kHeaderBytes + kAdminPrefixBytes +
+                              kUpdateBeginBodyBytes);
+}
+
+inline void ReadUpdateBegin(const uint8_t* payload, uint32_t& imageBytes,
+                            uint16_t& imageCrc) {
+  imageBytes = ReadU32(&payload[kAdminPrefixBytes]);
+  imageCrc = ReadU16(&payload[kAdminPrefixBytes + 4]);
+}
+
+// Used for both UpdateBeginAck and UpdateChunkAck: same shape, and the command
+// byte says which. `offset` echoes the chunk being acknowledged, or the number
+// of bytes staged so far for a begin.
+inline size_t BuildUpdateAckFrame(uint8_t* frame, uint8_t command,
+                                  uint8_t boardId, uint8_t sequence,
+                                  uint8_t epoch, uint8_t status,
+                                  uint32_t offset) {
+  WriteHeader(frame, kFrameAdmin, kFlagNone, kNoBoard, sequence, epoch);
+  uint8_t* p = frame + kHeaderBytes;
+  p[0] = command;
+  p[1] = boardId;
+  p[2] = status;
+  WriteU32(&p[3], offset);
+  return AppendCrc(frame, kHeaderBytes + kAdminPrefixBytes +
+                              kUpdateAckBodyBytes);
+}
+
+inline void ReadUpdateAck(const uint8_t* payload, uint8_t& status,
+                          uint32_t& offset) {
+  status = payload[kAdminPrefixBytes];
+  offset = ReadU32(&payload[kAdminPrefixBytes + 1]);
+}
+
+inline size_t BuildUpdateChunkFrame(uint8_t* frame, uint8_t boardId,
+                                    uint8_t sequence, uint8_t epoch,
+                                    uint32_t offset, const uint8_t* data,
+                                    uint16_t length) {
+  WriteHeader(frame, kFrameAdmin, kFlagNone, kNoBoard, sequence, epoch);
+  uint8_t* p = frame + kHeaderBytes;
+  p[0] = kAdminUpdateChunk;
+  p[1] = boardId;
+  WriteU32(&p[2], offset);
+  WriteU16(&p[6], length);
+  for (uint16_t i = 0; i < length; ++i) {
+    p[kAdminPrefixBytes + kUpdateChunkHeadBytes + i] = data[i];
+  }
+  return AppendCrc(frame, kHeaderBytes + kAdminPrefixBytes +
+                              kUpdateChunkHeadBytes + length);
+}
+
+inline void ReadUpdateChunkHead(const uint8_t* payload, uint32_t& offset,
+                                uint16_t& length) {
+  offset = ReadU32(&payload[kAdminPrefixBytes]);
+  length = ReadU16(&payload[kAdminPrefixBytes + 4]);
+}
+
+inline size_t UpdateChunkFrameBytes(uint16_t length) {
+  return kHeaderBytes + kAdminPrefixBytes + kUpdateChunkHeadBytes + length +
+         kCrcBytes;
+}
+
+inline size_t BuildUpdateCommitFrame(uint8_t* frame, uint8_t boardId,
+                                     uint8_t sequence, uint8_t epoch) {
+  WriteHeader(frame, kFrameAdmin, kFlagNone, kNoBoard, sequence, epoch);
+  uint8_t* p = frame + kHeaderBytes;
+  p[0] = kAdminUpdateCommit;
+  p[1] = boardId;
+  return AppendCrc(frame, kHeaderBytes + kAdminPrefixBytes);
 }
 
 // Reset, Restart and SwitchRefresh carry no payload.

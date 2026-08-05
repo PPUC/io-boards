@@ -786,6 +786,105 @@ Result CheckFrameTypeSpaceRemaining() {
   return Pass();
 }
 
+Result CheckUpdateBeginLayout() {
+  uint8_t frame[kUpdateBeginFrameBytes];
+  const size_t len = BuildUpdateBeginFrame(frame, /*boardId*/ 2, 9, 1,
+                                           /*imageBytes*/ 0x00020034,
+                                           /*crc*/ 0xBEEF);
+  if (len != kUpdateBeginFrameBytes) return Fail("begin frame length wrong");
+  if (frame[5] != kAdminUpdateBegin) return Fail("wrong admin command");
+  if (frame[6] != 2) return Fail("begin must name its board");
+  if (frame[7] != 0x00 || frame[8] != 0x02 || frame[9] != 0x00 ||
+      frame[10] != 0x34) {
+    return Fail("image size must be big-endian at offset 2 of the payload");
+  }
+  if (frame[11] != 0xBE || frame[12] != 0xEF) {
+    return Fail("image CRC must be big-endian after the size");
+  }
+  if (!VerifyCrc(frame, len)) return Fail("begin frame failed its own CRC");
+
+  uint32_t bytes = 0;
+  uint16_t crc = 0;
+  ReadUpdateBegin(frame + kHeaderBytes, bytes, crc);
+  if (bytes != 0x00020034 || crc != 0xBEEF) {
+    return Fail("begin payload did not round-trip");
+  }
+  return Pass();
+}
+
+Result CheckUpdateChunkLayout() {
+  uint8_t frame[kUpdateChunkMaxFrameBytes];
+  uint8_t data[kAdminChunkBytes];
+  for (size_t i = 0; i < kAdminChunkBytes; ++i) {
+    data[i] = static_cast<uint8_t>(i);
+  }
+
+  const size_t len = BuildUpdateChunkFrame(frame, /*boardId*/ 1, 3, 1,
+                                           /*offset*/ 0x00010000, data,
+                                           kAdminChunkBytes);
+  if (len != kUpdateChunkMaxFrameBytes) return Fail("chunk frame length wrong");
+  if (len != UpdateChunkFrameBytes(kAdminChunkBytes)) {
+    return Fail("UpdateChunkFrameBytes disagrees with the builder");
+  }
+  if (frame[5] != kAdminUpdateChunk) return Fail("wrong admin command");
+
+  uint32_t offset = 0;
+  uint16_t length = 0;
+  ReadUpdateChunkHead(frame + kHeaderBytes, offset, length);
+  if (offset != 0x00010000 || length != kAdminChunkBytes) {
+    return Fail("chunk head did not round-trip");
+  }
+
+  const uint8_t* body =
+      frame + kHeaderBytes + kAdminPrefixBytes + kUpdateChunkHeadBytes;
+  for (size_t i = 0; i < kAdminChunkBytes; ++i) {
+    if (body[i] != data[i]) return Fail("chunk body did not round-trip");
+  }
+  if (!VerifyCrc(frame, len)) return Fail("chunk frame failed its own CRC");
+
+  // A short final chunk must shrink the frame, not pad it.
+  const size_t shortLen = BuildUpdateChunkFrame(frame, 1, 4, 1, 0, data, 7);
+  if (shortLen != UpdateChunkFrameBytes(7)) {
+    return Fail("a short chunk must produce a short frame");
+  }
+  if (!VerifyCrc(frame, shortLen)) return Fail("short chunk CRC wrong");
+  return Pass();
+}
+
+Result CheckUpdateAckLayout() {
+  uint8_t frame[kUpdateAckFrameBytes];
+  const size_t len =
+      BuildUpdateAckFrame(frame, kAdminUpdateChunkAck, /*boardId*/ 4, 2, 1,
+                          kUpdateBadOffset, /*offset*/ 0x12345678);
+  if (len != kUpdateAckFrameBytes) return Fail("ack frame length wrong");
+  if (frame[5] != kAdminUpdateChunkAck) return Fail("wrong admin command");
+
+  uint8_t status = 0;
+  uint32_t offset = 0;
+  ReadUpdateAck(frame + kHeaderBytes, status, offset);
+  if (status != kUpdateBadOffset || offset != 0x12345678) {
+    return Fail("ack payload did not round-trip");
+  }
+  if (!VerifyCrc(frame, len)) return Fail("ack frame failed its own CRC");
+  return Pass();
+}
+
+Result CheckUpdateCommandsAreDistinct() {
+  const uint8_t commands[] = {
+      kAdminVersionQuery,   kAdminVersionReport,  kAdminUpdateBegin,
+      kAdminUpdateBeginAck, kAdminUpdateChunk,    kAdminUpdateChunkAck,
+      kAdminUpdateCommit,   kAdminUpdateResult};
+  for (size_t i = 0; i < sizeof(commands); ++i) {
+    if (commands[i] == 0) return Fail("0 is reserved as 'no command'");
+    for (size_t j = i + 1; j < sizeof(commands); ++j) {
+      if (commands[i] == commands[j]) {
+        return Fail("two admin commands share a value: " + Num(commands[i]));
+      }
+    }
+  }
+  return Pass();
+}
+
 const Case kCases[] = {
     {"wire constants", CheckWireConstants},
     {"frame type values", CheckFrameTypeValues},
@@ -815,6 +914,10 @@ const Case kCases[] = {
     {"AdminFrame byte layout", CheckAdminFrameLayout},
     {"version report layout", CheckVersionReportLayout},
     {"frame type space", CheckFrameTypeSpaceRemaining},
+    {"UpdateBegin byte layout", CheckUpdateBeginLayout},
+    {"UpdateChunk byte layout", CheckUpdateChunkLayout},
+    {"UpdateAck byte layout", CheckUpdateAckLayout},
+    {"admin commands are distinct", CheckUpdateCommandsAreDistinct},
     {"switch reply layout", CheckSwitchReplyLayout},
     {"OutputState layout", CheckOutputStateLayout},
     {"wire sizes are not struct padding", CheckWireSizesAreNotStructPadding},
