@@ -885,6 +885,41 @@ Result CheckUpdateCommandsAreDistinct() {
   return Pass();
 }
 
+// A receive buffer sized to the largest runtime frame overruns on the first
+// firmware chunk, which is five times larger. This asserts the constant the
+// buffers are sized from actually covers every frame that can arrive.
+Result CheckMaxFrameBytesCoversEverything() {
+  RuntimeConfig maxed;
+  maxed.coilBits = kMaxCoilBits;
+  maxed.lampBits = kMaxLampBits;
+  maxed.switchBits = kMaxSwitchBits;
+
+  const size_t sizes[] = {
+      kSetupFrameBytes,        kMappingFrameBytes,
+      kConfigFrameBytes,       kConfigAckFrameBytes,
+      kTriggerFrameBytes,      kResetFrameBytes,
+      kAdminFrameBytes,        kUpdateBeginFrameBytes,
+      kUpdateAckFrameBytes,    kUpdateCommitFrameBytes,
+      kUpdateChunkMaxFrameBytes, OutputFrameBytes(maxed),
+      SwitchFrameBytes(maxed), SwitchNoChangeFrameBytes(),
+  };
+
+  for (size_t size : sizes) {
+    if (size > kMaxFrameBytes) {
+      return Fail("a frame of " + Num(size) + " bytes exceeds kMaxFrameBytes " +
+                  Num(kMaxFrameBytes));
+    }
+  }
+
+  // And it should not be wildly larger than needed either, or every board
+  // pays for it twice in RAM.
+  if (kMaxFrameBytes != kUpdateChunkMaxFrameBytes) {
+    return Fail("the firmware chunk should be the largest frame; "
+                "kMaxFrameBytes = " + Num(kMaxFrameBytes));
+  }
+  return Pass();
+}
+
 const Case kCases[] = {
     {"wire constants", CheckWireConstants},
     {"frame type values", CheckFrameTypeValues},
@@ -918,6 +953,7 @@ const Case kCases[] = {
     {"UpdateChunk byte layout", CheckUpdateChunkLayout},
     {"UpdateAck byte layout", CheckUpdateAckLayout},
     {"admin commands are distinct", CheckUpdateCommandsAreDistinct},
+    {"kMaxFrameBytes covers every frame", CheckMaxFrameBytesCoversEverything},
     {"switch reply layout", CheckSwitchReplyLayout},
     {"OutputState layout", CheckOutputStateLayout},
     {"wire sizes are not struct padding", CheckWireSizesAreNotStructPadding},

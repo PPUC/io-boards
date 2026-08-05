@@ -729,6 +729,26 @@ inline size_t UpdateChunkFrameBytes(uint16_t length) {
          kCrcBytes;
 }
 
+// The largest frame that can appear on the bus, in either direction.
+//
+// Receive buffers must be at least this big. Sizing a buffer to the largest
+// *runtime* frame is not enough: a firmware chunk is five times larger than
+// anything the runtime protocol sends, and a short buffer would be a silent
+// overrun rather than a rejected frame.
+constexpr size_t kMaxRuntimeOutputFrameBytes =
+    kHeaderBytes + kMaxCoilBytes + kMaxLampBytes + kGiBytes + kCrcBytes;
+constexpr size_t kMaxRuntimeSwitchFrameBytes =
+    kHeaderBytes + kSwitchStatusBytes + kMaxSwitchBytes + kCrcBytes;
+
+constexpr size_t kMaxFrameBytes =
+    kUpdateChunkMaxFrameBytes > kMaxRuntimeOutputFrameBytes
+        ? (kUpdateChunkMaxFrameBytes > kMaxRuntimeSwitchFrameBytes
+               ? kUpdateChunkMaxFrameBytes
+               : kMaxRuntimeSwitchFrameBytes)
+        : (kMaxRuntimeOutputFrameBytes > kMaxRuntimeSwitchFrameBytes
+               ? kMaxRuntimeOutputFrameBytes
+               : kMaxRuntimeSwitchFrameBytes);
+
 inline size_t BuildUpdateCommitFrame(uint8_t* frame, uint8_t boardId,
                                      uint8_t sequence, uint8_t epoch) {
   WriteHeader(frame, kFrameAdmin, kFlagNone, kNoBoard, sequence, epoch);

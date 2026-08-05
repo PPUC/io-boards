@@ -12,6 +12,7 @@
 
 #include <queue>
 
+#include "../FirmwareUpdater.h"
 #include "../PPUCProtocolV2.h"
 #include "Event.h"
 #include "EventListener.h"
@@ -73,6 +74,11 @@ class EventDispatcher {
   void sendSwitchStateFrame(byte nextBoard);
   void sendSwitchNoChangeFrame(byte nextBoard);
   void sendVersionReportFrame();
+  void sendUpdateAckFrame(uint8_t command, uint8_t status, uint32_t offset);
+
+  // Receives firmware images and hands them to the OTA bootloader. Owned here
+  // because the admin frames that drive it arrive here.
+  FirmwareUpdater firmwareUpdater;
   void forwardSwitchTokenIfSelected(uint8_t selectedBoard);
   void applyOutputStates(const byte* coils, size_t coilBytes, const byte* lamps,
                          size_t lampBytes, const byte* giLevels);
@@ -96,11 +102,11 @@ class EventDispatcher {
   char eventListenerFilters[MAX_EVENT_LISTENERS];
   int numListeners = -1;
 
-  byte v2Buffer[ppuc::v2::kHeaderBytes + ppuc::v2::kMaxCoilBytes +
-                ppuc::v2::kMaxLampBytes + ppuc::v2::kGiBytes +
-                ppuc::v2::kCrcBytes];
-  byte v2TxBuffer[ppuc::v2::kHeaderBytes + ppuc::v2::kSwitchStatusBytes +
-                  ppuc::v2::kMaxSwitchBytes + ppuc::v2::kCrcBytes];
+  // Sized to the largest frame on the bus, which is a firmware chunk rather
+  // than anything the runtime protocol sends. Sizing these to the runtime
+  // maximum would overrun on the first chunk.
+  byte v2Buffer[ppuc::v2::kMaxFrameBytes];
+  byte v2TxBuffer[ppuc::v2::kMaxFrameBytes];
   byte outputCoils[ppuc::v2::kMaxCoilBytes] = {0};
   byte outputLamps[ppuc::v2::kMaxLampBytes] = {0};
   byte outputGi[ppuc::v2::kGiStrings] = {0};

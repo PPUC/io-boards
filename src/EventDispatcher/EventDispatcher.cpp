@@ -587,8 +587,55 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
     // Deliberately not gated on runtimeConfigValid or the epoch. The point of
     // a version query is to work before a session exists - that is when the
     // host needs to know what it is talking to.
-    if (command == ppuc::v2::kAdminVersionQuery) {
-      sendVersionReportFrame();
+    switch (command) {
+      case ppuc::v2::kAdminVersionQuery:
+        sendVersionReportFrame();
+        break;
+
+      case ppuc::v2::kAdminUpdateBegin: {
+        // Turn everything off before accepting an image. A board about to
+        // reboot into the bootloader must not leave a coil energised, and the
+        // host has no way to know what this board was doing.
+        dispatch(new Event(EVENT_RESTART));
+
+        uint32_t imageBytes = 0;
+        uint16_t imageCrc = 0;
+        ppuc::v2::ReadUpdateBegin(&frame[payloadOffset], imageBytes, imageCrc);
+        const uint8_t status = firmwareUpdater.begin(imageBytes, imageCrc);
+        sendUpdateAckFrame(ppuc::v2::kAdminUpdateBeginAck, status, 0);
+        break;
+      }
+
+      case ppuc::v2::kAdminUpdateChunk: {
+        uint32_t offset = 0;
+        uint16_t length = 0;
+        ppuc::v2::ReadUpdateChunkHead(&frame[payloadOffset], offset, length);
+        const uint8_t* body = &frame[payloadOffset + ppuc::v2::kAdminPrefixBytes +
+                                     ppuc::v2::kUpdateChunkHeadBytes];
+        const uint8_t status = firmwareUpdater.chunk(offset, body, length);
+        // Acknowledge the offset that was asked about, so a host retrying a
+        // lost ack can tell which chunk the answer belongs to.
+        sendUpdateAckFrame(ppuc::v2::kAdminUpdateChunkAck, status, offset);
+        break;
+      }
+
+      case ppuc::v2::kAdminUpdateCommit: {
+        const uint8_t status = firmwareUpdater.commit();
+        sendUpdateAckFrame(ppuc::v2::kAdminUpdateResult, status,
+                           firmwareUpdater.bytesReceived());
+
+        if (status == ppuc::v2::kUpdateOk) {
+          // Reboot through the existing reset path rather than calling the
+          // reboot directly: it gives the effects controller its shutdown
+          // window and leaves the reply time to reach the host, and it is the
+          // sequence already exercised on every reset.
+          dispatch(new Event(EVENT_RESET));
+        }
+        break;
+      }
+
+      default:
+        break;
     }
     return true;
   }
@@ -851,6 +898,21 @@ void EventDispatcher::sendSwitchStateFrame(byte nextBoard) {
   consecutiveSwitchNoChangeReplies = 0;
   clearReportedStatusFlags();
   lastPoll = millis();
+}
+
+void EventDispatcher::sendUpdateAckFrame(uint8_t command, uint8_t status,
+                                        uint32_t offset) {
+  byte* frame = v2TxBuffer;
+  const size_t frameBytes = ppuc::v2::BuildUpdateAckFrame(
+      frame, command, board, txSequence++, currentEpoch, status, offset);
+
+  digitalWrite(rs485Pin, HIGH);  // Write.
+  delayMicroseconds(RS485_MODE_SWITCH_DELAY);
+  hwSerial->write(frame, frameBytes);
+  ReleaseBusAfterTx(rs485Pin, frameBytes);
+  delayMicroseconds(RS485_MODE_SWITCH_DELAY);
+
+  v2TxFrames++;
 }
 
 void EventDispatcher::sendVersionReportFrame() {
