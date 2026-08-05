@@ -151,6 +151,11 @@ void setup() {
   // decide when the frame has left the wire. GPIO 0/1 are UART0 on the RP2040,
   // so that only holds while the RS485 UART lives on these pins. Polling the
   // wrong UART would read "idle" immediately and drop the driver mid-frame.
+  // The reported board type must be a value the protocol knows, or a host
+  // pairing images to boards by name has nothing to match against.
+  static_assert(ppuc::v2::BoardTypeName(PPUC_BOARD_TYPE) != nullptr,
+                "PPUC_BOARD_TYPE is not a known ppuc::v2::BoardType");
+
   static_assert(RS485_TX_PIN == 0 && RS485_RX_PIN == 1,
                 "RS485 UART must be uart0 on GPIO 0/1, or "
                 "ReleaseBusAfterTx() has to be updated with it");

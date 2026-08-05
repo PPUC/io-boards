@@ -97,6 +97,63 @@ constexpr size_t kAdminChunkBytes = 256;
 constexpr uint8_t kAdminProtocolMajor = 1;
 constexpr uint8_t kAdminProtocolMinor = 0;
 
+// Which board this firmware is built for.
+//
+// On the wire because firmware is board-specific: the same GPIO is a coil
+// output on one board and an input on another, so an image flashed to the
+// wrong type does not merely misbehave, it drives outputs into inputs. A
+// board reports its type so the host can refuse the mismatch rather than
+// discover it electrically.
+//
+// Values are on the wire and must not be renumbered. Names match the
+// PlatformIO environments and the CI artefact names, which is also how images
+// are matched to boards on disk.
+enum BoardType : uint8_t {
+  kBoardTypeUnknown = 0x00,
+  kBoardTypeIo16_8_1 = 0x01,     // IO_16_8_1
+  kBoardTypeIo16x8Matrix = 0x02, // IO_16x8_matrix
+  kBoardTypeOut8x10 = 0x03,      // Out_8x10
+  kBoardTypeOpto16 = 0x04,       // Opto_16
+};
+
+// Canonical name for a board type, or nullptr if unknown. One definition so
+// firmware filenames, config-tool board names and the wire value cannot drift
+// apart.
+constexpr const char* BoardTypeName(uint8_t type) {
+  switch (type) {
+    case kBoardTypeIo16_8_1: return "IO_16_8_1";
+    case kBoardTypeIo16x8Matrix: return "IO_16x8_matrix";
+    case kBoardTypeOut8x10: return "Out_8x10";
+    case kBoardTypeOpto16: return "Opto_16";
+    default: return nullptr;
+  }
+}
+
+// Inverse of BoardTypeName. Returns kBoardTypeUnknown for anything unrecognised
+// rather than guessing, so an unfamiliar filename cannot be flashed to
+// whatever happens to be on the bus.
+constexpr uint8_t BoardTypeFromName(const char* name) {
+  if (name == nullptr) {
+    return kBoardTypeUnknown;
+  }
+  for (uint8_t type = kBoardTypeIo16_8_1; type <= kBoardTypeOpto16; ++type) {
+    const char* candidate = BoardTypeName(type);
+    if (candidate == nullptr) {
+      continue;
+    }
+    const char* a = candidate;
+    const char* b = name;
+    while (*a != '\0' && *a == *b) {
+      ++a;
+      ++b;
+    }
+    if (*a == '\0' && *b == '\0') {
+      return type;
+    }
+  }
+  return kBoardTypeUnknown;
+}
+
 // What a board is willing to do, reported in a version report.
 enum AdminCapability : uint8_t {
   kAdminCapabilityVersionReport = 0x01,
@@ -611,7 +668,8 @@ enum AdminVersionField : uint8_t {
   kAdminVersionProtocolMajor = 3,
   kAdminVersionProtocolMinor = 4,
   kAdminVersionCapabilities = 5,
-  // 6, 7 reserved
+  kAdminVersionBoardType = 6,
+  // 7 reserved
 };
 
 inline size_t BuildVersionQueryFrame(uint8_t* frame, uint8_t boardId,
@@ -626,7 +684,8 @@ inline size_t BuildVersionReportFrame(uint8_t* frame, uint8_t boardId,
                                       uint8_t firmwareMajor,
                                       uint8_t firmwareMinor,
                                       uint8_t firmwarePatch,
-                                      uint8_t capabilities) {
+                                      uint8_t capabilities,
+                                      uint8_t boardType) {
   uint8_t data[kAdminDataBytes] = {0};
   data[kAdminVersionFirmwareMajor] = firmwareMajor;
   data[kAdminVersionFirmwareMinor] = firmwareMinor;
@@ -634,6 +693,7 @@ inline size_t BuildVersionReportFrame(uint8_t* frame, uint8_t boardId,
   data[kAdminVersionProtocolMajor] = kAdminProtocolMajor;
   data[kAdminVersionProtocolMinor] = kAdminProtocolMinor;
   data[kAdminVersionCapabilities] = capabilities;
+  data[kAdminVersionBoardType] = boardType;
   return BuildAdminFrame(frame, kAdminVersionReport, boardId, kNoBoard,
                          sequence, epoch, data);
 }

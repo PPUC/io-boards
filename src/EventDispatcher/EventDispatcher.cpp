@@ -920,7 +920,9 @@ void EventDispatcher::sendVersionReportFrame() {
   const size_t frameBytes = ppuc::v2::BuildVersionReportFrame(
       frame, board, txSequence++, currentEpoch, FIRMWARE_VERSION_MAJOR,
       FIRMWARE_VERSION_MINOR, FIRMWARE_VERSION_PATCH,
-      ppuc::v2::kAdminCapabilityVersionReport);
+      ppuc::v2::kAdminCapabilityVersionReport |
+          ppuc::v2::kAdminCapabilityFirmwareUpdate,
+      PPUC_BOARD_TYPE);
 
   digitalWrite(rs485Pin, HIGH);  // Write.
   delayMicroseconds(RS485_MODE_SWITCH_DELAY);

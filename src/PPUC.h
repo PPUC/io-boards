@@ -17,6 +17,16 @@
 
 #define CONTROLLER_16_8_1 1
 
+// Which board this image is built for, reported over the bus so the host can
+// refuse to flash it to a different type. Must be one of ppuc::v2::BoardType.
+//
+// Overridable per PlatformIO environment: each board type gets its own
+// environment and its own image, and the CI artefact name has to match
+// ppuc::v2::BoardTypeName() for the host to pair them up on disk.
+#ifndef PPUC_BOARD_TYPE
+#define PPUC_BOARD_TYPE 1  // kBoardTypeIo16_8_1
+#endif
+
 // RS485 UART pins. These are not free to change: GPIO 0/1 are UART0 on the
 // RP2040, and EventDispatcher releases the driver by polling uart0's BUSY flag
 // directly rather than going through HardwareSerial::flush(). Moving the UART

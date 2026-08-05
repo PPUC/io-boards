@@ -744,7 +744,8 @@ Result CheckVersionReportLayout() {
   const size_t len = BuildVersionReportFrame(frame, /*boardId*/ 5,
                                              /*sequence*/ 1, /*epoch*/ 1,
                                              /*fw*/ 2, 3, 4,
-                                             kAdminCapabilityVersionReport);
+                                             kAdminCapabilityVersionReport,
+                                             kBoardTypeIo16_8_1);
   if (len != kAdminFrameBytes) return Fail("version report length wrong");
   if (ExtractType(frame[1]) != kFrameAdmin) {
     return Fail("version report must be an admin frame");
@@ -920,6 +921,56 @@ Result CheckMaxFrameBytesCoversEverything() {
   return Pass();
 }
 
+// Board type decides which firmware image may be flashed to a board, so the
+// values and names have to stay put: a renumbering silently pairs an image
+// with the wrong hardware.
+Result CheckBoardTypeValues() {
+  const struct {
+    uint8_t type;
+    const char* name;
+  } kExpected[] = {
+      {kBoardTypeIo16_8_1, "IO_16_8_1"},
+      {kBoardTypeIo16x8Matrix, "IO_16x8_matrix"},
+      {kBoardTypeOut8x10, "Out_8x10"},
+      {kBoardTypeOpto16, "Opto_16"},
+  };
+
+  for (const auto& e : kExpected) {
+    const char* name = BoardTypeName(e.type);
+    if (name == nullptr || std::string(name) != e.name) {
+      return Fail(std::string("board type ") + Num(e.type) + " should be named " +
+                  e.name);
+    }
+    if (BoardTypeFromName(e.name) != e.type) {
+      return Fail(std::string(e.name) + " should map back to " + Num(e.type));
+    }
+  }
+
+  // Anything unrecognised must not resolve to a real board, or an unfamiliar
+  // filename could be flashed to whatever is on the bus.
+  if (BoardTypeFromName("IO_16_8") != kBoardTypeUnknown ||
+      BoardTypeFromName("IO_16_8_1x") != kBoardTypeUnknown ||
+      BoardTypeFromName("") != kBoardTypeUnknown ||
+      BoardTypeFromName(nullptr) != kBoardTypeUnknown) {
+    return Fail("an unknown name must not resolve to a board type");
+  }
+  if (BoardTypeName(kBoardTypeUnknown) != nullptr) {
+    return Fail("the unknown type must not have a name");
+  }
+  return Pass();
+}
+
+Result CheckVersionReportCarriesBoardType() {
+  uint8_t frame[kAdminFrameBytes];
+  BuildVersionReportFrame(frame, /*boardId*/ 1, 1, 1, 0, 2, 0,
+                          kAdminCapabilityVersionReport, kBoardTypeOut8x10);
+  const uint8_t* data = frame + kHeaderBytes + 2;
+  if (data[kAdminVersionBoardType] != kBoardTypeOut8x10) {
+    return Fail("the board type is not where the report says it is");
+  }
+  return Pass();
+}
+
 const Case kCases[] = {
     {"wire constants", CheckWireConstants},
     {"frame type values", CheckFrameTypeValues},
@@ -948,6 +999,8 @@ const Case kCases[] = {
     {"TriggerFrame byte layout", CheckTriggerFrameLayout},
     {"AdminFrame byte layout", CheckAdminFrameLayout},
     {"version report layout", CheckVersionReportLayout},
+    {"board type values and names", CheckBoardTypeValues},
+    {"version report carries the board type", CheckVersionReportCarriesBoardType},
     {"frame type space", CheckFrameTypeSpaceRemaining},
     {"UpdateBegin byte layout", CheckUpdateBeginLayout},
     {"UpdateChunk byte layout", CheckUpdateChunkLayout},
