@@ -17,6 +17,11 @@ uint32_t FrameWireTimeUs(size_t frameBytes) {
   return (bits * 1000000u) / kSerialBaudRate + 200;
 }
 
+// Extra time allowed on top of a frame's wire time before a partial read is
+// abandoned. Covers the sender's DE turnaround (RS485_MODE_SWITCH_DELAY at each
+// end) plus loop jitter, with room to spare.
+constexpr uint32_t kReadTimeoutSlackUs = 500;
+
 // Releases the RS485 driver as soon as the UART has shifted the last bit out.
 //
 // This used to wait FrameWireTimeUs() and then drop DE. Because write() only
@@ -238,6 +243,24 @@ bool EventDispatcher::getSwitchState(uint16_t number) const {
 }
 
 bool EventDispatcher::readBytes(byte *buffer, size_t len) {
+  // Bounded by how long the bytes physically take to arrive, not by a flat
+  // constant.
+  //
+  // This is a busy wait in the middle of the board's main loop: nothing else
+  // runs while it spins - not PwmDevices::update(), which is what enforces
+  // maxPulseTime, and not the switch event dispatch. So the ceiling here is
+  // the board's worst-case blind spot, and it should be no larger than the
+  // traffic justifies.
+  //
+  // Once a sender has started a frame it transmits continuously, so the bytes
+  // of one frame arrive back to back. Waiting materially longer than the frame
+  // takes on the wire cannot recover a frame that is already lost - it only
+  // blocks the board. The margin covers the sender's DE turnaround and loop
+  // jitter, and a false sync byte now costs a fraction of a millisecond
+  // instead of eight.
+  const uint32_t wireUs = FrameWireTimeUs(len);
+  const uint32_t timeoutUs = wireUs + kReadTimeoutSlackUs;
+
   size_t offset = 0;
   uint32_t start = micros();
   while (offset < len) {
@@ -246,7 +269,7 @@ bool EventDispatcher::readBytes(byte *buffer, size_t len) {
       continue;
     }
 
-    if ((micros() - start) > 8000) {
+    if ((micros() - start) > timeoutUs) {
       return false;
     }
   }
