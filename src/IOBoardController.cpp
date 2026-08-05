@@ -1,5 +1,7 @@
 #include "IOBoardController.h"
 
+#include "PPUCBoardTypes.h"
+
 #include "EventDispatcher/CrossLinkDebugger.h"
 #include "pico/multicore.h"
 #include "hardware/sync.h"
@@ -16,16 +18,10 @@ uint8_t decodeBoardSelectorValue(int raw) {
 }
 
 SwitchMatrixProfile switchMatrixProfileForController(int controllerType) {
-  switch (controllerType) {
-    case CONTROLLER_16_8_1:
-    default:
-      return SwitchMatrixProfile{
-          4,              // columns
-          8,              // maxRows
-          15,             // columnsBasePin, GPIO 15-18
-          (1u << 4) | (1u << 8),
-      };
-  }
+  // Board-local geometry lives in PPUCBoardTypes.h so adding a board means
+  // editing one table rather than finding every switch statement.
+  (void)controllerType;
+  return ppuc::board::self().matrix;
 }
 
 [[noreturn]] void performBoardReboot() {
@@ -105,7 +101,14 @@ void IOBoardController::begin() {
     return;
   }
 
-  if (controllerType == CONTROLLER_16_8_1) {
+  // Build only the subsystems this board declares. The gate used to be
+  // `controllerType == CONTROLLER_16_8_1`, so any other type came up inert
+  // with nothing to say why.
+  constexpr ppuc::board::Profile kProfile = ppuc::board::self();
+  static_assert(kProfile.type != ppuc::v2::kBoardTypeUnknown,
+                "PPUC_BOARD_TYPE has no profile in PPUCBoardTypes.h");
+
+  {
     initializeBoardIdentity();
 
     _eventDispatcher->setBoard(boardId);
