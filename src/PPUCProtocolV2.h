@@ -51,6 +51,31 @@ enum FrameType : uint8_t {
   kFrameRestart = 0x0B,
   kFrameTrigger = 0x0C,
   kFrameSwitchRefresh = 0x0D,
+  // Envelope for board administration: version reporting, run-mode selection
+  // and, later, firmware transfer.
+  //
+  // One type rather than one per message, because the type field is the low
+  // nibble of typeAndFlags and only 0x0E and 0x0F were left. Administration
+  // needs more messages than that, so the command lives in the payload and
+  // 0x0F stays available. Reusing this framing also means administration
+  // inherits the CRC, sequence, epoch and parser rather than duplicating them.
+  kFrameAdmin = 0x0E,
+};
+
+// Sub-commands carried in AdminPayload.command.
+enum AdminCommand : uint8_t {
+  kAdminVersionQuery = 0x01,   // host -> board
+  kAdminVersionReport = 0x02,  // board -> host
+};
+
+// Version of the administration contract itself, independent of the frame
+// format. A board reports it so a host can tell what it is able to ask for.
+constexpr uint8_t kAdminProtocolMajor = 1;
+constexpr uint8_t kAdminProtocolMinor = 0;
+
+// What a board is willing to do, reported in a version report.
+enum AdminCapability : uint8_t {
+  kAdminCapabilityVersionReport = 0x01,
 };
 
 enum MappingDomain : uint8_t {
@@ -134,6 +159,19 @@ struct SwitchPayload {
   uint8_t switches[kMaxSwitchBytes];
 };
 
+// Administration envelope.
+//
+// boardId is explicit rather than inferred from token order: administration
+// happens before and outside the switch chain, where there is no token to
+// infer from. A board answers only when the id matches its own, so a host that
+// polls one board at a time cannot cause two boards to reply at once.
+constexpr size_t kAdminDataBytes = 8;
+struct AdminPayload {
+  uint8_t command;
+  uint8_t boardId;
+  uint8_t data[kAdminDataBytes];
+};
+
 struct TriggerPayload {
   uint8_t source;
   uint8_t numberHi;
@@ -190,6 +228,7 @@ constexpr size_t kOutputPayloadBytes = sizeof(OutputPayload);
 constexpr size_t kConfigAckPayloadBytes = sizeof(ConfigAckPayload);
 constexpr size_t kSwitchPayloadBytes = sizeof(SwitchPayload);
 constexpr size_t kTriggerPayloadBytes = sizeof(TriggerPayload);
+constexpr size_t kAdminPayloadBytes = sizeof(AdminPayload);
 constexpr size_t kSwitchStatusBytes = 4;
 constexpr size_t kResetFrameBytes = kHeaderBytes + kCrcBytes;
 constexpr size_t kRestartFrameBytes = kHeaderBytes + kCrcBytes;
@@ -201,6 +240,7 @@ constexpr size_t kOutputFrameBytes = kHeaderBytes + kOutputPayloadBytes + kCrcBy
 constexpr size_t kConfigAckFrameBytes = kHeaderBytes + kConfigAckPayloadBytes + kCrcBytes;
 constexpr size_t kSwitchFrameBytes = kHeaderBytes + kSwitchPayloadBytes + kCrcBytes;
 constexpr size_t kTriggerFrameBytes = kHeaderBytes + kTriggerPayloadBytes + kCrcBytes;
+constexpr size_t kAdminFrameBytes = kHeaderBytes + kAdminPayloadBytes + kCrcBytes;
 
 // The wire format is deliberately assembled byte at a time, never by copying a
 // struct, so that host endianness, struct padding and alignment cannot affect
@@ -218,6 +258,7 @@ static_assert(kMappingPayloadBytes == 6, "MappingPayload must be 6 bytes on the 
 static_assert(kConfigPayloadBytes == 8, "ConfigPayload must be 8 bytes on the wire");
 static_assert(kConfigAckPayloadBytes == 8, "ConfigAckPayload must be 8 bytes on the wire");
 static_assert(kTriggerPayloadBytes == 4, "TriggerPayload must be 4 bytes on the wire");
+static_assert(kAdminPayloadBytes == 10, "AdminPayload must be 10 bytes on the wire");
 static_assert(kSwitchStatusBytes == 4, "the switch status prefix is 4 bytes on the wire");
 static_assert(kGiBytes == 3, "5 GI strings at 4 bits each pack into 3 bytes");
 
@@ -506,6 +547,70 @@ inline size_t BuildConfigAckFrame(uint8_t* frame, uint8_t nextBoard,
   WriteConfigAckPayload(frame + kHeaderBytes, boardId, topic, index, key,
                         status);
   return AppendCrc(frame, kHeaderBytes + kConfigAckPayloadBytes);
+}
+
+inline void WriteAdminPayload(uint8_t* payload, uint8_t command,
+                              uint8_t boardId, const uint8_t* data) {
+  payload[0] = command;
+  payload[1] = boardId;
+  for (size_t i = 0; i < kAdminDataBytes; ++i) {
+    payload[2 + i] = data ? data[i] : 0;
+  }
+}
+
+inline void ReadAdminPayload(const uint8_t* payload, uint8_t& command,
+                             uint8_t& boardId, uint8_t* data) {
+  command = payload[0];
+  boardId = payload[1];
+  if (data) {
+    for (size_t i = 0; i < kAdminDataBytes; ++i) {
+      data[i] = payload[2 + i];
+    }
+  }
+}
+
+inline size_t BuildAdminFrame(uint8_t* frame, uint8_t command, uint8_t boardId,
+                              uint8_t nextBoard, uint8_t sequence,
+                              uint8_t epoch, const uint8_t* data) {
+  WriteHeader(frame, kFrameAdmin, kFlagNone, nextBoard, sequence, epoch);
+  WriteAdminPayload(frame + kHeaderBytes, command, boardId, data);
+  return AppendCrc(frame, kHeaderBytes + kAdminPayloadBytes);
+}
+
+// Layout of the data area for kAdminVersionReport. Named so both sides index
+// it the same way rather than each counting offsets by hand.
+enum AdminVersionField : uint8_t {
+  kAdminVersionFirmwareMajor = 0,
+  kAdminVersionFirmwareMinor = 1,
+  kAdminVersionFirmwarePatch = 2,
+  kAdminVersionProtocolMajor = 3,
+  kAdminVersionProtocolMinor = 4,
+  kAdminVersionCapabilities = 5,
+  // 6, 7 reserved
+};
+
+inline size_t BuildVersionQueryFrame(uint8_t* frame, uint8_t boardId,
+                                     uint8_t sequence, uint8_t epoch) {
+  const uint8_t data[kAdminDataBytes] = {0};
+  return BuildAdminFrame(frame, kAdminVersionQuery, boardId, kNoBoard, sequence,
+                         epoch, data);
+}
+
+inline size_t BuildVersionReportFrame(uint8_t* frame, uint8_t boardId,
+                                      uint8_t sequence, uint8_t epoch,
+                                      uint8_t firmwareMajor,
+                                      uint8_t firmwareMinor,
+                                      uint8_t firmwarePatch,
+                                      uint8_t capabilities) {
+  uint8_t data[kAdminDataBytes] = {0};
+  data[kAdminVersionFirmwareMajor] = firmwareMajor;
+  data[kAdminVersionFirmwareMinor] = firmwareMinor;
+  data[kAdminVersionFirmwarePatch] = firmwarePatch;
+  data[kAdminVersionProtocolMajor] = kAdminProtocolMajor;
+  data[kAdminVersionProtocolMinor] = kAdminProtocolMinor;
+  data[kAdminVersionCapabilities] = capabilities;
+  return BuildAdminFrame(frame, kAdminVersionReport, boardId, kNoBoard,
+                         sequence, epoch, data);
 }
 
 // Reset, Restart and SwitchRefresh carry no payload.

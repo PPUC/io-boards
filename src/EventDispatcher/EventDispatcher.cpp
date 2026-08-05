@@ -2,6 +2,8 @@
 
 #include <string.h>
 
+#include "../PPUC.h"        // FIRMWARE_VERSION_*, the single source of truth
+                            // that CI also reads to tag releases
 #include "hardware/sync.h"  // save_and_disable_interrupts
 #include "hardware/uart.h"  // uart0, UART_UARTFR_BUSY_BITS
 #include "pico/time.h"      // make_timeout_time_us, time_reached
@@ -295,6 +297,8 @@ size_t EventDispatcher::getV2PayloadBytes(ppuc::v2::FrameType frameType) {
       return ppuc::v2::SwitchNoChangePayloadBytes();
     case ppuc::v2::kFrameTrigger:
       return ppuc::v2::kTriggerPayloadBytes;
+    case ppuc::v2::kFrameAdmin:
+      return ppuc::v2::kAdminPayloadBytes;
     case ppuc::v2::kFrameSwitchRefresh:
     case ppuc::v2::kFrameHeartbeat:
     case ppuc::v2::kFrameError:
@@ -433,7 +437,8 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
       frameType == ppuc::v2::kFrameSwitchRefresh ||
       frameType == ppuc::v2::kFrameHeartbeat ||
       frameType == ppuc::v2::kFrameError || frameType == ppuc::v2::kFrameReset ||
-      frameType == ppuc::v2::kFrameRestart;
+      frameType == ppuc::v2::kFrameRestart ||
+      frameType == ppuc::v2::kFrameAdmin;
   const bool hostPollFrame = frameType == ppuc::v2::kFrameOutputState ||
                              frameType == ppuc::v2::kFrameSwitchRefresh;
 
@@ -561,6 +566,29 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
   if (frameType == ppuc::v2::kFrameSwitchNoChange) {
     if (runtimeConfigValid && incomingEpoch == currentEpoch) {
       forwardSwitchTokenIfSelected(frame[2]);
+    }
+    return true;
+  }
+
+  if (frameType == ppuc::v2::kFrameAdmin) {
+    uint8_t command = 0;
+    uint8_t targetBoard = 0;
+    uint8_t data[ppuc::v2::kAdminDataBytes] = {0};
+    ppuc::v2::ReadAdminPayload(&frame[payloadOffset], command, targetBoard,
+                               data);
+
+    // Answer only when addressed. Administration happens outside the switch
+    // chain, so there is no token deciding who may transmit; a broadcast query
+    // would put every board on the wire at once.
+    if (targetBoard != board) {
+      return true;
+    }
+
+    // Deliberately not gated on runtimeConfigValid or the epoch. The point of
+    // a version query is to work before a session exists - that is when the
+    // host needs to know what it is talking to.
+    if (command == ppuc::v2::kAdminVersionQuery) {
+      sendVersionReportFrame();
     }
     return true;
   }
@@ -823,6 +851,22 @@ void EventDispatcher::sendSwitchStateFrame(byte nextBoard) {
   consecutiveSwitchNoChangeReplies = 0;
   clearReportedStatusFlags();
   lastPoll = millis();
+}
+
+void EventDispatcher::sendVersionReportFrame() {
+  byte* frame = v2TxBuffer;
+  const size_t frameBytes = ppuc::v2::BuildVersionReportFrame(
+      frame, board, txSequence++, currentEpoch, FIRMWARE_VERSION_MAJOR,
+      FIRMWARE_VERSION_MINOR, FIRMWARE_VERSION_PATCH,
+      ppuc::v2::kAdminCapabilityVersionReport);
+
+  digitalWrite(rs485Pin, HIGH);  // Write.
+  delayMicroseconds(RS485_MODE_SWITCH_DELAY);
+  hwSerial->write(frame, frameBytes);
+  ReleaseBusAfterTx(rs485Pin, frameBytes);
+  delayMicroseconds(RS485_MODE_SWITCH_DELAY);
+
+  v2TxFrames++;
 }
 
 void EventDispatcher::sendSwitchNoChangeFrame(byte nextBoard) {

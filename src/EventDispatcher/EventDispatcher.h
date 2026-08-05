@@ -72,6 +72,7 @@ class EventDispatcher {
                           uint8_t key, uint8_t status);
   void sendSwitchStateFrame(byte nextBoard);
   void sendSwitchNoChangeFrame(byte nextBoard);
+  void sendVersionReportFrame();
   void forwardSwitchTokenIfSelected(uint8_t selectedBoard);
   void applyOutputStates(const byte* coils, size_t coilBytes, const byte* lamps,
                          size_t lampBytes, const byte* giLevels);

@@ -707,6 +707,85 @@ Result CheckCodecIsEndianIndependent() {
 }
 }  // namespace
 
+Result CheckAdminFrameLayout() {
+  uint8_t frame[kAdminFrameBytes];
+  uint8_t data[kAdminDataBytes] = {0};
+  data[0] = 0xAA;
+  data[kAdminDataBytes - 1] = 0x55;
+
+  const size_t len = BuildAdminFrame(frame, kAdminVersionQuery, /*boardId*/ 3,
+                                     kNoBoard, /*sequence*/ 7, /*epoch*/ 2,
+                                     data);
+  if (len != kAdminFrameBytes) return Fail("admin frame length wrong");
+  if (frame[1] != kFrameAdmin) return Fail("Admin must carry no flags");
+  if (frame[5] != kAdminVersionQuery) {
+    return Fail("byte 5 must be the admin command");
+  }
+  if (frame[6] != 3) return Fail("byte 6 must be the board id");
+  if (frame[7] != 0xAA || frame[14] != 0x55) {
+    return Fail("bytes 7..14 must be the admin data area");
+  }
+  if (!VerifyCrc(frame, len)) return Fail("admin frame failed its own CRC");
+
+  uint8_t command = 0, boardId = 0;
+  uint8_t out[kAdminDataBytes] = {0};
+  ReadAdminPayload(frame + kHeaderBytes, command, boardId, out);
+  if (command != kAdminVersionQuery || boardId != 3) {
+    return Fail("admin header fields did not round-trip");
+  }
+  for (size_t i = 0; i < kAdminDataBytes; ++i) {
+    if (out[i] != data[i]) return Fail("admin data did not round-trip");
+  }
+  return Pass();
+}
+
+Result CheckVersionReportLayout() {
+  uint8_t frame[kAdminFrameBytes];
+  const size_t len = BuildVersionReportFrame(frame, /*boardId*/ 5,
+                                             /*sequence*/ 1, /*epoch*/ 1,
+                                             /*fw*/ 2, 3, 4,
+                                             kAdminCapabilityVersionReport);
+  if (len != kAdminFrameBytes) return Fail("version report length wrong");
+  if (ExtractType(frame[1]) != kFrameAdmin) {
+    return Fail("version report must be an admin frame");
+  }
+  if (frame[5] != kAdminVersionReport) return Fail("wrong admin command");
+  if (frame[6] != 5) return Fail("version report must name its board");
+
+  const uint8_t* data = frame + kHeaderBytes + 2;
+  if (data[kAdminVersionFirmwareMajor] != 2 ||
+      data[kAdminVersionFirmwareMinor] != 3 ||
+      data[kAdminVersionFirmwarePatch] != 4) {
+    return Fail("firmware version fields are in the wrong place");
+  }
+  if (data[kAdminVersionProtocolMajor] != kAdminProtocolMajor ||
+      data[kAdminVersionProtocolMinor] != kAdminProtocolMinor) {
+    return Fail("admin protocol version fields are in the wrong place");
+  }
+  if (data[kAdminVersionCapabilities] != kAdminCapabilityVersionReport) {
+    return Fail("capabilities field is in the wrong place");
+  }
+  if (!VerifyCrc(frame, len)) return Fail("version report failed its own CRC");
+  return Pass();
+}
+
+// The type field is the low nibble, so the space is small and worth watching.
+Result CheckFrameTypeSpaceRemaining() {
+  if (kFrameAdmin != 0x0E) return Fail("Admin must be 0x0E");
+  // 0x0F is the only value left. If something takes it, the next protocol
+  // addition has to go inside an existing envelope rather than beside it.
+  const uint8_t typesInUse[] = {
+      kFrameOutputState, kFrameSwitchState, kFrameHeartbeat, kFrameError,
+      kFrameSetup, kFrameMapping, kFrameReset, kFrameConfig,
+      kFrameSwitchNoChange, kFrameConfigAck, kFrameRestart, kFrameTrigger,
+      kFrameSwitchRefresh, kFrameAdmin};
+  for (uint8_t t : typesInUse) {
+    if (t == 0x0F) return Fail("0x0F was the last free frame type and is gone");
+    if ((t & 0xF0) != 0) return Fail("a frame type escaped the low nibble");
+  }
+  return Pass();
+}
+
 const Case kCases[] = {
     {"wire constants", CheckWireConstants},
     {"frame type values", CheckFrameTypeValues},
@@ -733,6 +812,9 @@ const Case kCases[] = {
     {"CRC rejects tampered frames", CheckCrcRejectsTamperedFrames},
     {"bare frame layout", CheckBareFrameLayout},
     {"TriggerFrame byte layout", CheckTriggerFrameLayout},
+    {"AdminFrame byte layout", CheckAdminFrameLayout},
+    {"version report layout", CheckVersionReportLayout},
+    {"frame type space", CheckFrameTypeSpaceRemaining},
     {"switch reply layout", CheckSwitchReplyLayout},
     {"OutputState layout", CheckOutputStateLayout},
     {"wire sizes are not struct padding", CheckWireSizesAreNotStructPadding},
