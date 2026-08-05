@@ -87,6 +87,7 @@ class SwitchMatrix : public EventListener {
   void stopReader();
   void startReader();
   void releasePrograms();
+  void seedIdleStableState();
   void resendStableStates();
   bool isConfiguredGeometrySupported() const;
   byte boardId;
@@ -103,7 +104,11 @@ class SwitchMatrix : public EventListener {
   uint8_t loadedNumRows = 4;
 
   byte mapping[SWITCH_MATRIX_MAX_COLUMNS * SWITCH_MATRIX_MAX_ROWS] = {0};
+  // The last stable *raw* sample. Its idle value depends on polarity, so it
+  // cannot simply start at zero: on an active-low matrix an open switch reads
+  // 1, and zero would mean every switch closed. See seedIdleStableState().
   uint32_t lastStable = 0;
+  bool haveScanned = false;
   volatile uint8_t pendingEventHead = 0;
   volatile uint8_t pendingEventTail = 0;
   PendingMatrixSwitchEvent pendingEvents[MATRIX_SWITCH_EVENT_QUEUE_SIZE] = {};

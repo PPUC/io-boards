@@ -105,9 +105,33 @@ void SwitchMatrix::releasePrograms() {
   sm_rows = 0;
 }
 
+// Sets lastStable to what an all-open matrix reads as, for the configured
+// polarity and geometry.
+//
+// lastStable holds raw samples, and on an active-low matrix an open switch
+// reads 1. Left at zero, resendStableStates() would tell the host every mapped
+// switch was closed - every target, every rollover, the trough - which is what
+// EVENT_REFRESH_SWITCHES would have reported before the first scan landed.
+//
+// Only meaningful before a real sample exists; afterwards lastStable is the
+// truth and must not be overwritten, or restarting the reader would lose the
+// live state.
+void SwitchMatrix::seedIdleStableState() {
+  const uint8_t bits =
+      static_cast<uint8_t>(profile.columns * numRows);
+  const uint32_t used =
+      (bits >= 32) ? 0xFFFFFFFFu : ((1u << bits) - 1u);
+  lastStable = activeLow ? used : 0u;
+}
+
 void SwitchMatrix::startReader() {
   if (running || !active || !isConfiguredGeometrySupported()) {
     return;
+  }
+
+  if (!haveScanned) {
+    // Polarity and row count are known by now; at construction they were not.
+    seedIdleStableState();
   }
 
   instance = this;
@@ -237,6 +261,7 @@ void SwitchMatrix::resetConfig() {
   active = false;
   memset(mapping, 0, sizeof(mapping));
   lastStable = 0;
+  haveScanned = false;
   pendingEventHead = 0;
   pendingEventTail = 0;
   memset(pendingEvents, 0, sizeof(pendingEvents));
@@ -252,6 +277,7 @@ void SwitchMatrix::registerSwitch(byte p, byte n) {
 
 void SwitchMatrix::handleRowChanges(uint32_t raw) {
   absolute_time_t now = get_absolute_time();
+  haveScanned = true;
   uint32_t changed = raw ^ lastStable;  // raw to raw comparison
 
   for (int column = 0; column < profile.columns; column++) {
