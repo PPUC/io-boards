@@ -27,6 +27,16 @@
 #define PPUC_BOARD_TYPE 1  // kBoardTypeIo16_8_1
 #endif
 
+// Which build this image is, reported alongside the version.
+//
+// The io-boards commit it was built from, truncated to 32 bits, injected by
+// CI. Zero means a local build with nothing recorded - the host treats that as
+// "unknown" rather than as a build that differs from every other, so a
+// hand-built board is not perpetually out of date.
+#ifndef PPUC_BUILD_ID
+#define PPUC_BUILD_ID 0
+#endif
+
 // RS485 UART pins. These are not free to change: GPIO 0/1 are UART0 on the
 // RP2040, and EventDispatcher releases the driver by polling uart0's BUSY flag
 // directly rather than going through HardwareSerial::flush(). Moving the UART

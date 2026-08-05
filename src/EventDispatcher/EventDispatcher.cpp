@@ -922,7 +922,7 @@ void EventDispatcher::sendVersionReportFrame() {
       FIRMWARE_VERSION_MINOR, FIRMWARE_VERSION_PATCH,
       ppuc::v2::kAdminCapabilityVersionReport |
           ppuc::v2::kAdminCapabilityFirmwareUpdate,
-      PPUC_BOARD_TYPE);
+      PPUC_BOARD_TYPE, PPUC_BUILD_ID);
 
   digitalWrite(rs485Pin, HIGH);  // Write.
   delayMicroseconds(RS485_MODE_SWITCH_DELAY);

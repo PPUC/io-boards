@@ -722,8 +722,13 @@ Result CheckAdminFrameLayout() {
     return Fail("byte 5 must be the admin command");
   }
   if (frame[6] != 3) return Fail("byte 6 must be the board id");
-  if (frame[7] != 0xAA || frame[14] != 0x55) {
-    return Fail("bytes 7..14 must be the admin data area");
+  // Derived from the constant rather than hardcoded: the data area has grown
+  // once already, and a test that pins the old extent fails for the wrong
+  // reason when it grows again.
+  const size_t dataStart = kHeaderBytes + kAdminPrefixBytes;
+  if (frame[dataStart] != 0xAA ||
+      frame[dataStart + kAdminDataBytes - 1] != 0x55) {
+    return Fail("the admin data area is not where the layout says it is");
   }
   if (!VerifyCrc(frame, len)) return Fail("admin frame failed its own CRC");
 
@@ -745,7 +750,8 @@ Result CheckVersionReportLayout() {
                                              /*sequence*/ 1, /*epoch*/ 1,
                                              /*fw*/ 2, 3, 4,
                                              kAdminCapabilityVersionReport,
-                                             kBoardTypeIo16_8_1);
+                                             kBoardTypeIo16_8_1,
+                                             /*buildId*/ 0xDEADBEEF);
   if (len != kAdminFrameBytes) return Fail("version report length wrong");
   if (ExtractType(frame[1]) != kFrameAdmin) {
     return Fail("version report must be an admin frame");
@@ -765,6 +771,14 @@ Result CheckVersionReportLayout() {
   }
   if (data[kAdminVersionCapabilities] != kAdminCapabilityVersionReport) {
     return Fail("capabilities field is in the wrong place");
+  }
+  if (ReadU32(&data[kAdminVersionBuildId]) != 0xDEADBEEF) {
+    return Fail("build id is not where the report says it is");
+  }
+  // The build id is appended after the fields that existed before it, so a
+  // reader written against the earlier layout still finds everything it knew.
+  if (kAdminVersionBuildId <= kAdminVersionBoardType) {
+    return Fail("the build id must come after the fields that predate it");
   }
   if (!VerifyCrc(frame, len)) return Fail("version report failed its own CRC");
   return Pass();
@@ -963,7 +977,8 @@ Result CheckBoardTypeValues() {
 Result CheckVersionReportCarriesBoardType() {
   uint8_t frame[kAdminFrameBytes];
   BuildVersionReportFrame(frame, /*boardId*/ 1, 1, 1, 0, 2, 0,
-                          kAdminCapabilityVersionReport, kBoardTypeOut8x10);
+                          kAdminCapabilityVersionReport, kBoardTypeOut8x10,
+                          /*buildId*/ 0);
   const uint8_t* data = frame + kHeaderBytes + 2;
   if (data[kAdminVersionBoardType] != kBoardTypeOut8x10) {
     return Fail("the board type is not where the report says it is");

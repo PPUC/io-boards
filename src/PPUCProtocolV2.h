@@ -247,7 +247,7 @@ struct SwitchPayload {
 // happens before and outside the switch chain, where there is no token to
 // infer from. A board answers only when the id matches its own, so a host that
 // polls one board at a time cannot cause two boards to reply at once.
-constexpr size_t kAdminDataBytes = 8;
+constexpr size_t kAdminDataBytes = 12;
 struct AdminPayload {
   uint8_t command;
   uint8_t boardId;
@@ -340,7 +340,7 @@ static_assert(kMappingPayloadBytes == 6, "MappingPayload must be 6 bytes on the 
 static_assert(kConfigPayloadBytes == 8, "ConfigPayload must be 8 bytes on the wire");
 static_assert(kConfigAckPayloadBytes == 8, "ConfigAckPayload must be 8 bytes on the wire");
 static_assert(kTriggerPayloadBytes == 4, "TriggerPayload must be 4 bytes on the wire");
-static_assert(kAdminPayloadBytes == 10, "AdminPayload must be 10 bytes on the wire");
+static_assert(kAdminPayloadBytes == 14, "AdminPayload must be 14 bytes on the wire");
 static_assert(kSwitchStatusBytes == 4, "the switch status prefix is 4 bytes on the wire");
 static_assert(kGiBytes == 3, "5 GI strings at 4 bits each pack into 3 bytes");
 
@@ -670,6 +670,19 @@ enum AdminVersionField : uint8_t {
   kAdminVersionCapabilities = 5,
   kAdminVersionBoardType = 6,
   // 7 reserved
+  // 8..11: build id, big-endian.
+  //
+  // Which build this is, as opposed to which version it calls itself. The
+  // firmware version is maintained by hand and does not move between
+  // snapshots, so two materially different images routinely claim the same
+  // version - which makes "is the board out of date" unanswerable from the
+  // version alone. The build id is the io-boards commit the image was built
+  // from, truncated to 32 bits.
+  //
+  // Zero means "not recorded": a local build with no id injected. A host must
+  // not treat zero as a distinct build, or every such board looks perpetually
+  // out of date.
+  kAdminVersionBuildId = 8,
 };
 
 inline size_t BuildVersionQueryFrame(uint8_t* frame, uint8_t boardId,
@@ -685,7 +698,8 @@ inline size_t BuildVersionReportFrame(uint8_t* frame, uint8_t boardId,
                                       uint8_t firmwareMinor,
                                       uint8_t firmwarePatch,
                                       uint8_t capabilities,
-                                      uint8_t boardType) {
+                                      uint8_t boardType,
+                                      uint32_t buildId) {
   uint8_t data[kAdminDataBytes] = {0};
   data[kAdminVersionFirmwareMajor] = firmwareMajor;
   data[kAdminVersionFirmwareMinor] = firmwareMinor;
@@ -694,6 +708,7 @@ inline size_t BuildVersionReportFrame(uint8_t* frame, uint8_t boardId,
   data[kAdminVersionProtocolMinor] = kAdminProtocolMinor;
   data[kAdminVersionCapabilities] = capabilities;
   data[kAdminVersionBoardType] = boardType;
+  WriteU32(&data[kAdminVersionBuildId], buildId);
   return BuildAdminFrame(frame, kAdminVersionReport, boardId, kNoBoard,
                          sequence, epoch, data);
 }

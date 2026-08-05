@@ -131,21 +131,37 @@ jobs:
           cd ..
 
       - name: Run PlatformIO
+        # The build id is this commit, truncated to 32 bits. It is what lets a
+        # host tell two images apart when both call themselves the same
+        # version, which is every pair of snapshots between releases.
         run: |
-          pio run -e ${{ matrix.controller }}
+          BUILD_ID=0x$(git rev-parse HEAD | cut -c1-8)
+          echo "build id ${BUILD_ID}"
+          PLATFORMIO_BUILD_FLAGS="-DPPUC_BUILD_ID=${BUILD_ID}UL" pio run -e ${{ matrix.controller }}
 
       - name: Create UF2 file (using elf2uf2)
         run: |
           ELF_FILE=$(find .pio/build/${{ matrix.controller }} -name "*.elf" | head -n 1)
           echo "Found ELF file: $ELF_FILE"
           elf2uf2 "$ELF_FILE" "${ELF_FILE%.elf}.uf2"
-          cp ${ELF_FILE%.elf}.uf2 ${{ matrix.controller }}-${{ needs.version.outputs.tag }}.uf2
+          # A tagged build is a release and is named by version alone, which
+          # keeps the plain "newer version wins" rule for released firmware.
+          # Anything else is a snapshot: two snapshots share a version, so the
+          # build id goes in the name or the host cannot tell them apart.
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            NAME="${{ matrix.controller }}-${{ needs.version.outputs.tag }}.uf2"
+          else
+            NAME="${{ matrix.controller }}-${{ needs.version.outputs.tag }}+$(git rev-parse HEAD | cut -c1-8).uf2"
+          fi
+          echo "artefact ${NAME}"
+          cp ${ELF_FILE%.elf}.uf2 "${NAME}"
+          echo "UF2_NAME=${NAME}" >> $GITHUB_ENV
       - name: Upload UF2 artifact
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.controller }}-firmware
           path: |
-            ${{ matrix.controller }}-${{ needs.version.outputs.tag }}.uf2
+            ${{ env.UF2_NAME }}
 
   post-build:
     runs-on: ubuntu-latest
