@@ -182,11 +182,22 @@ void SwitchMatrix::startReader() {
 
   const uint8_t rowsBasePin = profile.columnsBasePin - numRows;
   sm_config_set_in_pins(&c_rows, rowsBasePin);
-  for (uint i = 0; i < (numRows + profile.columns); i++) {
+
+  // Only the row pins. The rows program also waits on the column pins - they
+  // sit directly above the rows, which is why in_base covers both and the
+  // program refers to them as PIN numRows..numRows+columns-1 - but it only
+  // *reads* them, and PIO input sampling reads the pad whatever its direction.
+  //
+  // Claiming them here would take them back: pin direction belongs to the PIO
+  // block, not the state machine, and both machines share a block. This setup
+  // runs after the columns machine has set the same pins to output, so
+  // including them made the last writer win and left the columns as inputs.
+  // The columns then never drove, the rows program waited forever on its first
+  // `wait 0 PIN`, and no scan ever completed.
+  for (uint i = 0; i < numRows; i++) {
     pio_gpio_init(pio, rowsBasePin + i);
   }
-  pio_sm_set_consecutive_pindirs(pio, sm_rows, rowsBasePin,
-                                 numRows + profile.columns, false);
+  pio_sm_set_consecutive_pindirs(pio, sm_rows, rowsBasePin, numRows, false);
   sm_config_set_in_shift(&c_rows, false, false, 0);
   pio_sm_init(pio, sm_rows, rows_offset, &c_rows);
   const int irqNum = pio_get_irq_num(pio, 0);

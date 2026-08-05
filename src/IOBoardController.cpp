@@ -138,9 +138,9 @@ void IOBoardController::update() {
     if (activeSwitches) {
       // nop
     }
-    if (activeSwitchMatrix) {
-      //switchMatrix()->update();
-    }
+    // SwitchMatrix has no update(); like Switches it is driven entirely by
+    // EVENT_POLL_EVENTS dispatched above. The commented-out call here named a
+    // method that never existed and read as though the matrix were disabled.
     if (activePwmDevices) {
       pwmDevices()->update();
     }
