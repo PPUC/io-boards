@@ -974,6 +974,32 @@ Result CheckBoardTypeValues() {
   return Pass();
 }
 
+// A board type is validated only once its firmware has actually driven the
+// hardware. The host refuses to flash an unvalidated type unattended, so
+// flipping one of these on by accident is how a machine gets an image whose
+// pin directions nobody has checked.
+Result CheckOnlyValidatedBoardTypesClaimToBe() {
+  if (!BoardTypeValidatedOnHardware(kBoardTypeIo16_8_1)) {
+    return Fail("IO_16_8_1 is the board this firmware runs on today");
+  }
+  // Update this list - deliberately, with hardware in front of you - when a
+  // board type has been exercised. Until then the host must keep its hands
+  // off it.
+  const uint8_t kNotYet[] = {kBoardTypeIo16x8Matrix, kBoardTypeOut8x10,
+                             kBoardTypeOpto16};
+  for (const uint8_t type : kNotYet) {
+    if (BoardTypeValidatedOnHardware(type)) {
+      return Fail(std::string(BoardTypeName(type)) +
+                  " claims hardware validation; if that is real, say so here too");
+    }
+  }
+  if (BoardTypeValidatedOnHardware(kBoardTypeUnknown) ||
+      BoardTypeValidatedOnHardware(0x7F)) {
+    return Fail("an unknown board type must never count as validated");
+  }
+  return Pass();
+}
+
 Result CheckVersionReportCarriesBoardType() {
   uint8_t frame[kAdminFrameBytes];
   BuildVersionReportFrame(frame, /*boardId*/ 1, 1, 1, 0, 2, 0,
@@ -1015,6 +1041,7 @@ const Case kCases[] = {
     {"AdminFrame byte layout", CheckAdminFrameLayout},
     {"version report layout", CheckVersionReportLayout},
     {"board type values and names", CheckBoardTypeValues},
+    {"only validated board types claim to be", CheckOnlyValidatedBoardTypesClaimToBe},
     {"version report carries the board type", CheckVersionReportCarriesBoardType},
     {"frame type space", CheckFrameTypeSpaceRemaining},
     {"UpdateBegin byte layout", CheckUpdateBeginLayout},

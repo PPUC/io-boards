@@ -51,15 +51,15 @@ struct Profile {
   // Matrix geometry, when kCapSwitchMatrix is set. Ignored otherwise.
   SwitchMatrixProfile matrix = {0, 0, 0, 0};
 
-  // Whether firmware for this board has been exercised on real hardware.
-  //
-  // Recorded rather than assumed: a board type can be declared here, build,
-  // and report itself over the bus long before its outputs have ever been
-  // driven correctly. The host uses this to decide whether an image is safe
-  // to hand out automatically.
-  bool validatedOnHardware = false;
-
   bool has(Capability cap) const { return (capabilities & cap) != 0; }
+
+  // Whether this board's firmware has been exercised on real hardware. Kept in
+  // the protocol header, not here, because the host is what acts on it - it
+  // decides whether to flash a board unattended - and the host does not
+  // compile this file.
+  constexpr bool validatedOnHardware() const {
+    return ppuc::v2::BoardTypeValidatedOnHardware(type);
+  }
 };
 
 // IO_16_8_1: 16 inputs, 8 high-power outputs, one special output.
@@ -71,7 +71,6 @@ constexpr Profile kIo16_8_1 = {
     /*switchBasePin*/ 3,
     /*maxSwitches*/ 16,
     /*matrix*/ {4, 8, 15, (1u << 4) | (1u << 8)},
-    /*validatedOnHardware*/ true,
 };
 
 // Opto_16: 16 opto-isolated inputs and the special output, nothing else.
@@ -83,7 +82,6 @@ constexpr Profile kOpto16 = {
     /*switchBasePin*/ 3,
     /*maxSwitches*/ 16,
     /*matrix*/ {0, 0, 0, 0},
-    /*validatedOnHardware*/ false,
 };
 
 // IO_16x8_matrix: 16 inputs and 8 signal outputs, intended for an original
@@ -98,7 +96,6 @@ constexpr Profile kIo16x8Matrix = {
     /*switchBasePin*/ 3,
     /*maxSwitches*/ 16,
     /*matrix*/ {4, 8, 15, (1u << 4) | (1u << 8)},
-    /*validatedOnHardware*/ false,
 };
 
 // Out_8x10: 8 high-side by 10 low-side, for driving an original lamp matrix.
@@ -109,7 +106,6 @@ constexpr Profile kOut8x10 = {
     /*switchBasePin*/ 0,
     /*maxSwitches*/ 0,
     /*matrix*/ {0, 0, 0, 0},
-    /*validatedOnHardware*/ false,
 };
 
 // The profile for the type this image was built for.

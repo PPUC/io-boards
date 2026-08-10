@@ -154,6 +154,32 @@ constexpr uint8_t BoardTypeFromName(const char* name) {
   return kBoardTypeUnknown;
 }
 
+// Whether firmware for this board type has ever been exercised on the real
+// hardware.
+//
+// Here rather than in the firmware's own board table because the host is what
+// acts on it: it decides whether to push an image at a board unattended. The
+// hazard is the same one that puts board type on the wire in the first place -
+// a pin that is an output on one board is an input on another, and a pin
+// configuration nobody has checked against a real board can drive an output
+// into an input. A person flashing over USB has accepted that; an update that
+// happens on its own while the machine boots has not.
+//
+// Flip an entry when the board's outputs have actually been driven correctly,
+// not when its firmware compiles or when it first answers on the bus.
+constexpr bool BoardTypeValidatedOnHardware(uint8_t type) {
+  switch (type) {
+    case kBoardTypeIo16_8_1: return true;
+    // Neither output stage exists in the firmware yet, and the pin maps are
+    // transcribed but unverified. See STABILIZATION_PLAN 4.8 in ppuc.
+    case kBoardTypeIo16x8Matrix: return false;
+    case kBoardTypeOut8x10: return false;
+    // Inputs only, on the same GPIOs as IO_16_8_1, but still never run.
+    case kBoardTypeOpto16: return false;
+    default: return false;
+  }
+}
+
 // What a board is willing to do, reported in a version report.
 enum AdminCapability : uint8_t {
   kAdminCapabilityVersionReport = 0x01,
