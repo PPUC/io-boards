@@ -73,12 +73,17 @@ constexpr Profile kIo16_8_1 = {
     /*matrix*/ {4, 8, 15, (1u << 4) | (1u << 8)},
 };
 
-// Opto_16: 16 opto-isolated inputs and the special output, nothing else.
+// Opto_16: 16 opto-isolated inputs plus the special output, nothing else.
 // Its inputs are on the same GPIOs as IO_16_8_1's, which is why the existing
 // switch reader covers it unchanged.
+//
+// The special output is the WS2812 connector every board carries, so an
+// Opto_16 can drive an LED string even though it has no PWM output stage. That
+// matters to whoever is placing boards: a string does not need a board with
+// drivers on it, and a board is a board's worth of space under a playfield.
 constexpr Profile kOpto16 = {
     ppuc::v2::kBoardTypeOpto16,
-    kCapDedicatedSwitches,
+    kCapDedicatedSwitches | kCapAddressableLeds,
     /*switchBasePin*/ 3,
     /*maxSwitches*/ 16,
     /*matrix*/ {0, 0, 0, 0},
