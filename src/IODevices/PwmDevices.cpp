@@ -14,8 +14,9 @@ int PwmDevices::findRegisteredOutput(byte outputType, byte p, byte n) const {
 
 void PwmDevices::registerSolenoid(byte p, byte n, byte pow, uint16_t minPT,
                                   uint16_t maxPT, byte hP, uint16_t hPAT,
-                                  byte fS) {
-  int index = findRegisteredOutput(PWM_TYPE_SOLENOID, p, n);
+                                  byte fS, byte sS1, byte sS2,
+                                  byte outputType) {
+  int index = findRegisteredOutput(outputType, p, n);
   if (index < 0) {
     if (last >= MAX_PWM_OUTPUTS) return;
     index = last++;
@@ -29,13 +30,19 @@ void PwmDevices::registerSolenoid(byte p, byte n, byte pow, uint16_t minPT,
   holdPower[index] = hP;
   holdPowerActivationTime[index] = hPAT;
   fastSwitch[index] = fS;
-  type[index] = PWM_TYPE_SOLENOID;
+  stopSwitch[index][0] = sS1;
+  stopSwitch[index][1] = sS2;
+  type[index] = outputType;
   activated[index] = 0;
   currentPower[index] = 0;
   scheduled[index] = false;
   fastSwitchClosed[index] = false;
   fastSwitchManagedActive[index] = false;
   fastSwitchWaitForRelease[index] = false;
+  for (byte s = 0; s < MAX_STOP_SWITCHES_PER_OUTPUT; s++) {
+    stopSwitchClosed[index][s] = false;
+  }
+  stopEngaged[index] = false;
 
   pinMode(p, OUTPUT);
   analogWrite(p, 0);
@@ -138,12 +145,95 @@ void PwmDevices::deactivateOutput(byte i) {
   fastSwitchManagedActive[i] = false;
 }
 
+bool PwmDevices::hasStopSwitch(byte i) const {
+  for (byte s = 0; s < MAX_STOP_SWITCHES_PER_OUTPUT; s++) {
+    if (stopSwitch[i][s] > 0) return true;
+  }
+  return false;
+}
+
+bool PwmDevices::anyStopSwitchClosed(byte i) const {
+  for (byte s = 0; s < MAX_STOP_SWITCHES_PER_OUTPUT; s++) {
+    if (stopSwitch[i][s] > 0 && stopSwitchClosed[i][s]) return true;
+  }
+  return false;
+}
+
+// One stop switch changed state.
+//
+// Engaging is deliberately on the *closing edge*, not on the switch being
+// closed. An assembly usually starts its travel sitting on one of its end
+// switches, and a level test would refuse to let it move at all.
+//
+// Releasing is on the level: once every stop switch is open the output may run
+// again. For an output driven by a fast-flip switch that means it fires again
+// by itself, which is the point on a Fliptronic flipper - a ball heavy enough
+// to push the finger back down opens the EOS, and the flipper should come back
+// up while the button is still held rather than staying down until the player
+// lets go and presses again.
+void PwmDevices::handleStopSwitchEvent(byte switchNumber, bool switchClosed,
+                                       byte i) {
+  bool closingEdge = false;
+  for (byte s = 0; s < MAX_STOP_SWITCHES_PER_OUTPUT; s++) {
+    if (stopSwitch[i][s] != switchNumber) continue;
+    if (switchClosed && !stopSwitchClosed[i][s]) {
+      closingEdge = true;
+    }
+    stopSwitchClosed[i][s] = switchClosed;
+  }
+
+  if (closingEdge && activated[i] > 0) {
+    stopEngaged[i] = true;
+    deactivateOutput(i);
+    CrossLinkDebugger::debug(
+        "Stopped PWM device on port %d: switch %d closed", port[i],
+        switchNumber);
+    return;
+  }
+
+  if (stopEngaged[i] && !anyStopSwitchClosed(i)) {
+    stopEngaged[i] = false;
+    CrossLinkDebugger::debug("Released stop on PWM device on port %d", port[i]);
+  }
+}
+
+// Reconciles the stop switches against what the board currently sees.
+//
+// The same reason the fast-flip switch is reconciled every update: an edge
+// event that never arrives must not leave an output stopped forever, or held on
+// when it should have been cut.
+void PwmDevices::refreshStopSwitches(byte i) {
+  if (!_eventDispatcher || !hasStopSwitch(i)) return;
+
+  for (byte s = 0; s < MAX_STOP_SWITCHES_PER_OUTPUT; s++) {
+    if (stopSwitch[i][s] == 0) continue;
+    const bool closed = _eventDispatcher->getSwitchState(
+        static_cast<uint16_t>(stopSwitch[i][s]));
+    if (closed && !stopSwitchClosed[i][s] && activated[i] > 0) {
+      stopEngaged[i] = true;
+      deactivateOutput(i);
+      CrossLinkDebugger::debug(
+          "Stopped PWM device on port %d: switch %d found closed", port[i],
+          stopSwitch[i][s]);
+    }
+    stopSwitchClosed[i][s] = closed;
+  }
+
+  if (stopEngaged[i] && !anyStopSwitchClosed(i)) {
+    stopEngaged[i] = false;
+    CrossLinkDebugger::debug("Released stop on PWM device on port %d", port[i]);
+  }
+}
+
 void PwmDevices::update() {
   _ms = millis();
 
   // Iterate over all outputs.
   for (byte i = 0; i < last; i++) {
-    if (_eventDispatcher && type[i] == PWM_TYPE_SOLENOID && fastSwitch[i] > 0) {
+    refreshStopSwitches(i);
+
+    if (_eventDispatcher && fastSwitch[i] > 0 &&
+        (type[i] == PWM_TYPE_SOLENOID || type[i] == PWM_TYPE_MOTOR)) {
       // Fast-flip coils should not depend forever on one switch edge event.
       // Reconcile against the current board/global switch bitmap each update so
       // a missed release event cannot leave a hold-style flipper powered until
@@ -153,6 +243,23 @@ void PwmDevices::update() {
       if (!fastSwitchClosed[i]) {
         fastSwitchWaitForRelease[i] = false;
       }
+    }
+
+    if (activated[i] == 0 && !stopEngaged[i] && fastSwitch[i] > 0 &&
+        fastSwitchClosed[i] && !fastSwitchWaitForRelease[i] &&
+        (type[i] == PWM_TYPE_SOLENOID || type[i] == PWM_TYPE_MOTOR)) {
+      // The stop cleared while the driving switch is still closed, so drive it
+      // again. Only for a switch-driven output: one the host commands waits for
+      // the host to ask again, because a motor that stopped at the end of its
+      // travel has arrived, not failed.
+      analogWrite(port[i], power[i]);
+      activated[i] = _ms;
+      currentPower[i] = power[i];
+      scheduled[i] = false;
+      fastSwitchManagedActive[i] = true;
+      CrossLinkDebugger::debug(
+          "Re-activated PWM device on port %d after its stop switch opened",
+          port[i]);
     }
 
     if (activated[i] > 0) {
@@ -206,6 +313,16 @@ void PwmDevices::update() {
 
 void PwmDevices::updateSolenoidOrFlasher(bool targetState, byte i) {
   _ms = millis();
+
+  if (targetState && stopEngaged[i]) {
+    // A stop switch is holding this output off. Ignoring the request rather
+    // than queueing it: the assembly is sitting at the end of its travel, and
+    // driving into that is what the switch is there to prevent.
+    CrossLinkDebugger::debug(
+        "Ignored activation of PWM device on port %d: stopped by a switch",
+        port[i]);
+    return;
+  }
 
   if (targetState && activated[i] == 0) {
     // Event received to activate the output and output isn't activated already.
@@ -268,6 +385,13 @@ void PwmDevices::handleFastSwitchEvent(bool switchClosed, byte i) {
     return;
   }
 
+  if (stopEngaged[i]) {
+    CrossLinkDebugger::debug(
+        "Ignored fast-switch activation on port %d: stopped by a switch",
+        port[i]);
+    return;
+  }
+
   if (activated[i] == 0) {
     analogWrite(port[i], power[i]);
     activated[i] = _ms;
@@ -289,7 +413,8 @@ void PwmDevices::handleEvent(Event *event) {
     switch (event->sourceId) {
       case EVENT_SOURCE_SOLENOID:
         for (byte i = 0; i < last; i++) {
-          if ((type[i] == PWM_TYPE_SOLENOID || type[i] == PWM_TYPE_FLASHER) &&
+          if ((type[i] == PWM_TYPE_SOLENOID || type[i] == PWM_TYPE_FLASHER ||
+               type[i] == PWM_TYPE_MOTOR) &&
               number[i] == (byte)event->eventId) {
             updateSolenoidOrFlasher((bool)event->value, i);
           }
@@ -298,10 +423,16 @@ void PwmDevices::handleEvent(Event *event) {
 
       case EVENT_SOURCE_SWITCH:
         // A switch event was triggered or received. Activate or deactivate any
-        // output that is configured as "fastSwitch" for that switch.
+        // output configured as "fastSwitch" for that switch, and cut any output
+        // this switch is a stop for.
         for (byte i = 0; i < last; i++) {
-          if (type[i] == PWM_TYPE_SOLENOID &&
-              fastSwitch[i] == (byte)event->eventId) {
+          if (type[i] != PWM_TYPE_SOLENOID && type[i] != PWM_TYPE_MOTOR) {
+            continue;
+          }
+          // Stops first: if one switch both drives and stops an output, the
+          // stop is the safety and has to win.
+          handleStopSwitchEvent((byte)event->eventId, (bool)event->value, i);
+          if (fastSwitch[i] == (byte)event->eventId) {
             handleFastSwitchEvent((bool)event->value, i);
           }
         }

@@ -64,6 +64,8 @@ class IOBoardController : public EventListener {
   byte holdPower = 0;
   uint16_t holdPowerActivationTime = 0;
   byte fastSwitch = 0;
+  byte stopSwitch1 = 0;
+  byte stopSwitch2 = 0;
   byte type = 0;
   uint32_t resetTimer = 0;
 

@@ -61,6 +61,11 @@
 #define CONFIG_TOPIC_REVERSE 66                     // "B"
 #define CONFIG_TOPIC_COLOR 67                       // "C"
 #define CONFIG_TOPIC_FAST_SWITCH 70                 // "F"
+// Switches that cut an output the moment they close: a flipper's end-of-stroke
+// contact, or the switch at the end of a motor-driven assembly's travel. The
+// opposite polarity to a fast switch, which runs an output while it is closed.
+#define CONFIG_TOPIC_STOP_SWITCH 68                 // "D"
+#define CONFIG_TOPIC_STOP_SWITCH_2 69               // "E"
 #define CONFIG_TOPIC_FREQUENCY 70                   // "F"
 #define CONFIG_TOPIC_AFTER_GLOW 71                  // "G"
 #define CONFIG_TOPIC_HOLD_POWER 72                  // "H"

@@ -180,6 +180,8 @@ void IOBoardController::clearConfiguredState() {
   holdPower = 0;
   holdPowerActivationTime = 0;
   fastSwitch = 0;
+  stopSwitch1 = 0;
+  stopSwitch2 = 0;
   type = 0;
   resetTimer = 0;
 
@@ -290,6 +292,8 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
             holdPower = 0;
             holdPowerActivationTime = 0;
             fastSwitch = 0;
+            stopSwitch1 = 0;
+            stopSwitch2 = 0;
             break;
           case CONFIG_TOPIC_NUMBER:
             number = event->value;
@@ -313,12 +317,24 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
             fastSwitch = event->value;
             _switches->markLocalFastSwitch(fastSwitch);
             break;
+          case CONFIG_TOPIC_STOP_SWITCH:
+            stopSwitch1 = event->value;
+            // Marked local so it reaches the outputs the moment it closes,
+            // rather than on the next queue drain. A switch that stops a motor
+            // is worth nothing if it arrives late.
+            _switches->markLocalFastSwitch(stopSwitch1);
+            break;
+          case CONFIG_TOPIC_STOP_SWITCH_2:
+            stopSwitch2 = event->value;
+            _switches->markLocalFastSwitch(stopSwitch2);
+            break;
           case CONFIG_TOPIC_TYPE:
             switch (event->value) {
               case PWM_TYPE_SOLENOID:  // Coil
                 _pwmDevices->registerSolenoid(
                     (byte)port, number, power, minPulseTime, maxPulseTime,
-                    holdPower, holdPowerActivationTime, fastSwitch);
+                    holdPower, holdPowerActivationTime, fastSwitch, stopSwitch1,
+                    stopSwitch2);
                 activePwmDevices = true;
                 break;
               case PWM_TYPE_FLASHER:  // Flasher
@@ -330,7 +346,14 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
                 activePwmDevices = true;
                 break;
               case PWM_TYPE_MOTOR:  // Motor
-                // @todo
+                // Driven exactly like a coil - it is a PWM output with a power
+                // and a pulse time - but registered under its own type so its
+                // end-of-travel switches can stop it.
+                _pwmDevices->registerSolenoid(
+                    (byte)port, number, power, minPulseTime, maxPulseTime,
+                    holdPower, holdPowerActivationTime, fastSwitch, stopSwitch1,
+                    stopSwitch2, PWM_TYPE_MOTOR);
+                activePwmDevices = true;
                 break;
               case PWM_TYPE_SHAKER:  // Shaker
                 // Shaker is handled by the EffectController.

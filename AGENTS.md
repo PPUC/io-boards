@@ -247,6 +247,37 @@ Semantics in `src/IODevices/PwmDevices.*`:
 Preserve these properties unless the replacement is clearly safer and has been
 validated on real hardware.
 
+## Stop Switches
+
+A fast-flip switch runs an output while it is closed. A **stop switch** is the
+other polarity: it cuts an output the instant it closes. Configured per output
+with `CONFIG_TOPIC_STOP_SWITCH` and `CONFIG_TOPIC_STOP_SWITCH_2`, up to two per
+output, and marked local so the event reaches `PwmDevices` without waiting for
+the queue.
+
+Two things need it. A WPC Fliptronic flipper drives its power and hold windings
+separately, and the end-of-stroke contact is what should drop the power winding
+once the finger has arrived - `maxPulseTime` is only the net for when that
+contact fails. And a motor-driven assembly has a switch at each end of its
+travel; missing one drives the assembly into its own stop.
+
+Three details that are easy to get wrong, all covered by `test/test_stop_switch`:
+
+- **Engaging is on the closing edge**, not on the switch being closed. An
+  assembly usually sits on one of its end switches, and a level test would stop
+  it ever moving.
+- **Releasing is on the level**, and an output driven by a fast-flip switch
+  then fires again by itself. That is what brings a flipper back up when a heavy
+  ball has pushed the finger down while the button is still held. An output the
+  *host* drives does not restart: a motor that reached the end of its travel has
+  arrived, not failed, so the host asks again.
+- **`maxPulseTime` still wins**, and after it cuts an output the driving switch
+  has to be released before it fires again. A timeout means something is wrong;
+  a stop switch means something worked.
+
+`PWM_TYPE_MOTOR` is registered like a solenoid, under its own type so its stop
+switches apply. It was an unimplemented `@todo` before this.
+
 ## Switch Debounce Modes
 
 Configured per switch as `debounce` (ms) plus `debounceMode`, exported by
