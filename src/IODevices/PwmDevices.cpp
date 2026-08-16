@@ -232,7 +232,9 @@ void PwmDevices::update() {
   for (byte i = 0; i < last; i++) {
     refreshStopSwitches(i);
 
-    if (_eventDispatcher && fastSwitch[i] > 0 &&
+    const bool fastSwitchAllowed = fastSwitchOutputsAllowed();
+
+    if (_eventDispatcher && fastSwitchAllowed && fastSwitch[i] > 0 &&
         (type[i] == PWM_TYPE_SOLENOID || type[i] == PWM_TYPE_MOTOR)) {
       // Fast-flip coils should not depend forever on one switch edge event.
       // Reconcile against the current board/global switch bitmap each update so
@@ -243,10 +245,19 @@ void PwmDevices::update() {
       if (!fastSwitchClosed[i]) {
         fastSwitchWaitForRelease[i] = false;
       }
+    } else if (!fastSwitchAllowed && fastSwitch[i] > 0) {
+      // High power is off, or the machine is tilted. Forget that the switch was
+      // closed and demand a fresh press before firing again: without this, a
+      // player still holding the button when power or tilt clears gets an
+      // immediate flip, which is exactly what the maxPulseTime path already
+      // guards against.
+      fastSwitchClosed[i] = false;
+      fastSwitchWaitForRelease[i] = true;
     }
 
-    if (activated[i] == 0 && !stopEngaged[i] && fastSwitch[i] > 0 &&
-        fastSwitchClosed[i] && !fastSwitchWaitForRelease[i] &&
+    if (fastSwitchAllowed && activated[i] == 0 && !stopEngaged[i] &&
+        fastSwitch[i] > 0 && fastSwitchClosed[i] &&
+        !fastSwitchWaitForRelease[i] &&
         (type[i] == PWM_TYPE_SOLENOID || type[i] == PWM_TYPE_MOTOR)) {
       // The stop cleared while the driving switch is still closed, so drive it
       // again. Only for a switch-driven output: one the host commands waits for
@@ -409,6 +420,26 @@ void PwmDevices::handleEvent(Event *event) {
 
   _ms = millis();
 
+  // Tilt just latched. Drop only the fast-flip outputs -- flippers, slingshots,
+  // pop bumpers. Checked here rather than as an "else" on the power branch
+  // because tilt deliberately leaves powerOn alone: the outhole kicker and
+  // trough eject have to keep working so the machine can get its balls back.
+  if (tiltActive && tiltToggled) {
+    for (byte i = 0; i < last; i++) {
+      if (fastSwitch[i] == 0) {
+        continue;
+      }
+      analogWrite(port[i], 0);
+      deactivateOutput(i);
+      fastSwitchClosed[i] = false;
+      // Demand a fresh press: otherwise a player still holding the button gets
+      // an immediate flip the moment tilt clears.
+      fastSwitchWaitForRelease[i] = true;
+      CrossLinkDebugger::debug(
+          "Tilt: deactivated fast-switch PWM device on port %d", port[i]);
+    }
+  }
+
   if (powerOn && coinDoorClosed) {
     switch (event->sourceId) {
       case EVENT_SOURCE_SOLENOID:
@@ -432,7 +463,8 @@ void PwmDevices::handleEvent(Event *event) {
           // Stops first: if one switch both drives and stops an output, the
           // stop is the safety and has to win.
           handleStopSwitchEvent((byte)event->eventId, (bool)event->value, i);
-          if (fastSwitch[i] == (byte)event->eventId) {
+          // Stops still apply while tilted; firing does not.
+          if (!tiltActive && fastSwitch[i] == (byte)event->eventId) {
             handleFastSwitchEvent((bool)event->value, i);
           }
         }

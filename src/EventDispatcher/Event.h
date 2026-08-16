@@ -51,6 +51,12 @@
 #define CONFIG_TOPIC_GAME_ON_SOLENOID 114         // "r"
 #define CONFIG_TOPIC_SWITCHES 115                 // "s"
 #define CONFIG_TOPIC_TRIGGER 116                  // "t"
+// A switch the host owns and asserts while the machine is tilted. While it is
+// closed, fast-flip outputs are inhibited board-locally. This is the only lever
+// the host has over a flipper the player is holding: fastFlipSwitch and
+// stopSwitches are both config-time, and de-asserting the game-on solenoid kills
+// the ball-recovery coils too.
+#define CONFIG_TOPIC_TILT_SWITCH 117              // "u"
 #define CONFIG_TOPIC_SWITCH_MATRIX 120            // "x"
 #define CONFIG_TOPIC_SWITCH_CHAIN 121             // "y"
 

@@ -44,6 +44,11 @@ class PwmDevices : public HighPowerOffAware {
   void off();
   void reset();
 
+  // Overriding only the Event* overload would hide the ConfigEvent* one for
+  // anyone holding a PwmDevices* directly. Virtual dispatch through
+  // EventListener* still found it, so this was invisible in production and only
+  // bit callers -- including tests -- that use the concrete type.
+  using HighPowerOffAware::handleEvent;
   void handleEvent(Event *event);
 
  private:

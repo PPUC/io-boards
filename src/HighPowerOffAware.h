@@ -19,6 +19,7 @@ class HighPowerOffAware : public EventListener {
 
   void handleEvent(Event *event) {
     powerToggled = false;
+    tiltToggled = false;
 
     if (coinDoorSwitch > 0 && event->sourceId == EVENT_SOURCE_SWITCH &&
         (byte)event->eventId == coinDoorSwitch) {
@@ -30,6 +31,19 @@ class HighPowerOffAware : public EventListener {
         (byte)event->eventId == gameOnSolenoid) {
       powerOn = (bool)event->value;
       powerToggled = true;
+    }
+
+    // Tilt is deliberately NOT part of powerOn: it must drop the flippers while
+    // leaving the outhole kicker and trough eject alive, because those are what
+    // get the balls back. A machine that killed all high power on tilt could
+    // strand a ball with no way to recover it.
+    if (tiltSwitch > 0 && event->sourceId == EVENT_SOURCE_SWITCH &&
+        (byte)event->eventId == tiltSwitch) {
+      const bool active = (bool)event->value;
+      if (active != tiltActive) {
+        tiltActive = active;
+        tiltToggled = true;
+      }
     }
 
     if (event->sourceId == EVENT_RUN) {
@@ -62,23 +76,44 @@ class HighPowerOffAware : public EventListener {
             break;
         }
         break;
+
+      case CONFIG_TOPIC_TILT_SWITCH:
+        switch (event->key) {
+          case CONFIG_TOPIC_NUMBER:
+            tiltSwitch = event->value;
+            break;
+        }
+        break;
     }
   }
 
   void resetHighPowerConfig() {
     coinDoorSwitch = 0;
     gameOnSolenoid = 0;
+    tiltSwitch = 0;
     coinDoorClosed = false;
     powerOn = false;
     powerToggled = false;
+    tiltActive = false;
+    tiltToggled = false;
   }
+
+  // High power in general: coils, flashers, lamps.
+  bool highPowerAvailable() const { return powerOn && coinDoorClosed; }
+
+  // Fast-flip outputs specifically: flippers, slingshots, pop bumpers. These
+  // additionally require that the machine is not tilted.
+  bool fastSwitchOutputsAllowed() const { return highPowerAvailable() && !tiltActive; }
 
  protected:
   byte coinDoorSwitch = 0;
   byte gameOnSolenoid = 0;
+  byte tiltSwitch = 0;
   bool coinDoorClosed = false;
   bool powerOn = false;
   bool powerToggled = false;
+  bool tiltActive = false;
+  bool tiltToggled = false;
 };
 
 #endif

@@ -11,7 +11,7 @@ One sub-system is the built-in EffectController which is able to drive additiona
 Other sub-systems could be video players or audio systems. The additional effects are bundled per pinball machine in
 so-called *Pinball Power-Ups* (PPUs).
 
-For homebrew machines there will be additional software to act as "CPU", running the game logic aka rules and
+For homebrew and electro-mechanical machines the host software can act as the "CPU" itself, running the game logic aka rules and
 communicating with the controllers. (WIP)
 
 A special variation of that "CPU" will be suitable as replacement for a broken CPU of an existing machine.
@@ -96,7 +96,28 @@ stays solid on during normal game play.
 
 ### Homebrew machines
 
-WIP
+An electro-mechanical or homebrew machine needs no ROM and no CPU board. The
+boards are exactly the same as in a retrofit install — there is no separate
+firmware build — and a host running
+
+    ppuc-pinmame --game <folder>
+
+with `Engine = script` in the game's `ppuc.ini` acts as the CPU. Players, ball
+counting, scoring, tilt and attract are owned by the host; scores are rendered to
+a DMD.
+
+The division of labour is unchanged from a ROM machine: the host decides *what*
+should happen, and the boards decide how long copper is energised. Flippers,
+slingshots and pop bumpers still run board-locally from `fastFlipSwitch`, so the
+host is not in the flip path.
+
+One board-local feature exists specifically for this case: a configured tilt
+switch (`CONFIG_TOPIC_TILT_SWITCH`). While it is closed, boards inhibit their
+fast-flip outputs, which is the only way to drop a flipper the player is holding.
+The host asserts it from a board declared `virtual: true` in the game YAML.
+
+See `ppuc/docs/EM_GAMES.md` for the configuration reference and
+`ppuc_games/emdemo` for a complete reference machine.
 
 ### Replacing a CPU (and drivers)
 
