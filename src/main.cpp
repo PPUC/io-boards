@@ -164,6 +164,22 @@ void setup() {
   gpio_set_function(RS485_RX_PIN, GPIO_FUNC_UART);
   Serial1.setTX(RS485_TX_PIN);
   Serial1.setRX(RS485_RX_PIN);
+  // The core's default receive buffer is 32 bytes. At 115200 baud that is
+  // 2.8ms of traffic, and it is smaller than a single firmware update chunk
+  // frame (271 bytes). Anything that blocks this core for longer than that -
+  // a burst of switch interrupts on a busy board, a fanout on core 0 - loses
+  // incoming bytes before the parser ever sees them. There is no CRC error and
+  // no resync when that happens, because the bytes never arrive at all; the
+  // board simply misses the frame naming it and stays silent, and the host
+  // reports a timeout it cannot explain.
+  //
+  // Measured on Time Warp: with switches worked hard, the busiest board was
+  // selected 113 fewer times than its peers over three minutes while replying
+  // to every selection it did see. Sized here to hold the largest frame on the
+  // bus several times over, which is ~44ms of slack instead of 2.8ms.
+  //
+  // Must precede begin(): the buffer is allocated there.
+  Serial1.setFIFOSize(512);
   Serial1.begin(ppuc::v2::kBaudRate);
   setBootStage(BOOT_STAGE_UART_READY);
   // Empty RX FIFO after reboot
