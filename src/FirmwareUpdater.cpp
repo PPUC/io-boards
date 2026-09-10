@@ -36,8 +36,15 @@ bool FirmwareUpdater::ensureFilesystem() {
 }
 
 uint8_t FirmwareUpdater::begin(uint32_t imageBytes, uint16_t imageCrc) {
+  // A staging state left over from an earlier attempt is not a reason to
+  // refuse. There is one host and one bus, so a fresh UpdateBegin means that
+  // host has restarted the transfer - it does not mean two updates are racing.
+  // Refusing here meant a single interrupted update wedged the board into
+  // kUpdateBusy for every later attempt until someone power cycled it, which is
+  // exactly the situation where retrying has to work.
   if (m_state == State::kReceiving) {
-    return ppuc::v2::kUpdateBusy;
+    m_state = State::kIdle;
+    m_received = 0;
   }
   if (imageBytes == 0 || imageBytes > kMaxImageBytes) {
     return ppuc::v2::kUpdateTooLarge;
@@ -68,9 +75,18 @@ uint8_t FirmwareUpdater::chunk(uint32_t offset, const uint8_t* data,
   if (m_state != State::kReceiving) {
     return ppuc::v2::kUpdateNotStaged;
   }
-  // A repeat of the chunk just written is the host retrying after a lost ack.
+  // A repeat of a chunk already written is the host retrying after a lost ack.
   // Acknowledging it again is correct; writing it again is not.
-  if (offset != m_received) {
+  //
+  // This is what the comment always said, but the check underneath it rejected
+  // any offset that was not the next one - including a repeat - so a single
+  // dropped ack ended the update with kUpdateBadOffset rather than being
+  // absorbed by the retry that exists for exactly this case.
+  if (offset < m_received) {
+    return ppuc::v2::kUpdateOk;
+  }
+  if (offset > m_received) {
+    // A gap: the host skipped ahead, so the staged image would be incomplete.
     return ppuc::v2::kUpdateBadOffset;
   }
   if (length == 0 || offset + length > m_expectedBytes) {
