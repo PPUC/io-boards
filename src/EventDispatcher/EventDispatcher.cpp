@@ -12,12 +12,28 @@ namespace {
 constexpr uint32_t kSerialBaudRate = ppuc::v2::kBaudRate;
 
 uint32_t FrameWireTimeUs(size_t frameBytes) {
-  // Approximate 8N1 UART wire time, plus a guard. Only used as an upper bound
-  // for ReleaseBusAfterTx() now that the driver is released on a completion
-  // signal rather than on this estimate.
+  // Approximate 8N1 UART wire time, plus a guard.
+  //
+  // The guard is proportional, not a flat 200us. readBytes() uses this as a
+  // deadline for bytes still in flight, and a fixed guard shrinks to nothing in
+  // relative terms as frames grow: a 258 byte firmware chunk takes 22.4ms on
+  // the wire and was allowed 23.1ms, a 3% margin that any preemption ate. The
+  // symptom was that updates completed with 64 byte chunks and failed at 256.
   const uint32_t bits = static_cast<uint32_t>(frameBytes) * 10;
-  return (bits * 1000000u) / kSerialBaudRate + 200;
+  const uint32_t wireUs = (bits * 1000000u) / kSerialBaudRate;
+  return wireUs + wireUs / 4u + 200;
 }
+
+// Pre-reply turnaround for admin frames - version reports and update acks.
+//
+// Deliberately its own constant rather than switchReplyDelayUs. Both need the
+// host's transceiver to have fallen back to receive, but they are paid for
+// differently: a switch reply happens on every chain, so every microsecond
+// there costs bus throughput, while an admin reply happens at startup or during
+// an update and its delay costs nothing measurable. Tying the two together
+// meant lowering the switch delay for throughput also made version queries and
+// firmware updates less reliable, which is a trade nobody wants to make.
+constexpr uint32_t kAdminReplyDelayUs = 2000;
 
 // Extra time allowed on top of a frame's wire time before a partial read is
 // abandoned. Covers the sender's DE turnaround (RS485_MODE_SWITCH_DELAY at each
@@ -592,6 +608,10 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
         sendVersionReportFrame();
         break;
 
+      case ppuc::v2::kAdminStatsQuery:
+        sendStatsReportFrame();
+        break;
+
       case ppuc::v2::kAdminUpdateBegin: {
         // Turn everything off before accepting an image. A board about to
         // reboot into the bootloader must not leave a coil energised, and the
@@ -820,6 +840,11 @@ void EventDispatcher::forwardSwitchTokenIfSelected(uint8_t selectedBoard) {
   if (selectedBoard != board) {
     return;
   }
+  // Counted the moment this board learns the token names it, before anything
+  // that could stop it replying. Against v2TxFrames this separates "never saw
+  // the frame selecting me" from "saw it and did not answer" - the two faults
+  // are indistinguishable from the host, which only sees silence either way.
+  v2Selected++;
   const bool shouldRefreshSwitches = forceNextSwitchStateReply;
   forceNextSwitchStateReply = false;
   const bool haveQueuedLocalSnapshots =
@@ -906,6 +931,9 @@ void EventDispatcher::sendUpdateAckFrame(uint8_t command, uint8_t status,
   const size_t frameBytes = ppuc::v2::BuildUpdateAckFrame(
       frame, command, board, txSequence++, currentEpoch, status, offset);
 
+  // Same turnaround as the version report; see sendVersionReportFrame for why.
+  delayMicroseconds(kAdminReplyDelayUs);
+
   digitalWrite(rs485Pin, HIGH);  // Write.
   delayMicroseconds(RS485_MODE_SWITCH_DELAY);
   hwSerial->write(frame, frameBytes);
@@ -913,6 +941,25 @@ void EventDispatcher::sendUpdateAckFrame(uint8_t command, uint8_t status,
   delayMicroseconds(RS485_MODE_SWITCH_DELAY);
 
   v2TxFrames++;
+}
+
+void EventDispatcher::sendStatsReportFrame() {
+  byte* frame = v2TxBuffer;
+  const size_t frameBytes = ppuc::v2::BuildStatsReportFrame(
+      frame, board, txSequence++, currentEpoch, v2RxFrames, v2RxCrcFail,
+      v2RawBytes, v2TxFrames, v2Selected);
+
+  delayMicroseconds(kAdminReplyDelayUs);
+
+  digitalWrite(rs485Pin, HIGH);  // Write.
+  delayMicroseconds(RS485_MODE_SWITCH_DELAY);
+  hwSerial->write(frame, frameBytes);
+  ReleaseBusAfterTx(rs485Pin, frameBytes);
+  delayMicroseconds(RS485_MODE_SWITCH_DELAY);
+
+  // Deliberately not counted in v2TxFrames: this frame reports that counter,
+  // and incrementing it here would make the number depend on how often it was
+  // asked for.
 }
 
 void EventDispatcher::sendVersionReportFrame() {
@@ -923,6 +970,12 @@ void EventDispatcher::sendVersionReportFrame() {
       ppuc::v2::kAdminCapabilityVersionReport |
           ppuc::v2::kAdminCapabilityFirmwareUpdate,
       PPUC_BOARD_TYPE, PPUC_BUILD_ID);
+
+  // The host drives the bus to send the query and its transceiver needs time to
+  // fall back to receive; answering the instant the frame is parsed puts the
+  // reply on the wire while the far end is still turning around, and the host
+  // sees a clipped frame or nothing.
+  delayMicroseconds(kAdminReplyDelayUs);
 
   digitalWrite(rs485Pin, HIGH);  // Write.
   delayMicroseconds(RS485_MODE_SWITCH_DELAY);
@@ -964,6 +1017,73 @@ void EventDispatcher::sendSwitchNoChangeFrame(byte nextBoard) {
   lastPoll = millis();
 }
 
+// Reads an admin frame whose header is already in v2Buffer, sizing the body
+// from the command rather than assuming the version-report layout.
+bool EventDispatcher::handleV2AdminFrame() {
+  if (!readBytes(&v2Buffer[ppuc::v2::kHeaderBytes],
+                 ppuc::v2::kAdminPrefixBytes)) {
+    return false;
+  }
+
+  const uint8_t command = v2Buffer[ppuc::v2::kHeaderBytes];
+  size_t bodyBytes = 0;
+  switch (command) {
+    case ppuc::v2::kAdminVersionQuery:
+    case ppuc::v2::kAdminVersionReport:
+      bodyBytes = ppuc::v2::kAdminDataBytes;
+      break;
+    case ppuc::v2::kAdminUpdateBegin:
+      bodyBytes = ppuc::v2::kUpdateBeginBodyBytes;
+      break;
+    case ppuc::v2::kAdminUpdateBeginAck:
+    case ppuc::v2::kAdminUpdateChunkAck:
+    case ppuc::v2::kAdminUpdateResult:
+      bodyBytes = ppuc::v2::kUpdateAckBodyBytes;
+      break;
+    case ppuc::v2::kAdminUpdateCommit:
+    case ppuc::v2::kAdminStatsQuery:
+      bodyBytes = 0;
+      break;
+    case ppuc::v2::kAdminStatsReport:
+      bodyBytes = ppuc::v2::kStatsBodyBytes;
+      break;
+    case ppuc::v2::kAdminUpdateChunk: {
+      // Two stage: the head carries the length of the data that follows it.
+      if (!readBytes(&v2Buffer[ppuc::v2::kHeaderBytes +
+                               ppuc::v2::kAdminPrefixBytes],
+                     ppuc::v2::kUpdateChunkHeadBytes)) {
+        return false;
+      }
+      const uint16_t length = ppuc::v2::ReadU16(
+          &v2Buffer[ppuc::v2::kHeaderBytes + ppuc::v2::kAdminPrefixBytes + 4]);
+      if (length > ppuc::v2::kAdminChunkBytes) {
+        return false;
+      }
+      const size_t payloadBytes =
+          ppuc::v2::kAdminPrefixBytes + ppuc::v2::kUpdateChunkHeadBytes + length;
+      if (!readBytes(&v2Buffer[ppuc::v2::kHeaderBytes +
+                               ppuc::v2::kAdminPrefixBytes +
+                               ppuc::v2::kUpdateChunkHeadBytes],
+                     length + ppuc::v2::kCrcBytes)) {
+        return false;
+      }
+      return processV2Frame(v2Buffer, payloadBytes);
+    }
+    default:
+      // An admin command this firmware does not know. Nothing can be assumed
+      // about its length, so the parser resyncs rather than guessing.
+      parserResynced = true;
+      return false;
+  }
+
+  if (!readBytes(&v2Buffer[ppuc::v2::kHeaderBytes + ppuc::v2::kAdminPrefixBytes],
+                 bodyBytes + ppuc::v2::kCrcBytes)) {
+    return false;
+  }
+
+  return processV2Frame(v2Buffer, ppuc::v2::kAdminPrefixBytes + bodyBytes);
+}
+
 bool EventDispatcher::handleV2Frame() {
   if (hwSerial->available() < (int)ppuc::v2::kHeaderBytes) {
     return false;
@@ -978,6 +1098,20 @@ bool EventDispatcher::handleV2Frame() {
   }
 
   ppuc::v2::FrameType frameType = ppuc::v2::ExtractType(v2Buffer[1]);
+
+  // Admin frames are not one size. getV2PayloadBytes() can only answer from the
+  // frame type, and for kFrameAdmin it answers kAdminPayloadBytes - the size of
+  // a version report. Every other admin frame is a different length, so reading
+  // that many bytes for an UpdateBegin waited for six bytes that were never
+  // sent, failed CRC on whatever it assembled, and left the parser mid-stream.
+  // The board answered nothing, which is why updating over RS485 never worked.
+  //
+  // The length is a function of the command, and the command is the first
+  // payload byte, so the prefix is read first and the rest sized from it.
+  if (frameType == ppuc::v2::kFrameAdmin) {
+    return handleV2AdminFrame();
+  }
+
   size_t payloadBytes = getV2PayloadBytes(frameType);
   if (frameType != ppuc::v2::kFrameHeartbeat &&
       frameType != ppuc::v2::kFrameError &&

@@ -72,6 +72,8 @@ enum AdminCommand : uint8_t {
   kAdminUpdateChunkAck = 0x06, // board -> host: offset accepted, or error
   kAdminUpdateCommit = 0x07,   // host -> board: verify and install
   kAdminUpdateResult = 0x08,   // board -> host: outcome
+  kAdminStatsQuery = 0x09,     // host -> board: ask for transport counters
+  kAdminStatsReport = 0x0A,    // board -> host: transport counters
 };
 
 // Why a board refused, or how an update ended. Reported rather than inferred
@@ -759,6 +761,54 @@ constexpr size_t kUpdateChunkMaxFrameBytes = kHeaderBytes + kAdminPrefixBytes +
                                              kAdminChunkBytes + kCrcBytes;
 constexpr size_t kUpdateCommitFrameBytes =
     kHeaderBytes + kAdminPrefixBytes + kCrcBytes;
+
+// --- transport counters ------------------------------------------------------
+//
+// Diagnostics only. The host can see that a board did not answer, but not why:
+// a board that never received the frame selecting it and a board that received
+// it and did not transmit look identical from the other end of the wire. These
+// are that board's own view, read out of band after the fact.
+constexpr size_t kStatsBodyBytes = 20;
+constexpr size_t kStatsQueryFrameBytes =
+    kHeaderBytes + kAdminPrefixBytes + kCrcBytes;
+constexpr size_t kStatsReportFrameBytes =
+    kHeaderBytes + kAdminPrefixBytes + kStatsBodyBytes + kCrcBytes;
+
+inline size_t BuildStatsQueryFrame(uint8_t* frame, uint8_t boardId,
+                                   uint8_t sequence, uint8_t epoch) {
+  WriteHeader(frame, kFrameAdmin, kFlagNone, kNoBoard, sequence, epoch);
+  uint8_t* p = frame + kHeaderBytes;
+  p[0] = kAdminStatsQuery;
+  p[1] = boardId;
+  return AppendCrc(frame, kHeaderBytes + kAdminPrefixBytes);
+}
+
+inline size_t BuildStatsReportFrame(uint8_t* frame, uint8_t boardId,
+                                    uint8_t sequence, uint8_t epoch,
+                                    uint32_t rxFrames, uint32_t rxCrcFail,
+                                    uint32_t rawBytes, uint32_t txFrames,
+                                    uint32_t rawSync) {
+  WriteHeader(frame, kFrameAdmin, kFlagNone, kNoBoard, sequence, epoch);
+  uint8_t* p = frame + kHeaderBytes;
+  p[0] = kAdminStatsReport;
+  p[1] = boardId;
+  WriteU32(&p[kAdminPrefixBytes + 0], rxFrames);
+  WriteU32(&p[kAdminPrefixBytes + 4], rxCrcFail);
+  WriteU32(&p[kAdminPrefixBytes + 8], rawBytes);
+  WriteU32(&p[kAdminPrefixBytes + 12], txFrames);
+  WriteU32(&p[kAdminPrefixBytes + 16], rawSync);
+  return AppendCrc(frame, kHeaderBytes + kAdminPrefixBytes + kStatsBodyBytes);
+}
+
+inline void ReadStatsReport(const uint8_t* payload, uint32_t& rxFrames,
+                            uint32_t& rxCrcFail, uint32_t& rawBytes,
+                            uint32_t& txFrames, uint32_t& rawSync) {
+  rxFrames = ReadU32(&payload[kAdminPrefixBytes + 0]);
+  rxCrcFail = ReadU32(&payload[kAdminPrefixBytes + 4]);
+  rawBytes = ReadU32(&payload[kAdminPrefixBytes + 8]);
+  txFrames = ReadU32(&payload[kAdminPrefixBytes + 12]);
+  rawSync = ReadU32(&payload[kAdminPrefixBytes + 16]);
+}
 
 inline size_t BuildUpdateBeginFrame(uint8_t* frame, uint8_t boardId,
                                     uint8_t sequence, uint8_t epoch,

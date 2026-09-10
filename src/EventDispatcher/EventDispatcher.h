@@ -67,6 +67,7 @@ class EventDispatcher {
  private:
   bool readBytes(byte* buffer, size_t len);
   bool handleV2Frame();
+  bool handleV2AdminFrame();
   size_t getV2PayloadBytes(ppuc::v2::FrameType frameType);
   bool processV2Frame(const byte* frame, size_t payloadBytes);
   void sendConfigAckFrame(uint8_t boardId, uint8_t topic, uint8_t index,
@@ -74,6 +75,7 @@ class EventDispatcher {
   void sendSwitchStateFrame(byte nextBoard);
   void sendSwitchNoChangeFrame(byte nextBoard);
   void sendVersionReportFrame();
+  void sendStatsReportFrame();
   void sendUpdateAckFrame(uint8_t command, uint8_t status, uint32_t offset);
 
   // Receives firmware images and hands them to the OTA bootloader. Owned here
@@ -133,6 +135,8 @@ class EventDispatcher {
   uint32_t v2RawFF = 0;
   bool m_sawRs485Activity = false;
   uint32_t v2TxFrames = 0;
+  // Times the token named this board. See forwardSwitchTokenIfSelected().
+  uint32_t v2Selected = 0;
   uint32_t v2SwitchNoChangeTx = 0;
   uint32_t crossCoreEventDrops = 0;
   bool switchOverflow = false;
