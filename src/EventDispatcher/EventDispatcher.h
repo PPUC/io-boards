@@ -160,6 +160,8 @@ class EventDispatcher {
   uint32_t v2VersionQueries = 0;
   // Version reports actually transmitted. See sendVersionReportFrame().
   uint32_t v2VersionReplies = 0;
+  // Which coil gates high power; see applyOutputStates().
+  uint16_t gameOnSolenoidNumber = 0;
   uint32_t v2SwitchNoChangeTx = 0;
   uint32_t crossCoreEventDrops = 0;
   bool switchOverflow = false;

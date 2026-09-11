@@ -417,6 +417,7 @@ void PwmDevices::handleFastSwitchEvent(bool switchClosed, byte i) {
 
 void PwmDevices::handleEvent(Event *event) {
   HighPowerOffAware::handleEvent(event);
+  publishGateBits();
 
   _ms = millis();
 

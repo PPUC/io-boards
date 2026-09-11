@@ -1,5 +1,7 @@
 #include "EventDispatcher.h"
 
+#include "../HighPowerOffAware.h"
+
 #include <string.h>
 
 #include "../PPUC.h"        // FIRMWARE_VERSION_*, the single source of truth
@@ -691,6 +693,12 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
     uint32_t configValue;
     ppuc::v2::ReadConfigPayload(&frame[payloadOffset], targetBoard, topic, index,
                                 key, configValue);
+    // Remembered here as well as in PwmDevices, because applyOutputStates has
+    // to know which coil gates high power before it walks the bitmap.
+    if (topic == CONFIG_TOPIC_GAME_ON_SOLENOID && key == CONFIG_TOPIC_NUMBER) {
+      gameOnSolenoidNumber = configValue;
+    }
+
     callListeners(new ConfigEvent(targetBoard, topic, index, key, configValue),
                   true);
     if (targetBoard == board) {
@@ -789,7 +797,38 @@ void EventDispatcher::applyOutputStates(const byte *coils, size_t coilBytes,
   // EventListener behavior, we synthesize legacy events only for changed bits
   // (edge detection old snapshot -> new snapshot). This keeps the rest of the
   // firmware event-driven without requiring listener rewrites.
+  // The coil that gates high power goes first, whatever its index.
+  //
+  // These events are raised in index order, and a coil command that arrives
+  // while high power is off is discarded rather than deferred. So a coil whose
+  // number sorts below the game-on solenoid was dropped whenever both changed
+  // in the same frame - the power arrived two indices too late. A real game
+  // never produced that ordering, because PinMAME asserts game-on long before
+  // anything fires; a bench coil test produces it every time.
+  int16_t gameOnIndex = -1;
+  if (gameOnSolenoidNumber > 0) {
+    for (uint16_t n = 0; n < runtimeConfig.coilBits; ++n) {
+      if (coilIndexToNumber[n] == gameOnSolenoidNumber) {
+        gameOnIndex = static_cast<int16_t>(n);
+        break;
+      }
+    }
+  }
+  if (gameOnIndex >= 0) {
+    const uint16_t n = static_cast<uint16_t>(gameOnIndex);
+    const bool oldState = ppuc::v2::GetBitmapBit(outputCoils, n);
+    const bool newState = ppuc::v2::GetBitmapBit(coils, n);
+    if (oldState != newState) {
+      callListeners(new Event(EVENT_SOURCE_SOLENOID, coilIndexToNumber[n],
+                              newState ? 1 : 0),
+                    true);
+    }
+  }
+
   for (uint16_t n = 0; n < runtimeConfig.coilBits; ++n) {
+    if (static_cast<int16_t>(n) == gameOnIndex) {
+      continue;
+    }
     bool oldState = ppuc::v2::GetBitmapBit(outputCoils, n);
     bool newState = ppuc::v2::GetBitmapBit(coils, n);
     if (oldState != newState) {
@@ -958,7 +997,8 @@ void EventDispatcher::sendStatsReportFrame() {
   const size_t frameBytes = ppuc::v2::BuildStatsReportFrame(
       frame, board, txSequence++, currentEpoch, v2RxFrames, v2RxCrcFail,
       v2RawBytes, v2TxFrames, v2Selected, v2VersionQueries,
-      v2VersionReplies);
+      v2VersionReplies,
+      g_highPowerGateBits);
 
   delayMicroseconds(kAdminReplyDelayUs);
 
