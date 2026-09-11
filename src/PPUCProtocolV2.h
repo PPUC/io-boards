@@ -768,7 +768,7 @@ constexpr size_t kUpdateCommitFrameBytes =
 // a board that never received the frame selecting it and a board that received
 // it and did not transmit look identical from the other end of the wire. These
 // are that board's own view, read out of band after the fact.
-constexpr size_t kStatsBodyBytes = 20;
+constexpr size_t kStatsBodyBytes = 28;
 constexpr size_t kStatsQueryFrameBytes =
     kHeaderBytes + kAdminPrefixBytes + kCrcBytes;
 constexpr size_t kStatsReportFrameBytes =
@@ -787,7 +787,8 @@ inline size_t BuildStatsReportFrame(uint8_t* frame, uint8_t boardId,
                                     uint8_t sequence, uint8_t epoch,
                                     uint32_t rxFrames, uint32_t rxCrcFail,
                                     uint32_t rawBytes, uint32_t txFrames,
-                                    uint32_t rawSync) {
+                                    uint32_t rawSync, uint32_t versionQueries,
+                                    uint32_t versionReplies) {
   WriteHeader(frame, kFrameAdmin, kFlagNone, kNoBoard, sequence, epoch);
   uint8_t* p = frame + kHeaderBytes;
   p[0] = kAdminStatsReport;
@@ -797,17 +798,23 @@ inline size_t BuildStatsReportFrame(uint8_t* frame, uint8_t boardId,
   WriteU32(&p[kAdminPrefixBytes + 8], rawBytes);
   WriteU32(&p[kAdminPrefixBytes + 12], txFrames);
   WriteU32(&p[kAdminPrefixBytes + 16], rawSync);
+  WriteU32(&p[kAdminPrefixBytes + 20], versionQueries);
+  WriteU32(&p[kAdminPrefixBytes + 24], versionReplies);
   return AppendCrc(frame, kHeaderBytes + kAdminPrefixBytes + kStatsBodyBytes);
 }
 
 inline void ReadStatsReport(const uint8_t* payload, uint32_t& rxFrames,
                             uint32_t& rxCrcFail, uint32_t& rawBytes,
-                            uint32_t& txFrames, uint32_t& rawSync) {
+                            uint32_t& txFrames, uint32_t& rawSync,
+                            uint32_t& versionQueries,
+                            uint32_t& versionReplies) {
   rxFrames = ReadU32(&payload[kAdminPrefixBytes + 0]);
   rxCrcFail = ReadU32(&payload[kAdminPrefixBytes + 4]);
   rawBytes = ReadU32(&payload[kAdminPrefixBytes + 8]);
   txFrames = ReadU32(&payload[kAdminPrefixBytes + 12]);
   rawSync = ReadU32(&payload[kAdminPrefixBytes + 16]);
+  versionQueries = ReadU32(&payload[kAdminPrefixBytes + 20]);
+  versionReplies = ReadU32(&payload[kAdminPrefixBytes + 24]);
 }
 
 inline size_t BuildUpdateBeginFrame(uint8_t* frame, uint8_t boardId,

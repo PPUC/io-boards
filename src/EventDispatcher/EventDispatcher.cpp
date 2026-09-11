@@ -605,6 +605,10 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
     // host needs to know what it is talking to.
     switch (command) {
       case ppuc::v2::kAdminVersionQuery:
+        // Counted before replying, so a query that arrives but goes unanswered
+        // is distinguishable from one that never arrived. The host cannot tell
+        // those apart: both are silence.
+        v2VersionQueries++;
         sendVersionReportFrame();
         break;
 
@@ -947,7 +951,8 @@ void EventDispatcher::sendStatsReportFrame() {
   byte* frame = v2TxBuffer;
   const size_t frameBytes = ppuc::v2::BuildStatsReportFrame(
       frame, board, txSequence++, currentEpoch, v2RxFrames, v2RxCrcFail,
-      v2RawBytes, v2TxFrames, v2Selected);
+      v2RawBytes, v2TxFrames, v2Selected, v2VersionQueries,
+      v2VersionReplies);
 
   delayMicroseconds(kAdminReplyDelayUs);
 
@@ -984,6 +989,10 @@ void EventDispatcher::sendVersionReportFrame() {
   delayMicroseconds(RS485_MODE_SWITCH_DELAY);
 
   v2TxFrames++;
+  // Counted after the frame has left the shift register, so this is "the board
+  // put a version report on the wire" rather than "the board decided to". With
+  // v2VersionQueries it says whether a query that arrived was answered.
+  v2VersionReplies++;
 }
 
 void EventDispatcher::sendSwitchNoChangeFrame(byte nextBoard) {

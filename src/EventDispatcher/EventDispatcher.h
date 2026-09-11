@@ -137,6 +137,10 @@ class EventDispatcher {
   uint32_t v2TxFrames = 0;
   // Times the token named this board. See forwardSwitchTokenIfSelected().
   uint32_t v2Selected = 0;
+  // Version queries addressed to this board, counted on arrival.
+  uint32_t v2VersionQueries = 0;
+  // Version reports actually transmitted. See sendVersionReportFrame().
+  uint32_t v2VersionReplies = 0;
   uint32_t v2SwitchNoChangeTx = 0;
   uint32_t crossCoreEventDrops = 0;
   bool switchOverflow = false;
