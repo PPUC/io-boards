@@ -60,39 +60,50 @@ effects. `WS2812FXEffect` overrides it with the segment number, and
 
 ## Built-in LED
 
-The board's built-in LED is also used as a startup and runtime status indicator
-in `src/main.cpp`.
+The board's built-in LED is the only status indicator the hardware has, so every
+state it shows has to be distinguishable across a room without counting
+anything. Two pieces of firmware drive it, and they hand over:
 
-On power-up it runs a boot blink pattern. Each boot stage resets the pattern and
-blinks a pulse train whose number of pulses matches the current stage. The LED
-stays low between stages, blinks the pulses during startup work, and uses a
-longer pause before the next cycle. The boot stages are:
+* `src/main.cpp` on core 0, from power-up until the host configures the board
+* `EffectsController` on core 1, from then on
 
-1. `POWER_ON`
-2. `CORE0_BEGIN`
-3. `UART_READY`
-4. `USB_WAIT` when USB debug mode is enabled (DIP switch 3)
-5. `CORE1_RESTART`
-6. `CORE1_BEGIN`
-7. `CROSSLINK_READY`
-8. `EFFECTS_STARTED`
-9. `RUNTIME`
+| State | Pattern | Meaning |
+|---|---|---|
+| Powered, no host | 1 s on, 100 ms off | The board is alive and waiting to be configured |
+| Configuring | Flicker per config frame | Addressed config frames are arriving |
+| Running | 200 ms steps across a 1 s cycle | Normal operation |
+| Transport error | 100 ms toggle | Frames are arriving corrupt |
+| Error cleared | Solid on | Transport recovered |
+| Firmware update | Two 80 ms pulses, then ~900 ms dark | An image is being staged |
 
-After core 1 is up, the firmware keeps the boot pattern alive for about 4
-seconds in the runtime stage. After that boot window, the board waits for host
-configuration and indicates that with the ready pattern:
+The configuration flicker is data-driven rather than timed: every `ConfigEvent`
+whose `boardId` matches this board flips the LED, so the rate is the rate frames
+are arriving. It is the one pattern that shows the host is actually talking to
+*this* board rather than to its neighbours.
 
-* the LED stays on for about 1 second
-* then it turns off briefly for about 100 ms
-* then it repeats until the board is started for normal operation
+The firmware update pattern is the only one with a gap in it. Everything else is
+either mostly on or evenly toggling, which is what makes it readable at a glance
+during a transfer that takes tens of seconds and otherwise looks like an idle
+board.
 
-While configuration is being received, addressed config frames toggle the
-built-in LED through `EffectsController`. Each `ConfigEvent` whose `boardId`
-matches the local board address flips the LED state, so active configuration is
-visible as data-driven flicker on top of the waiting-for-config phase.
+Error and update states override the running pattern by effect priority, so the
+most important thing the board is doing is what the LED shows.
 
-Once configuration is complete and the board enters game runtime mode, the LED
-stays solid on during normal game play.
+### No boot stage pattern
+
+Earlier firmware blinked the boot stage as a pulse count - up to nine 90 ms
+pulses before each pause. It was added while chasing a reset problem and it
+answered that question, but nobody reading a machine can count nine blinks and
+name a stage.
+
+It was also actively misleading. A board frozen part way through a pulse group
+sits with the LED lit, which is indistinguishable from a healthy board that has
+finished booting. That cost real debugging time: a hung board was read as merely
+idle. The freeze had a cause and it is fixed, but the ambiguity was the
+pattern's own.
+
+So there is no boot pattern. From power-up the LED shows the ready pattern, and
+a board that is lit and not blinking is not booting - it is stuck.
 
 ### Homebrew machines
 

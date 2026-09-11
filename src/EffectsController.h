@@ -22,6 +22,7 @@
 #include "Effects/FastLedBlinkEffect.h"
 #include "Effects/ImpulsePWMEffect.h"
 #include "Effects/LedBlinkEffect.h"
+#include "Effects/LedDoubleBlinkEffect.h"
 #include "Effects/LedOnEffect.h"
 #include "Effects/NullEffect.h"
 #include "Effects/RGBColorCycleEffect.h"
@@ -73,6 +74,11 @@ class EffectsController : public EventListener {
                 new Event(EVENT_ERROR), 3, -1, -1);
       addEffect(new LedOnEffect(), _ledBuiltInDevice, new Event(EVENT_NO_ERROR),
                 4, 0, -1);
+      // Above the error and run patterns: a transfer is the most important
+      // thing this board is doing, it takes tens of seconds, and while it runs
+      // the board answers the bus normally and otherwise looks idle.
+      addEffect(new LedDoubleBlinkEffect(), _ledBuiltInDevice,
+                new Event(EVENT_FIRMWARE_UPDATE), 5, -1, -1);
       addEffect(new LedBlinkEffect(), _ledBuiltInDevice, new Event(EVENT_RUN),
                 1,   // priority
                 -1,  // repeat

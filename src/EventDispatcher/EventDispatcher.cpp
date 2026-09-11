@@ -626,6 +626,9 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
         uint16_t imageCrc = 0;
         ppuc::v2::ReadUpdateBegin(&frame[payloadOffset], imageBytes, imageCrc);
         const uint8_t status = firmwareUpdater.begin(imageBytes, imageCrc);
+        if (status == ppuc::v2::kUpdateOk) {
+          dispatch(new Event(EVENT_FIRMWARE_UPDATE, 1, board));
+        }
         sendUpdateAckFrame(ppuc::v2::kAdminUpdateBeginAck, status, 0);
         break;
       }
@@ -645,6 +648,9 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
 
       case ppuc::v2::kAdminUpdateCommit: {
         const uint8_t status = firmwareUpdater.commit();
+        // Either way the transfer is over: a commit reboots into the new image,
+        // and a refusal leaves the board running the old one.
+        dispatch(new Event(EVENT_FIRMWARE_UPDATE, 0, board));
         sendUpdateAckFrame(ppuc::v2::kAdminUpdateResult, status,
                            firmwareUpdater.bytesReceived());
 

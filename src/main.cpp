@@ -28,29 +28,18 @@ volatile bool core_0_initialized = false;
 volatile bool core_0_loop_running = false;
 volatile bool core_1_initialized = false;
 volatile bool core_1_loop_running = false;
-volatile bool boot_led_active = true;
-volatile bool boot_runtime_stage_entered = false;
-volatile uint8_t boot_stage = 1;
-uint32_t boot_led_ms = 0;
-uint32_t boot_runtime_stage_ms = 0;
-uint8_t boot_led_pulse_index = 0;
-bool boot_led_on = false;
 uint32_t ready_led_ms = 0;
 bool ready_led_state = true;
 
-enum BootStage : uint8_t {
-  BOOT_STAGE_POWER_ON = 1,
-  BOOT_STAGE_CORE0_BEGIN = 2,
-  BOOT_STAGE_UART_READY = 3,
-  BOOT_STAGE_USB_WAIT = 4,
-  BOOT_STAGE_CORE1_RESTART = 5,
-  BOOT_STAGE_CORE1_BEGIN = 6,
-  BOOT_STAGE_CROSSLINK_READY = 7,
-  BOOT_STAGE_EFFECTS_STARTED = 8,
-  BOOT_STAGE_RUNTIME = 9
-};
-
-constexpr uint32_t BOOT_STAGE_RUNTIME_HOLD_MS = 4000;
+// The built-in LED showed the boot stage as a count of fast blinks - up to nine
+// 90ms pulses before each pause. It was added to find a reset problem and it
+// answered that question, but nobody reading the machine can count nine blinks
+// and name a stage, and a board frozen part way through a group looks simply
+// lit. The cause of that freeze is fixed; the blinking outlived its purpose.
+//
+// From power-on the LED now shows one readable thing: this board is alive and
+// waiting for a host. EffectsController takes it over on core 1 once the host
+// starts configuring, and from then on it means traffic rather than liveness.
 
 // How long the main loop must be stopped before the board reboots itself.
 //
@@ -84,41 +73,6 @@ bool watchdog(struct repeating_timer *t) {
   return true;
 }
 
-void setBootStage(BootStage stage) {
-  boot_stage = static_cast<uint8_t>(stage);
-  boot_led_pulse_index = 0;
-  boot_led_on = false;
-  boot_led_ms = millis();
-  digitalWrite(LED_BUILTIN, LOW);
-}
-
-void updateBuiltinLedBootPattern() {
-  if (!boot_led_active) {
-    return;
-  }
-
-  const uint32_t now = millis();
-  const uint8_t pulses = boot_stage == 0 ? 1 : boot_stage;
-  const uint8_t stepsPerCycle = static_cast<uint8_t>(pulses * 2);
-  const uint32_t intervalMs =
-      boot_led_on ? 90 : (boot_led_pulse_index >= stepsPerCycle ? 850 : 160);
-  if ((now - boot_led_ms) < intervalMs) {
-    return;
-  }
-
-  boot_led_ms = now;
-  if (boot_led_pulse_index >= stepsPerCycle) {
-    boot_led_pulse_index = 0;
-    boot_led_on = false;
-    digitalWrite(LED_BUILTIN, LOW);
-    return;
-  }
-
-  boot_led_on = !boot_led_on;
-  digitalWrite(LED_BUILTIN, boot_led_on ? HIGH : LOW);
-  boot_led_pulse_index++;
-}
-
 void updateBuiltinLedReadyPattern() {
   const uint32_t now = millis();
   const uint32_t intervalMs = ready_led_state ? 1000 : 100;
@@ -140,7 +94,7 @@ void startBuiltinLedReadyPattern() {
 void delayWithBootPattern(uint32_t delayMs) {
   const uint32_t start = millis();
   while ((millis() - start) < delayMs) {
-    updateBuiltinLedBootPattern();
+    updateBuiltinLedReadyPattern();
     delay(1);
   }
 }
@@ -156,11 +110,9 @@ void setup() {
   set_sys_clock_khz(SYS_CLK_KHZ, true);
 
   pinMode(LED_BUILTIN, OUTPUT);
-  setBootStage(BOOT_STAGE_POWER_ON);
   startBuiltinLedReadyPattern();
 
   ioBoardController.begin();
-  setBootStage(BOOT_STAGE_CORE0_BEGIN);
 
   // RS485 connection.
   Serial1.end();  // Deactivete UART to empty TX FIFO after reboot
@@ -203,7 +155,6 @@ void setup() {
   // Must precede begin(): the buffer is allocated there.
   Serial1.setFIFOSize(512);
   Serial1.begin(ppuc::v2::kBaudRate);
-  setBootStage(BOOT_STAGE_UART_READY);
   // Empty RX FIFO after reboot
   while (Serial1.available()) {
     Serial1.read();
@@ -214,14 +165,13 @@ void setup() {
   if (usb_debugging) {
     Serial.begin(115200);
     delayWithBootPattern(100);
-    setBootStage(BOOT_STAGE_USB_WAIT);
     // Wait for a serial connection of a debugger via USB CDC.
     // The Pico implements USB itself so special care must be taken. Use
     // while(!Serial){} in the setup() code before printing anything so that
     // it waits for the USB connection to be established.
     // https://community.platformio.org/t/serial-monitor-not-working/1512/25
     while (!Serial) {
-      updateBuiltinLedBootPattern();
+      updateBuiltinLedReadyPattern();
       delay(1);
     }
 
@@ -236,16 +186,14 @@ void setup() {
   }
 
   core_0_initialized = true;
-  setBootStage(BOOT_STAGE_CORE1_RESTART);
   rp2040.restartCore1();
 }
 
 void setup1() {
   while (!core_0_initialized) {
-    updateBuiltinLedBootPattern();
+      updateBuiltinLedReadyPattern();
   }
 
-  setBootStage(BOOT_STAGE_CORE1_BEGIN);
   effectsController.begin();
   core_1_initialized = true;
 
@@ -256,30 +204,16 @@ void setup1() {
 
   effectsController.eventDispatcher()->setMultiCoreCrossLink(
       ioBoardController.eventDispatcher()->getMultiCoreCrossLink());
-  setBootStage(BOOT_STAGE_CROSSLINK_READY);
 
   effectsController.start();
-  setBootStage(BOOT_STAGE_EFFECTS_STARTED);
 }
 
 void loop() {
   core_0_loop_running = true;
-  if (boot_led_active && core_1_initialized && core_1_loop_running) {
-    if (!boot_runtime_stage_entered) {
-      setBootStage(BOOT_STAGE_RUNTIME);
-      boot_runtime_stage_entered = true;
-      boot_runtime_stage_ms = millis();
-    } else if ((millis() - boot_runtime_stage_ms) >=
-               BOOT_STAGE_RUNTIME_HOLD_MS) {
-      boot_led_active = false;
-      startBuiltinLedReadyPattern();
-    }
-  }
-
   watchdog_ms = millis();
-  if (boot_led_active) {
-    updateBuiltinLedBootPattern();
-  } else if (!ioBoardController.isRunning()) {
+  // Only until the host configures this board; EffectsController drives the LED
+  // from there, where it means traffic rather than liveness.
+  if (!ioBoardController.isRunning()) {
     updateBuiltinLedReadyPattern();
   }
   ioBoardController.update();

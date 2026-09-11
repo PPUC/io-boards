@@ -38,6 +38,11 @@
 #define EVENT_RESTART 92          // soft restart without reboot
 #define EVENT_NO_ERROR 98         // NO ERROR
 #define EVENT_ERROR 99            // ERROR
+// A firmware image is being staged. Raised so the built-in LED can say so:
+// a transfer takes tens of seconds during which the board answers the bus
+// normally and otherwise looks idle, which is indistinguishable from a board
+// that is simply not being played.
+#define EVENT_FIRMWARE_UPDATE 100  // FIRMWARE UPDATE IN PROGRESS
 
 #define CONFIG_TOPIC_PLATFORM 102                 // "f"
 #define CONFIG_TOPIC_LED_STRING 103               // "g"
