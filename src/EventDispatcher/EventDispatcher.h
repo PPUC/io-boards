@@ -30,7 +30,26 @@
 #define SWITCH_REPORT_HISTORY_SIZE 32
 #endif
 
-static constexpr uint8_t kMaxConsecutiveSwitchNoChangeReplies = 20;
+// Replies a board may answer "nothing changed" before volunteering its full
+// switch state anyway.
+//
+// This is the backstop for a switch change the host never saw. It was 20, which
+// at the measured ~99 replies per second per board is a full state every 0.2 s -
+// five a second, each carrying the whole switch bitmap. That rate made sense
+// while the boards were silently dropping frames for want of a UART receive
+// buffer, because losses were routine and invisible. With the buffer sized
+// properly they are neither.
+//
+// 100 is about a second, still well inside a ball's flight, and costs a fifth
+// as much. It is deliberately not longer than that: the cost scales with the
+// machine's switch count, so a value tuned to feel free on a small playfield
+// stops being free on a large one, and this is also what recovers a board that
+// restarted mid-game before the host notices its kStatusNeedsSetup.
+//
+// Losses the host *can* see - a failed CRC, a chain that did not complete - no
+// longer wait for this at all. libppuc asks for a refresh the moment it detects
+// one, which is what makes a slower blind interval safe.
+static constexpr uint8_t kMaxConsecutiveSwitchNoChangeReplies = 100;
 
 class EventDispatcher {
  public:
