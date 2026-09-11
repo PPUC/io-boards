@@ -52,12 +52,32 @@ class FirmwareUpdater {
   enum class State : uint8_t { kIdle, kReceiving, kStaged };
 
   bool ensureFilesystem();
+  // Writes whatever is buffered to the staging file. The file is held open for
+  // the whole transfer, so this is the only place bytes reach the filesystem.
+  bool flushBuffer();
 
   State m_state = State::kIdle;
   uint32_t m_expectedBytes = 0;
   uint16_t m_expectedCrc = 0;
   uint32_t m_received = 0;
   bool m_filesystemReady = false;
+
+  // Chunks are accumulated and written a page at a time rather than one
+  // open/append/close per chunk, which is where a transfer spent almost all of
+  // its time: 266 ms per 256-byte chunk against 23 ms of wire time, so roughly
+  // three minutes per board for a filesystem cost, not a bus cost.
+  //
+  // This changes nothing about what can be installed. commit() reads the staged
+  // file back out of flash and checks it against the announced CRC before the
+  // bootloader is pointed at anything, so a short or corrupt write is caught at
+  // the same gate it always was.
+  static constexpr size_t kWriteBufferBytes = 4096;
+  uint8_t m_buffer[kWriteBufferBytes] = {0};
+  size_t m_buffered = 0;
+  // The staging file handle lives in the .cpp rather than here: this header is
+  // reached by the native test build through EventDispatcher.h, where LittleFS
+  // does not exist. One board has one updater, so a single handle beside the
+  // implementation is equivalent and costs the tests nothing.
 };
 
 #endif

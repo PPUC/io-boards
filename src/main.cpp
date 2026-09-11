@@ -7,6 +7,7 @@
 #include "EffectsController.h"
 #include "EventDispatcher/CrossLinkDebugger.h"
 #include "IOBoardController.h"
+#include "hardware/watchdog.h"
 #include "PPUC.h"
 #include "PPUCProtocolV2.h"
 #include "RPi_Pico_TimerInterrupt.h"
@@ -51,12 +52,33 @@ enum BootStage : uint8_t {
 
 constexpr uint32_t BOOT_STAGE_RUNTIME_HOLD_MS = 4000;
 
+// How long the main loop must be stopped before the board reboots itself.
+//
+// Deliberately keyed only on watchdog_ms, never on lastPoll_ms. A quiet bus is
+// normal - the host is simply not running - and rebooting for that would put
+// every board in a reboot loop whenever ppuc-pinmame is closed. A main loop
+// that has not run at all is a hang, and nothing short of a reset clears it:
+// the board stops answering the bus entirely and needs its power cycling by
+// hand, which is what this avoids.
+//
+// Well above the 1 s output-shutdown threshold so the outputs are already off
+// before a reset is considered.
+constexpr uint32_t WATCHDOG_REBOOT_MS = 5000;
+
 // Turn off all High Power Outputs in case the main loop has not finished in 1
-// second (or 2 seconds in edge cases).
+// second (or 2 seconds in edge cases), and reboot if it has stopped entirely.
 bool watchdog(struct repeating_timer *t) {
   uint32_t ms = millis();
-  if ((ms - watchdog_ms) > 1000 || (ms - lastPoll_ms) > 3000) {
+  const uint32_t sinceLoop = ms - watchdog_ms;
+  if (sinceLoop > 1000 || (ms - lastPoll_ms) > 3000) {
     for (int i = 19; i <= 26; i++) digitalWrite(i, LOW);
+  }
+
+  if (sinceLoop > WATCHDOG_REBOOT_MS) {
+    // Outputs are already off by the branch above. The board comes back
+    // unconfigured, which the host sees as kStatusNeedsSetup and must treat as
+    // "this board lost its configuration", not as a transient.
+    watchdog_reboot(0, 0, 0);
   }
 
   return true;

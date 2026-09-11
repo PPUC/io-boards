@@ -1,6 +1,11 @@
 #include "FirmwareUpdater.h"
 
 #include <LittleFS.h>
+
+namespace {
+// See the note in the header: one board, one updater, one staging file.
+File g_stagingFile;
+}
 #include <PicoOTA.h>
 
 namespace {
@@ -55,13 +60,16 @@ uint8_t FirmwareUpdater::begin(uint32_t imageBytes, uint16_t imageCrc) {
 
   // Remove any earlier attempt first. Appending to a stale file would produce
   // an image that fails its CRC for a reason nobody could see.
+  if (g_stagingFile) {
+    g_stagingFile.close();
+  }
+  m_buffered = 0;
   LittleFS.remove(kStagingPath);
 
-  File file = LittleFS.open(kStagingPath, "w");
-  if (!file) {
+  g_stagingFile = LittleFS.open(kStagingPath, "w");
+  if (!g_stagingFile) {
     return ppuc::v2::kUpdateWriteFailed;
   }
-  file.close();
 
   m_expectedBytes = imageBytes;
   m_expectedCrc = imageCrc;
@@ -93,24 +101,54 @@ uint8_t FirmwareUpdater::chunk(uint32_t offset, const uint8_t* data,
     return ppuc::v2::kUpdateBadOffset;
   }
 
-  File file = LittleFS.open(kStagingPath, "a");
-  if (!file) {
+  if (!g_stagingFile) {
     return ppuc::v2::kUpdateWriteFailed;
   }
-  const size_t written = file.write(data, length);
-  file.close();
 
-  if (written != length) {
+  if (m_buffered + length > kWriteBufferBytes && !flushBuffer()) {
     return ppuc::v2::kUpdateWriteFailed;
   }
+  // A chunk never exceeds kAdminChunkBytes, so it always fits once flushed.
+  memcpy(m_buffer + m_buffered, data, length);
+  m_buffered += length;
 
   m_received += length;
+  if (m_received == m_expectedBytes && !flushBuffer()) {
+    return ppuc::v2::kUpdateWriteFailed;
+  }
   return ppuc::v2::kUpdateOk;
+}
+
+bool FirmwareUpdater::flushBuffer() {
+  if (m_buffered == 0) {
+    return true;
+  }
+  if (!g_stagingFile) {
+    return false;
+  }
+  const size_t written = g_stagingFile.write(m_buffer, m_buffered);
+  if (written != m_buffered) {
+    return false;
+  }
+  m_buffered = 0;
+  // Flushed to the filesystem, not merely to our own buffer: commit() reopens
+  // the file to verify it, and would otherwise read a short image.
+  g_stagingFile.flush();
+  return true;
 }
 
 uint8_t FirmwareUpdater::commit() {
   if (m_state != State::kReceiving || m_received != m_expectedBytes) {
     return ppuc::v2::kUpdateNotStaged;
+  }
+
+  // Everything buffered must be on the filesystem before it is read back, and
+  // the write handle closed, or the verification below reads a short image.
+  if (!flushBuffer()) {
+    return ppuc::v2::kUpdateWriteFailed;
+  }
+  if (g_stagingFile) {
+    g_stagingFile.close();
   }
 
   // Verify what actually landed in flash, not what we believe we wrote. This
@@ -167,6 +205,14 @@ uint8_t FirmwareUpdater::commit() {
 }
 
 void FirmwareUpdater::abort() {
+  // Drop buffered bytes and the write handle before removing the file, so an
+  // abandoned transfer leaves nothing half-written behind it. A partial staging
+  // file is not harmless: mounting one has hung a board hard enough to need the
+  // power switch.
+  m_buffered = 0;
+  if (g_stagingFile) {
+    g_stagingFile.close();
+  }
   if (m_filesystemReady) {
     LittleFS.remove(kStagingPath);
   }
