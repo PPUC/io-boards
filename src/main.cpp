@@ -10,16 +10,21 @@
 #include "hardware/watchdog.h"
 #include "PPUC.h"
 #include "PPUCProtocolV2.h"
-#include "RPi_Pico_TimerInterrupt.h"
 #include "hardware/gpio.h"
 #include "hardware/uart.h"
+#include "pico/time.h"
 
 IOBoardController ioBoardController(CONTROLLER_16_8_1);
 
 // Platform will be adjusted by ConfigEvent.
 EffectsController effectsController(CONTROLLER_16_8_1, PLATFORM_LIBPINMAME);
 
-RPI_PICO_Timer ITimer(1);
+// The watchdog runs on a pico-sdk repeating timer. It used to go through
+// RPI_PICO_TimerInterrupt, which wrapped exactly this call -- the callback
+// below already has the SDK's signature -- and that library has been archived
+// since 2022. Its RPI_PICO_Timer(1) pinned hardware alarm 1; the default alarm
+// pool picks one instead, which nothing here depends on.
+static struct repeating_timer watchdogTimer;
 
 volatile uint32_t watchdog_ms = millis();
 volatile uint32_t lastPoll_ms = millis();
@@ -180,7 +185,9 @@ void setup() {
   } else {
     // The watchdog interferes with the USB debuging, so only start it
     // if USB debugging is not active.
-    if (!ITimer.attachInterruptInterval(1000000, watchdog)) {
+    // Negative period: measured from the start of the previous callback, so a
+    // slow one does not push the next tick out.
+    if (!add_repeating_timer_us(-1000000, watchdog, nullptr, &watchdogTimer)) {
       // @todo
     }
   }
