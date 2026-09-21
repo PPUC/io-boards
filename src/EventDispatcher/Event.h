@@ -125,7 +125,6 @@
 
 #define SWITCH_DEBOUNCE_STANDARD 0
 #define SWITCH_DEBOUNCE_FAST_FLIP 1
-#define SWITCH_DEBOUNCE_SLOW_STABLE 2
 
 inline uint16_t HashNamedTriggerId(const char* name) {
   if (!name) {

@@ -189,6 +189,10 @@ Good defaults:
 * Stand-up targets and optos that need fast response: `2-5 ms`.
 * Most drop targets: `5-10 ms`.
 * Bouncy old leaf standups or drop targets: `8-15 ms`.
+* Tilt and slam tilt: `10-12 ms`, or tune on the real machine.
+* Coin door and service buttons: `5-10 ms`.
+* Trough switches and drop-target bank all-down/reset-position switches:
+  `5-10 ms`.
 
 For slingshots, bumpers, and similar old assemblies that should fire locally,
 use `standard` debounce and configure the associated PWM output with its fast
@@ -213,22 +217,6 @@ Good defaults:
 Do not use `fastFlip` for slingshots or bumpers just because they use local
 fast-switch coil activation. Fast-switch output behavior and debounce behavior
 are separate settings.
-
-### `slowStable`
-
-Use `slowStable` for switches where false positives are much worse than a small
-delay.
-
-The firmware uses conservative stable-before-report behavior. The configured
-debounce value is the actual debounce window used by the firmware.
-
-Good defaults:
-
-* Tilt and slam tilt: configure `10-12 ms` for an effective `40-48 ms`, or tune
-  on the real machine.
-* Coin door and service buttons: configure `5-10 ms`.
-* Trough-ish switches and drop-target bank all-down/reset-position switches:
-  configure `5-10 ms`.
 
 ### Microswitches vs Leaf Switches
 

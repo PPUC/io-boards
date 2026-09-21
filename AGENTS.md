@@ -288,8 +288,6 @@ Configured per switch as `debounce` (ms) plus `debounceMode`, exported by
   window. Default for playfield switches.
 - `fastFlip` — accept the close edge immediately, require the open edge to
   survive the window. For flipper and magna-save buttons.
-- `slowStable` — conservative stable-before-report. For tilt, coin door,
-  trough, drop-target bank switches.
 
 Debounce mode and local PWM fast-switch activation are **separate settings**.
 A slingshot can use `standard` debounce and still fire locally via its fast

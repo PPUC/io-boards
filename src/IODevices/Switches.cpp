@@ -224,7 +224,7 @@ void Switches::registerSwitch(byte p, byte n, uint8_t debounceTimeMs) {
 }
 
 void Switches::setDebounceMode(byte n, uint8_t mode) {
-  if (mode > SWITCH_DEBOUNCE_SLOW_STABLE) {
+  if (mode > SWITCH_DEBOUNCE_FAST_FLIP) {
     mode = SWITCH_DEBOUNCE_STANDARD;
   }
 
@@ -283,7 +283,7 @@ void Switches::deferSwitchState(uint8_t index, uint32_t mask, bool switchState,
   pendingDebounceMask |= mask;
 }
 
-void Switches::flushPendingDebounce(uint32_t nowUs, bool includeSlowStable) {
+void Switches::flushPendingDebounce(uint32_t nowUs) {
   if (pendingDebounceMask == 0) {
     return;
   }
@@ -301,16 +301,11 @@ void Switches::flushPendingDebounce(uint32_t nowUs, bool includeSlowStable) {
       continue;
     }
 
-    if (!includeSlowStable && debounceMode[i] == SWITCH_DEBOUNCE_SLOW_STABLE) {
-      continue;
-    }
-
     const uint32_t debounceUs = debounceWindowUs(static_cast<uint8_t>(i));
     const uint32_t lastAcceptedUs = debounceTimeUs[i][switchState ? 1 : 0];
     const uint32_t sinceUs = pendingDebounceSinceUs[i];
     const bool stableLongEnough =
-        debounceMode[i] == SWITCH_DEBOUNCE_STANDARD ||
-        debounceMode[i] == SWITCH_DEBOUNCE_SLOW_STABLE;
+        debounceMode[i] == SWITCH_DEBOUNCE_STANDARD;
     if (stableLongEnough && sinceUs != 0 && (nowUs - sinceUs) < debounceUs) {
       continue;
     }
@@ -329,7 +324,7 @@ void Switches::handleSwitchChanges(uint32_t raw) {
   // new raw transition arrived. Commit it against the previous raw sample
   // first so a valid quick press/release cannot be canceled by the release IRQ
   // before the normal poll loop gets a chance to flush it.
-  flushPendingDebounce(nowUs, false);
+  flushPendingDebounce(nowUs);
   latestRaw = static_cast<uint16_t>(raw);
   uint32_t changed = raw ^ currentStable;
   if (changed > 0) {
@@ -358,7 +353,6 @@ void Switches::handleSwitchChanges(uint32_t raw) {
             }
             break;
 
-          case SWITCH_DEBOUNCE_SLOW_STABLE:
           case SWITCH_DEBOUNCE_STANDARD:
           default:
             deferSwitchState(static_cast<uint8_t>(i), mask, switchState, nowUs);
@@ -399,7 +393,7 @@ void Switches::handleEvent(Event* event) {
       // pendingEvents[]
       const uint32_t irqState = save_and_disable_interrupts();
 
-      flushPendingDebounce(micros(), true);
+      flushPendingDebounce(micros());
 
       while (pendingEventTail != pendingEventHead) {
         collectedEvents[collectedCount++] = pendingEvents[pendingEventTail];
