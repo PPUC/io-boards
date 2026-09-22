@@ -104,6 +104,7 @@ class EventDispatcher {
   void applyOutputStates(const byte* coils, size_t coilBytes, const byte* lamps,
                          size_t lampBytes, const byte* giLevels);
   void applySwitchStates(const byte* switches, size_t switchBytes);
+  void announceLocalSwitchStates();
   void updateSwitchBitmap(Event* event);
   void clearSessionState();
   void resetSessionState(uint8_t newEpoch, const ppuc::v2::RuntimeConfig& cfg);

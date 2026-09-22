@@ -487,6 +487,12 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
         dispatch(new Event(EVENT_READ_SWITCHES));
         v2RuntimeInitialized = true;
       }
+      // A session without mapping frames is complete as soon as it is set up,
+      // so the transition announceLocalSwitchStates() waits for in the mapping
+      // handler never comes.
+      if (mappingComplete) {
+        announceLocalSwitchStates();
+      }
     }
     return true;
   }
@@ -544,7 +550,11 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
     if (receivedMappingFrames < expectedMappingFrames) {
       receivedMappingFrames++;
     }
+    const bool wasComplete = mappingComplete;
     mappingComplete = receivedMappingFrames >= expectedMappingFrames;
+    if (mappingComplete && !wasComplete) {
+      announceLocalSwitchStates();
+    }
     return true;
   }
 
@@ -724,6 +734,30 @@ void EventDispatcher::sendConfigAckFrame(uint8_t boardId, uint8_t topic,
   hwSerial->write(frame, sizeof(frame));
   ReleaseBusAfterTx(rs485Pin, sizeof(frame));
   delayMicroseconds(RS485_MODE_SWITCH_DELAY);
+}
+
+// Re-announces the state of every switch wired to this board.
+//
+// Other boards learn a switch's state from this board's reports, and a switch
+// only enters the report once its number resolves to a bitmap index - which
+// needs the mapping frames. Those arrive last, after setup. The announcement
+// made when setup arrives therefore resolved nothing: every switch was looked
+// up in the identity map the session starts with, missed, and was left out of
+// the report. A switch that then never changed was never reported at all.
+//
+// On a real machine that was the coin door. It is closed at power-up and stays
+// closed, so its own board saw it and every other board went on believing it
+// was open - and a board that believes the door is open keeps high power off.
+// Three of four boards had no working coils until someone opened and closed
+// the door during a game. Before firmware 0.3.0 the door did not gate anything
+// and the missing report had no visible effect.
+//
+// So the announcement is repeated once the numbers resolve, on every session
+// including a resync, where the mapping is sent again. Both switch readers
+// ignore a second start, and each switch is reported in the state it is
+// actually in, so repeating it is harmless.
+void EventDispatcher::announceLocalSwitchStates() {
+  dispatch(new Event(EVENT_READ_SWITCHES));
 }
 
 void EventDispatcher::refreshDedicatedSwitchState(uint16_t number,
