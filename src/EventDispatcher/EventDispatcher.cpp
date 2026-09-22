@@ -757,6 +757,31 @@ void EventDispatcher::sendConfigAckFrame(uint8_t boardId, uint8_t topic,
 // ignore a second start, and each switch is reported in the state it is
 // actually in, so repeating it is harmless.
 void EventDispatcher::announceLocalSwitchStates() {
+  // Everything recorded before the mapping arrived was recorded against the
+  // identity map this session starts with, where position n means number n.
+  // A board that reported one of its own switches in that window put it at the
+  // position equal to its number and marked that position as its own. Once the
+  // real mapping arrives the position usually belongs to a different switch,
+  // and the board then ignores that switch from every other board, because it
+  // believes it owns it.
+  //
+  // On a real machine the coin door, switch 200, sat at position 45, and board
+  // 4 owned a switch numbered 45. Board 4 ignored the door for the rest of the
+  // session and kept high power off, while the boards without such a collision
+  // worked. Which board breaks therefore depends on the switch numbering of
+  // the game.
+  //
+  // So the positions are forgotten here and rebuilt by the announcement below,
+  // which now runs with numbers that resolve. Remote state is forgotten too:
+  // it was recorded under the same wrong map, and the other boards resend it
+  // on the next refresh.
+  memset(switchStates, 0, sizeof(switchStates));
+  memset(localReportSwitchStates, 0, sizeof(localReportSwitchStates));
+  memset(localOwnedSwitchMask, 0, sizeof(localOwnedSwitchMask));
+  memset(localSwitchReportHistory, 0, sizeof(localSwitchReportHistory));
+  localSwitchReportHead = 0;
+  localSwitchReportTail = 0;
+
   dispatch(new Event(EVENT_READ_SWITCHES));
 }
 
@@ -789,6 +814,15 @@ int16_t EventDispatcher::findMappedIndex(const uint16_t* table, uint16_t count,
 }
 
 void EventDispatcher::updateSwitchBitmap(Event *event) {
+  // Positions are meaningless until the mapping frames have arrived: the
+  // identity map in force until then would file this switch under whatever
+  // switch happens to occupy the position matching its number.
+  // announceLocalSwitchStates records every local switch once the mapping is
+  // complete, so nothing is lost by ignoring these.
+  if (!mappingComplete) {
+    return;
+  }
+
   // V2 switch reporting is bitmap-based. Legacy switch events still originate
   // from the existing switch devices/listeners; this method mirrors those
   // events into the dense V2 switch-state RAM bitmap. On token/poll, the board
