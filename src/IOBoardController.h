@@ -9,7 +9,9 @@
 #include "EventDispatcher/Event.h"
 #include "EventDispatcher/EventDispatcher.h"
 #include "EventDispatcher/MultiCoreCrossLink.h"
+#include "IODevices/LampMatrix.h"
 #include "IODevices/PwmDevices.h"
+#include "IODevices/StrobedSwitchMatrix.h"
 #include "IODevices/SwitchMatrix.h"
 #include "IODevices/Switches.h"
 #include "PPUC.h"
@@ -41,15 +43,25 @@ class IOBoardController : public EventListener {
   int readBoardSelectorRaw() const;
   void initializeBoardIdentity();
   void clearConfiguredState();
+  void reportConfigError();
+  void registerPwmOutput(byte pwmType);
+  void handleSwitchMatrixConfig(ConfigEvent *event);
 
+  // Each is null on a board that does not have it - see PPUCBoardTypes.h.
   PwmDevices *_pwmDevices;
   Switches *_switches;
   SwitchMatrix *_switchMatrix;
+  StrobedSwitchMatrix *_strobedSwitchMatrix;
+  LampMatrix *_lampMatrix;
 
   bool running = false;
   bool activePwmDevices = false;
   bool activeSwitches = false;
   bool activeSwitchMatrix = false;
+  bool activeLampMatrix = false;
+  // GPIOs registered as PWM outputs so far, for spotting two that would share
+  // a PWM channel.
+  uint32_t pwmPinsInUse = 0;
   bool m_debug = false;
   bool m_initialized = false;
 

@@ -12,6 +12,7 @@
 
 #include <Arduino.h>
 
+#include "PPUCBoardTypes.h"
 #include "PPUCPlatforms.h"
 #include "PPUCTimings.h"
 
@@ -26,6 +27,13 @@
 #ifndef PPUC_BOARD_TYPE
 #define PPUC_BOARD_TYPE 1  // kBoardTypeIo16_8_1
 #endif
+
+namespace ppuc {
+namespace board {
+// This image's own profile.
+constexpr Profile self() { return profileFor(PPUC_BOARD_TYPE); }
+}  // namespace board
+}  // namespace ppuc
 
 // Which build this image is, reported alongside the version.
 //

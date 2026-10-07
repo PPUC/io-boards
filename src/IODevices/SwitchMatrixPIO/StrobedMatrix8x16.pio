@@ -1,0 +1,41 @@
+; Scans the switch matrix of IO_16x8_matrix: eight strobes, sixteen returns.
+;
+; One state machine does both halves. It drives one strobe, waits for the
+; harness to settle, samples all sixteen returns and pushes them tagged with
+; the strobe pattern that produced them, so the reader never has to stay in
+; step with the scan - every word says which column it is.
+;
+; This is not a wider version of the 4-column programs next to it. Those drive
+; four consecutive GPIOs and pack a whole scan into one 32-bit word, which
+; IO_16_8_1 depends on and which 8 x 16 = 128 bits cannot do.
+;
+; Pin mapping, set by StrobedSwitchMatrix:
+;   OUT base  the lowest strobe GPIO, 9 pins wide. The board's eight strobes
+;             span nine GPIOs because the on-board LED sits between two of
+;             them. That GPIO is never handed to the PIO block, so its slot
+;             drives nothing and the reader discards its sample.
+;   IN base   the first return GPIO.
+;
+; A strobe GPIO is high while its column is selected: the output stage inverts,
+; so the line on the connector is low.
+;
+; Shift directions: OSR right, ISR left, no autopush, no autopull.
+; One slot is 42 cycles, 32 of them between driving the strobe and sampling.
+
+.program strobed_matrix_8x16_pio
+.wrap_target
+    set y, 1         ; one-hot strobe pattern, lowest GPIO first
+    set x, 8         ; nine slots: eight strobes and the gap between them
+slot:
+    mov osr, y
+    out pins, 9      ; drive exactly one strobe
+    nop [31]         ; let the harness settle before sampling
+    in pins, 16      ; the sixteen returns
+    in y, 9          ; tag the sample with the strobe that produced it
+    push noblock     ; a slow reader loses samples, it never stalls the scan
+    mov isr, y
+    in null, 1       ; pattern << 1
+    mov y, isr
+    mov isr, null    ; clear ISR and its shift counter for the next sample
+    jmp x-- slot
+.wrap

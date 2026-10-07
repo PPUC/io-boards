@@ -1,6 +1,7 @@
 #include "IOBoardController.h"
 
-#include "PPUCBoardTypes.h"
+#include "PPUC.h"
+#include "SafeOff.h"
 
 #include "EventDispatcher/CrossLinkDebugger.h"
 #include "pico/multicore.h"
@@ -17,12 +18,11 @@ uint8_t decodeBoardSelectorValue(int raw) {
   return static_cast<uint8_t>(16 - static_cast<int>((raw + 29.23) / 58.46));
 }
 
-SwitchMatrixProfile switchMatrixProfileForController(int controllerType) {
-  // Board-local geometry lives in PPUCBoardTypes.h so adding a board means
-  // editing one table rather than finding every switch statement.
-  (void)controllerType;
-  return ppuc::board::self().matrix;
-}
+// Board-local geometry lives in PPUCBoardTypes.h so adding a board means
+// editing one table rather than finding every switch statement.
+constexpr ppuc::board::Profile kProfile = ppuc::board::self();
+static_assert(kProfile.type != ppuc::v2::kBoardTypeUnknown,
+              "PPUC_BOARD_TYPE has no profile in PPUCBoardTypes.h");
 
 [[noreturn]] void performBoardReboot() {
   // Stop the second core first so the chip does not reboot with core 1 still
@@ -58,6 +58,8 @@ IOBoardController::IOBoardController(int cT) {
   _pwmDevices = nullptr;
   _switches = nullptr;
   _switchMatrix = nullptr;
+  _strobedSwitchMatrix = nullptr;
+  _lampMatrix = nullptr;
   _multiCoreCrossLink = nullptr;
   boardId = 255;
 }
@@ -101,13 +103,6 @@ void IOBoardController::begin() {
     return;
   }
 
-  // Build only the subsystems this board declares. The gate used to be
-  // `controllerType == CONTROLLER_16_8_1`, so any other type came up inert
-  // with nothing to say why.
-  constexpr ppuc::board::Profile kProfile = ppuc::board::self();
-  static_assert(kProfile.type != ppuc::v2::kBoardTypeUnknown,
-                "PPUC_BOARD_TYPE has no profile in PPUCBoardTypes.h");
-
   {
     initializeBoardIdentity();
 
@@ -117,11 +112,28 @@ void IOBoardController::begin() {
     _eventDispatcher->setCrossLinkSerial(Serial1);
     _multiCoreCrossLink = new MultiCoreCrossLink();
     _eventDispatcher->setMultiCoreCrossLink(_multiCoreCrossLink);
-    _pwmDevices = new PwmDevices(_eventDispatcher);
-    _switches = new Switches(boardId, _eventDispatcher);
-    _switchMatrix = new SwitchMatrix(
-        boardId, _eventDispatcher,
-        switchMatrixProfileForController(controllerType));
+
+    // Build only the subsystems this board declares. Everything used to be
+    // built on every board, so an Out_8x10 carried a coil stage and a switch
+    // reader for pins that are lamp drivers there. A subsystem that does not
+    // exist cannot be configured onto the wrong pin.
+    if (kProfile.has(ppuc::board::kCapPwmOutputs)) {
+      _pwmDevices = new PwmDevices(_eventDispatcher);
+    }
+    if (kProfile.has(ppuc::board::kCapDedicatedSwitches)) {
+      _switches = new Switches(boardId, _eventDispatcher);
+    }
+    if (kProfile.has(ppuc::board::kCapSwitchMatrix)) {
+      _switchMatrix =
+          new SwitchMatrix(boardId, _eventDispatcher, kProfile.matrix);
+    }
+    if (kProfile.has(ppuc::board::kCapStrobedSwitchMatrix)) {
+      _strobedSwitchMatrix = new StrobedSwitchMatrix(
+          boardId, _eventDispatcher, kProfile.strobedMatrix);
+    }
+    if (kProfile.has(ppuc::board::kCapLampMatrix)) {
+      _lampMatrix = new LampMatrix(_eventDispatcher, kProfile);
+    }
     // Adjust PWM properties if needed.
     analogWriteFreq(500);
     analogWriteResolution(8);
@@ -153,6 +165,10 @@ void IOBoardController::update() {
     }
   }
 
+  if (_lampMatrix) {
+    _lampMatrix->setRunning(running && activeLampMatrix);
+  }
+
   if (resetTimer > 0 && resetTimer < millis()) {
     if (!m_debug) {
       performBoardReboot();
@@ -171,6 +187,8 @@ void IOBoardController::clearConfiguredState() {
   activePwmDevices = false;
   activeSwitches = false;
   activeSwitchMatrix = false;
+  activeLampMatrix = false;
+  pwmPinsInUse = 0;
   port = 0;
   number = 0;
   power = 0;
@@ -195,6 +213,152 @@ void IOBoardController::clearConfiguredState() {
   }
   if (_switchMatrix) {
     _switchMatrix->resetConfig();
+  }
+  if (_strobedSwitchMatrix) {
+    _strobedSwitchMatrix->resetConfig();
+  }
+  if (_lampMatrix) {
+    _lampMatrix->resetConfig();
+  }
+}
+
+// The host asked for something this board cannot do: a device on a pin it
+// does not have, or a subsystem it does not carry.
+//
+// The request is dropped and EVENT_ERROR fast-blinks the on-board LED. The
+// host validates the same things against the same table before it sends
+// anything, so getting here means the board on this address is not the type
+// the configuration was written for.
+void IOBoardController::reportConfigError() {
+  _eventDispatcher->dispatch(new Event(EVENT_ERROR));
+}
+
+void IOBoardController::handleSwitchMatrixConfig(ConfigEvent *event) {
+  if (_strobedSwitchMatrix) {
+    switch (event->key) {
+      case CONFIG_TOPIC_ACTIVE_LOW:
+        if (event->value) {
+          _strobedSwitchMatrix->setActiveLow();
+        }
+        break;
+      case CONFIG_TOPIC_NUM_ROWS:
+        rows = (uint8_t)event->value;
+        if (!_strobedSwitchMatrix->setNumRows(rows)) {
+          reportConfigError();
+        }
+        break;
+      case CONFIG_TOPIC_PORT:
+        port = event->value;
+        break;
+      case CONFIG_TOPIC_NUMBER:
+        if (_strobedSwitchMatrix->registerSwitch((byte)port, event->value)) {
+          activeSwitchMatrix = true;
+          // All sixteen inputs are returns from here on, whatever the row
+          // count says: the scan samples every one of them.
+          if (_switches) {
+            _switches->setNumSwitches(0);
+          }
+        } else {
+          reportConfigError();
+        }
+        break;
+    }
+    return;
+  }
+
+  if (!_switchMatrix) {
+    reportConfigError();
+    return;
+  }
+
+  switch (event->key) {
+    case CONFIG_TOPIC_ACTIVE_LOW:
+      if (event->value) {
+        _switchMatrix->setActiveLow();
+      }
+      break;
+    case CONFIG_TOPIC_NUM_ROWS:
+      rows = (uint8_t)event->value;
+      if (_switchMatrix->setNumRows(rows)) {
+        const uint8_t matrixPinsUsed = _switchMatrix->matrixPinsUsed();
+        _switches->setNumSwitches(
+            matrixPinsUsed < MAX_SWITCHES ? MAX_SWITCHES - matrixPinsUsed : 0);
+      }
+      break;
+    case CONFIG_TOPIC_PORT:
+      port = event->value;
+      break;
+    case CONFIG_TOPIC_NUMBER:
+      _switchMatrix->registerSwitch((byte)port, event->value);
+      activeSwitchMatrix = true;
+      break;
+  }
+}
+
+// Registers the output the last CONFIG_TOPIC_PWM block described.
+void IOBoardController::registerPwmOutput(byte pwmType) {
+  if (_lampMatrix) {
+    // This board's outputs are lamp drivers with no PWM behind them. A lamp
+    // wired to a single output is welcome; a coil is not.
+    if (pwmType == PWM_TYPE_LAMP &&
+        _lampMatrix->registerDirect((byte)port, number)) {
+      activeLampMatrix = true;
+    } else {
+      reportConfigError();
+    }
+    return;
+  }
+
+  if (!_pwmDevices || !kProfile.allowsPwm(port)) {
+    reportConfigError();
+    return;
+  }
+  if (_strobedSwitchMatrix && _strobedSwitchMatrix->isActive() &&
+      kProfile.isStrobePin(port)) {
+    // The matrix scan owns this pin.
+    reportConfigError();
+    return;
+  }
+  for (uint8_t pin = 0; pin < 32; pin++) {
+    if ((pwmPinsInUse & (1u << pin)) != 0 &&
+        ppuc::board::sharesPwmChannel(pin, port)) {
+      // Whatever is written to one of these two pins comes out of both.
+      reportConfigError();
+      return;
+    }
+  }
+  pwmPinsInUse |= ppuc::board::pinBit(port);
+
+  switch (pwmType) {
+    case PWM_TYPE_SOLENOID:  // Coil
+      _pwmDevices->registerSolenoid((byte)port, number, power, minPulseTime,
+                                    maxPulseTime, holdPower,
+                                    holdPowerActivationTime, fastSwitch,
+                                    stopSwitch1, stopSwitch2);
+      activePwmDevices = true;
+      break;
+    case PWM_TYPE_FLASHER:  // Flasher
+      _pwmDevices->registerFlasher((byte)port, number, power);
+      activePwmDevices = true;
+      break;
+    case PWM_TYPE_LAMP:  // Lamp
+      _pwmDevices->registerLamp((byte)port, number, power);
+      activePwmDevices = true;
+      break;
+    case PWM_TYPE_MOTOR:  // Motor
+      // Driven exactly like a coil - it is a PWM output with a power
+      // and a pulse time - but registered under its own type so its
+      // end-of-travel switches can stop it.
+      _pwmDevices->registerSolenoid((byte)port, number, power, minPulseTime,
+                                    maxPulseTime, holdPower,
+                                    holdPowerActivationTime, fastSwitch,
+                                    stopSwitch1, stopSwitch2, PWM_TYPE_MOTOR);
+      activePwmDevices = true;
+      break;
+    case PWM_TYPE_SHAKER:  // Shaker
+      // Shaker is handled by the EffectController. Its pin is recorded
+      // above so nothing else lands on the same PWM channel.
+      break;
   }
 }
 
@@ -230,27 +394,29 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
   if (event->boardId == boardId) {
     switch (event->topic) {
       case CONFIG_TOPIC_SWITCH_MATRIX:
+        handleSwitchMatrixConfig(event);
+        break;
+
+      case CONFIG_TOPIC_LAMP_MATRIX:
+        if (!_lampMatrix) {
+          reportConfigError();
+          break;
+        }
         switch (event->key) {
-          case CONFIG_TOPIC_ACTIVE_LOW:
-            if (event->value) {
-              _switchMatrix->setActiveLow();
-            }
-            break;
           case CONFIG_TOPIC_NUM_ROWS:
-            rows = (uint8_t)event->value;
-            if (_switchMatrix->setNumRows(rows)) {
-              const uint8_t matrixPinsUsed = _switchMatrix->matrixPinsUsed();
-              _switches->setNumSwitches(matrixPinsUsed < MAX_SWITCHES
-                                            ? MAX_SWITCHES - matrixPinsUsed
-                                            : 0);
+            if (!_lampMatrix->setNumRows((uint8_t)event->value)) {
+              reportConfigError();
             }
             break;
           case CONFIG_TOPIC_PORT:
             port = event->value;
             break;
           case CONFIG_TOPIC_NUMBER:
-            _switchMatrix->registerSwitch((byte)port, event->value);
-            activeSwitchMatrix = true;
+            if (_lampMatrix->registerLamp((byte)port, event->value)) {
+              activeLampMatrix = true;
+            } else {
+              reportConfigError();
+            }
             break;
         }
         break;
@@ -272,11 +438,17 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
             number = event->value;
             break;
           case CONFIG_TOPIC_DEBOUNCE_TIME:
-            _switches->registerSwitch((byte)port, number, event->value);
-            activeSwitches = true;
+            if (_switches && kProfile.allowsSwitch(port)) {
+              _switches->registerSwitch((byte)port, number, event->value);
+              activeSwitches = true;
+            } else {
+              reportConfigError();
+            }
             break;
           case CONFIG_TOPIC_MODE:
-            _switches->setDebounceMode(number, event->value);
+            if (_switches) {
+              _switches->setDebounceMode(number, event->value);
+            }
             break;
         }
         break;
@@ -315,50 +487,27 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
             break;
           case CONFIG_TOPIC_FAST_SWITCH:
             fastSwitch = event->value;
-            _switches->markLocalFastSwitch(fastSwitch);
+            if (_switches) {
+              _switches->markLocalFastSwitch(fastSwitch);
+            }
             break;
           case CONFIG_TOPIC_STOP_SWITCH:
             stopSwitch1 = event->value;
             // Marked local so it reaches the outputs the moment it closes,
             // rather than on the next queue drain. A switch that stops a motor
             // is worth nothing if it arrives late.
-            _switches->markLocalFastSwitch(stopSwitch1);
+            if (_switches) {
+              _switches->markLocalFastSwitch(stopSwitch1);
+            }
             break;
           case CONFIG_TOPIC_STOP_SWITCH_2:
             stopSwitch2 = event->value;
-            _switches->markLocalFastSwitch(stopSwitch2);
+            if (_switches) {
+              _switches->markLocalFastSwitch(stopSwitch2);
+            }
             break;
           case CONFIG_TOPIC_TYPE:
-            switch (event->value) {
-              case PWM_TYPE_SOLENOID:  // Coil
-                _pwmDevices->registerSolenoid(
-                    (byte)port, number, power, minPulseTime, maxPulseTime,
-                    holdPower, holdPowerActivationTime, fastSwitch, stopSwitch1,
-                    stopSwitch2);
-                activePwmDevices = true;
-                break;
-              case PWM_TYPE_FLASHER:  // Flasher
-                _pwmDevices->registerFlasher((byte)port, number, power);
-                activePwmDevices = true;
-                break;
-              case PWM_TYPE_LAMP:  // Lamp
-                _pwmDevices->registerLamp((byte)port, number, power);
-                activePwmDevices = true;
-                break;
-              case PWM_TYPE_MOTOR:  // Motor
-                // Driven exactly like a coil - it is a PWM output with a power
-                // and a pulse time - but registered under its own type so its
-                // end-of-travel switches can stop it.
-                _pwmDevices->registerSolenoid(
-                    (byte)port, number, power, minPulseTime, maxPulseTime,
-                    holdPower, holdPowerActivationTime, fastSwitch, stopSwitch1,
-                    stopSwitch2, PWM_TYPE_MOTOR);
-                activePwmDevices = true;
-                break;
-              case PWM_TYPE_SHAKER:  // Shaker
-                // Shaker is handled by the EffectController.
-                break;
-            }
+            registerPwmOutput((byte)event->value);
             break;
         }
         break;

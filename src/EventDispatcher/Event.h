@@ -49,6 +49,11 @@
 #define CONFIG_TOPIC_LED_SEGMENT 104              // "h"
 #define CONFIG_TOPIC_LED_EFFECT 105               // "i"
 #define CONFIG_TOPIC_PWM_EFFECT 106               // "j"
+// A strobed lamp matrix of high-side columns by low-side rows. Configured like
+// the switch matrix: CONFIG_TOPIC_NUM_ROWS first, then a CONFIG_TOPIC_PORT /
+// CONFIG_TOPIC_NUMBER pair per lamp, where the port is the zero-based position
+// column * rows + row.
+#define CONFIG_TOPIC_LAMP_MATRIX 107              // "k"
 #define CONFIG_TOPIC_LAMPS 108                    // "l"
 #define CONFIG_TOPIC_MECHS 109                    // "m"
 #define CONFIG_TOPIC_PWM 112                      // "p"

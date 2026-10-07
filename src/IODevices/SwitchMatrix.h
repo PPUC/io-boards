@@ -8,6 +8,7 @@
 
 #include "../EventDispatcher/Event.h"
 #include "../EventDispatcher/EventDispatcher.h"
+#include "../PPUCBoardTypes.h"
 #include "PioAllocation.h"
 #include "hardware/gpio.h"
 #include "hardware/irq.h"
@@ -19,12 +20,8 @@
 #define MATRIX_SWITCH_DEBOUNCE 2
 #define MATRIX_SWITCH_EVENT_QUEUE_SIZE 32
 
-struct SwitchMatrixProfile {
-  uint8_t columns;
-  uint8_t maxRows;
-  uint8_t columnsBasePin;
-  uint16_t supportedRowsMask;
-};
+// SwitchMatrixProfile lives in PPUCBoardTypes.h, with the rest of what is
+// board-specific.
 
 struct PendingMatrixSwitchEvent {
   uint8_t number;

@@ -10,6 +10,7 @@
 #include "hardware/watchdog.h"
 #include "PPUC.h"
 #include "PPUCProtocolV2.h"
+#include "SafeOff.h"
 #include "hardware/gpio.h"
 #include "hardware/uart.h"
 #include "pico/time.h"
@@ -25,6 +26,8 @@ EffectsController effectsController(CONTROLLER_16_8_1, PLATFORM_LIBPINMAME);
 // since 2022. Its RPI_PICO_Timer(1) pinned hardware alarm 1; the default alarm
 // pool picks one instead, which nothing here depends on.
 static struct repeating_timer watchdogTimer;
+
+volatile bool g_outputsForcedOff = false;
 
 volatile uint32_t watchdog_ms = millis();
 volatile uint32_t lastPoll_ms = millis();
@@ -59,13 +62,36 @@ bool ready_led_state = true;
 // before a reset is considered.
 constexpr uint32_t WATCHDOG_REBOOT_MS = 5000;
 
-// Turn off all High Power Outputs in case the main loop has not finished in 1
-// second (or 2 seconds in edge cases), and reboot if it has stopped entirely.
+// Takes one output away from whatever is driving it - PWM slice or PIO block -
+// and holds it low.
+static void forceOutputLow(uint8_t pin) {
+  gpio_put(pin, 0);
+  gpio_set_dir(pin, GPIO_OUT);
+  gpio_set_function(pin, GPIO_FUNC_SIO);
+}
+
+// Turn off every output that can put current through a load in case the main
+// loop has not finished in 1 second (or 2 seconds in edge cases), and reboot
+// if it has stopped entirely.
+//
+// Which outputs those are is the board's business, so the list comes from its
+// profile. This used to be a loop over GPIO 19 to 26, which is IO_16_8_1's
+// outputs less the last one: GPIO 25 is the on-board LED and the eighth output
+// is on GPIO 27, so that coil was never switched off. On an Out_8x10 the same
+// loop would have left all ten low-side switches alone.
 bool watchdog(struct repeating_timer *t) {
   uint32_t ms = millis();
   const uint32_t sinceLoop = ms - watchdog_ms;
+  constexpr uint32_t kSafeOffPins = ppuc::board::self().safeOffPins;
   if (sinceLoop > 1000 || (ms - lastPoll_ms) > 3000) {
-    for (int i = 19; i <= 26; i++) digitalWrite(i, LOW);
+    g_outputsForcedOff = true;
+    for (uint8_t pin = 0; pin < 32; pin++) {
+      if ((kSafeOffPins >> pin) & 1u) {
+        forceOutputLow(pin);
+      }
+    }
+  } else {
+    g_outputsForcedOff = false;
   }
 
   if (sinceLoop > WATCHDOG_REBOOT_MS) {

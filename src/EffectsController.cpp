@@ -305,7 +305,11 @@ void EffectsController::handleEvent(ConfigEvent *event) {
             break;
           case CONFIG_TOPIC_LIGHT_UP:
             config_values[4] = event->value;
-            if (!ws2812FXDevices[0]) {
+            // Only on the special output. Any other pin is a switch input or
+            // a driver on some board, and a WS2812 bit stream on it would be
+            // read as switch noise or fed straight into a coil.
+            if (!ws2812FXDevices[0] &&
+                ppuc::board::self().allowsLedString(config_values[0])) {
               ws2812FXDevices[0] = new CombinedGiAndLightMatrixWS2812FXDevice(
                   new WS2812FX(config_values[1], config_values[0],
                                config_neoPixelType),
@@ -553,6 +557,10 @@ void EffectsController::handleEvent(ConfigEvent *event) {
           case CONFIG_TOPIC_TYPE:
             switch (event->value) {
               case PWM_TYPE_SHAKER:  // Shaker
+                if (!ppuc::board::self().allowsPwm(config_values[0])) {
+                  // Not an output on this board. IOBoardController reports it.
+                  break;
+                }
                 if (_shakerPWMDevice) {
                   delete _shakerPWMDevice;
                 }

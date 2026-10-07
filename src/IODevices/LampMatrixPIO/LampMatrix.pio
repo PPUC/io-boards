@@ -1,0 +1,33 @@
+; Strobes the lamp matrix of Out_8x10.
+;
+; Each word from the TX FIFO is the pin pattern for one column slot: the
+; column's high-side switch plus the low-side switches of its lit rows. The
+; state machine holds it for a fixed time, turns everything off, and takes the
+; next word.
+;
+; The timing is the reason this is a PIO program. A column that stays on
+; longer than its neighbours is visibly brighter, and the CPU on the other end
+; is busy with RS485 frames.
+;
+; An empty FIFO yields zero, so the outputs go dark by themselves when nothing
+; feeds the state machine - a stalled CPU cannot leave a column lit.
+;
+; Pin mapping, set by LampMatrix:
+;   OUT base  the lowest lamp GPIO, 22 pins wide. Only the GPIOs that are
+;             lamp outputs are handed to the PIO block; the others in the
+;             range are unaffected.
+;
+; Shift direction: OSR right, no autopull.
+; One slot is 133 cycles: 126 on, 7 off.
+
+.program lamp_matrix_pio
+.wrap_target
+    mov x, null      ; what an empty FIFO yields: every output off
+    pull noblock     ; the next column, or X when nothing is feeding
+    out pins, 22     ; column on
+    set y, 30
+hold:
+    jmp y-- hold [3]
+    mov pins, null   ; everything off before the next column, against ghosting
+    nop [3]
+.wrap
