@@ -1,46 +1,74 @@
-# PPUC - Pinball Power-Up Controller
+# PPUC I/O boards — RP2040 firmware
 
-The Pinball Power-Up Controller family is designed to enhance the capabilities of classic pinball machines of the 80s
-and 90s and to drive the hardware of home brew pinball machines.
+The firmware for the PPUC I/O boards. One RP2040 image per board type, built
+with PlatformIO.
 
-In existing machines, the controller is able to monitor all playfield switches, lights, and solenoids and to trigger and
-distribute corresponding *events* to attached sub-systems.
-In combination with PIN2DMD and TiltAudio it is possible to monitor DMD and sound commands, too.
+A board reads the switches it is wired to, drives the coils, lamps and LEDs it
+is wired to, and answers a host over an RS485 bus. It is deliberately not where
+a game lives: the host decides *what* should happen, and a board decides *how
+long copper is energised*. That split is the point of the firmware, and it is
+why a hung or disconnected host cannot cook a coil — the host's output bit is a
+request, and the board owns the pulse envelope and the watchdog that ends it.
 
-One sub-system is the built-in EffectController which is able to drive additional LEDs, motors, and coils.
-Other sub-systems could be video players or audio systems. The additional effects are bundled per pinball machine in
-so-called *Pinball Power-Ups* (PPUs).
+Flippers, slingshots and pop bumpers are the exception that proves the rule.
+They run board-locally from `fastFlipSwitch`, because a flipper that waited for
+a round trip would not feel like a flipper.
 
-For homebrew and electro-mechanical machines the host software can act as the "CPU" itself, running the game logic aka rules and
-communicating with the controllers. (WIP)
+**This repository owns the wire protocol.** `src/PPUCProtocolV2.h` and
+`src/PPUCBoardTypes.h` are the authority for frame layout, board type values
+and each board's GPIO map, and both are shared verbatim with the host: libppuc
+compiles against them and uses the same tables to refuse a configuration that
+puts a device on a pin the board does not have. A change here reaches a host
+build only when `IO_BOARDS_SHA` is bumped in libppuc, so protocol changes have
+to be made as if someone else's build depends on them, because it does.
 
-A special variation of that "CPU" will be suitable as replacement for a broken CPU of an existing machine.
-The development happens as part of the [PinMAME project](https://github.com/mkalkbrenner/pinmame/tree/master/src/ppuc).
+For what PPUC is as a project — the config tool, the host, game rules, the
+reasons any of this exists — see [ppuc.org](https://ppuc.org) and
+[PPUC/docs](https://github.com/PPUC/docs). This README is about the firmware.
 
-## Motivation
+## Board types
 
-We want to enable people to be creative and to modernize old pinball machines using today's technology. Our goal is to
-establish an open and affordable platform for that. Ideally people will publish their game-specific PPUs so others could
-leverage and potentially improve them. We want to see a growing library of PPUs and a vital homebrew pinball community.
+Four board types exist. The type is on the wire: a board reports it, and the
+host refuses to flash an image built for a different one, because the same GPIO
+is an input on one board and a coil output on another — a mismatch does not
+merely misbehave, it drives an output into an input.
 
-## Concept
+The environment name, the type name and the CI artefact name are all the same
+string, which is how an image on disk is paired with the board that asked for
+it.
 
-### Enhancing / Modding an existing machine
+| Board | Type | What it is | Hardware |
+|---|---|---|---|
+| `IO_16_8_1` | `0x01` | 16 inputs that double as low-power outputs, 8 high-power outputs, a 4-column switch matrix scanned on the inputs | [Hardware_IO_16_8_1](https://github.com/PPUC/Hardware_IO_16_8_1) |
+| `IO_16x8_matrix` | `0x02` | 16 inputs and 8 strobe outputs, for the switch matrix of an original playfield harness | [Hardware_IO_16x8_matrix](https://github.com/PPUC/Hardware_IO_16x8_matrix) |
+| `Out_8x10` | `0x03` | A lamp matrix: 8 high-side columns by 10 low-side rows | [Hardware_Out_8x10](https://github.com/PPUC/Hardware_Out_8x10) |
+| `Opto_16` | `0x04` | 16 opto inputs and nothing else | [Hardware_Opto_16](https://github.com/PPUC/Hardware_Opto_16) |
 
-The Pinball Power-Up Controllers consist of multiple micro controllers to perform several tasks in parallel. The entire
-system is modular, so you can choose what you really need. The basic setup consists of a controller to capture a
-pinball's events and another independent one to run effects.
+Every board carries the special output, a WS2812 data line on GPIO 29, whatever
+else it has or has not got. That matters when placing boards: an addressable
+string does not need a board with drivers on it.
 
-We will provide several integrated boards and vendor specific adaptor boards (currently in development: Williams WPC,
-Data East, Stern SAM and Whitestar).
+**Only `IO_16_8_1` has been validated on real hardware.** The firmware says so
+itself, in `BoardTypeValidatedOnHardware()`, and the host reads it to decide
+whether a board may be flashed unattended. For the other three the pin maps are
+transcribed from the KiCad schematics but unverified, and the output stages for
+`IO_16x8_matrix` and `Out_8x10` are not implemented yet. Treat them as declared,
+not delivered.
 
-These controllers integrate modified versions of other projects with the permission of their authors:
-* https://github.com/sker65/pinball-lw3
-* https://github.com/bitfieldlabs/afterglow
-* https://github.com/bitfieldlabs/aggi
+A few board-local details are worth knowing before reading the code, because
+they are not symmetric and look like mistakes if you assume they are:
 
-The Effect Controller should be able to drive hundreds (or thousands?) of LEDs, PWM devices, ... in parallel in a
-non-blocking way.
+* `IO_16x8_matrix`'s outputs run the opposite way to `IO_16_8_1`'s — `Out_1` is
+  GPIO 27 descending to `Out_8` on GPIO 19 — and each is an NPN stage with a
+  pull-up, so a strobe is active-low on the connector and active-high on the pin.
+* `Out_8x10` has no PWM at all, on purpose: `Lo_5`..`Lo_10` share RP2040 PWM
+  channels with `Hi_1`..`Hi_6`, so dimming one would drive the other. Its
+  outputs go through the lamp matrix stage instead.
+* `Opto_16`'s 16 transmitter LEDs are wired to the supply rather than to the
+  RP2040, so there is nothing for the firmware to drive.
+
+Adding a board should mean editing `src/PPUCBoardTypes.h` and adding a
+PlatformIO environment, and nothing else in the firmware.
 
 ## Effect Stack
 
@@ -105,7 +133,7 @@ pattern's own.
 So there is no boot pattern. From power-up the LED shows the ready pattern, and
 a board that is lit and not blinking is not booting - it is stuck.
 
-### Homebrew machines
+## Homebrew and EM machines
 
 An electro-mechanical or homebrew machine needs no ROM and no CPU board. The
 boards are exactly the same as in a retrofit install — there is no separate
@@ -130,9 +158,9 @@ The host asserts it from a board declared `virtual: true` in the game YAML.
 See `ppuc/docs/EM_GAMES.md` for the configuration reference and
 `ppuc_games/emdemo` for a complete reference machine.
 
-### Replacing a CPU (and drivers)
+## Replacing a CPU and its drivers
 
-WIP, see [PPUC.org](https://ppuc.org).
+WIP. See [ppuc.org](https://ppuc.org).
 
 ## V2 Switch Refresh
 
@@ -231,26 +259,52 @@ firing when another switch is hit.
 
 ## Licence
 
-The code is licenced under GPLv3. Be aware of the fact that your own *Pinball Power-Ups* (PPUs) need to be licenced
-under a compatible licence.
-That doesn't prevent any commercial use, but you need to respect the terms and conditions of GPLv3!
+GPLv3, which does not prevent commercial use but does carry its terms with it.
 
-We would appreciate contributions to PPUC itself or as game-specific PPUs.
+`src/PPUCProtocolV2.h` and `src/PPUCBoardTypes.h` are compiled into host
+software under the same licence; libppuc is GPLv3 too.
+
+The firmware integrates modified versions of other projects with the permission
+of their authors:
+
+* [sker65/pinball-lw3](https://github.com/sker65/pinball-lw3)
+* [bitfieldlabs/afterglow](https://github.com/bitfieldlabs/afterglow)
+* [bitfieldlabs/aggi](https://github.com/bitfieldlabs/aggi)
+
+Contributions are welcome.
 
 ## Setup Development Environment
 
-todo
+Install [PlatformIO](https://platformio.org/) — the CLI alone is enough. Everything
+else is pinned in `platformio.ini` and fetched on the first build: the RP2040
+platform, the Arduino core, and the four libraries this firmware uses.
+
+Nothing has to be installed per board type. One checkout builds all four.
 
 ## Compile & Upload
 
-Example:
+One environment per board type, named exactly as the board type is named:
+
 ```
-cd ppu/STTNG/InputController
-pio run
-pio run --target upload
-cd ../EffectController
-pio run
-pio run --target upload
+pio run -e IO_16_8_1
+pio run -e IO_16_8_1 --target upload
+```
+
+The other environments are `IO_16x8_matrix`, `Out_8x10` and `Opto_16`.
+`IO_16_8_1` is the default, so `pio run` on its own builds that one.
+
+Upload goes over USB, so it needs the board in reach. A board already running
+PPUC firmware can instead be updated over the RS485 bus by the host, which is
+how boards under a playfield are updated without unplugging anything — see
+`AllowFirmwareUpdate` in the host's `ppuc.ini`.
+
+## Tests
+
+The device logic is also built for the host, against the shims in `test/stubs/`,
+so it runs on a laptop and in CI without an RP2040:
+
+```
+pio test -e native
 ```
 
 ## Troubleshooting
