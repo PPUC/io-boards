@@ -126,6 +126,14 @@ struct Profile {
   StrobedMatrixProfile strobedMatrix = {0, 0, 0, {0}, 0, 0};
   LampMatrixProfile lampMatrix = {0, 0, {0}, {0}};
 
+  // A dedicated input reads high while its switch is closed. On most boards a
+  // closed switch pulls the input low.
+  bool inputsActiveHigh = false;
+  // The 16-input switch reader drives GPIO 15-18 low, high and low again
+  // before every read, as IO_16_8_1 needs. A board whose inputs are driven
+  // by something else must not get that: the reader would fight it.
+  bool resetsStatefulInputs = false;
+
   constexpr bool has(Capability cap) const { return (capabilities & cap) != 0; }
 
   constexpr bool allowsSwitch(uint8_t pin) const {
@@ -183,12 +191,19 @@ constexpr Profile kIo16_8_1 = {
     /*matrix*/ {4, 8, 15, (1u << 4) | (1u << 8)},
     /*strobedMatrix*/ {0, 0, 0, {0}, 0, 0},
     /*lampMatrix*/ {0, 0, {0}, {0}},
+    /*inputsActiveHigh*/ false,
+    /*resetsStatefulInputs*/ true,
 };
 
 // Opto_16: 16 opto inputs plus the special output, nothing else.
-// Its inputs are on the same GPIOs as IO_16_8_1's, which is why the existing
-// switch reader covers it unchanged. The 16 transmitter LED drivers are wired
-// to the supply, not to the RP2040, so there is nothing to drive.
+// Its inputs are on the same GPIOs as IO_16_8_1's, but they are not the same
+// kind of input. Each one is an LM339 comparator output with a 10 k pull-up to
+// 3.3 V, and it is high while the beam is broken - which is when the switch
+// counts as closed. So the inputs are active-high, and GPIO 15-18 must not be
+// driven: they are comparator outputs here, not stateful inputs.
+//
+// The 16 transmitter LEDs are fed from 5 V through 180 R each, not from the
+// RP2040, so there is nothing to drive.
 //
 // The special output is the WS2812 connector every board carries, so an
 // Opto_16 can drive an LED string even though it has no PWM output stage. That
@@ -205,6 +220,8 @@ constexpr Profile kOpto16 = {
     /*matrix*/ {0, 0, 0, 0},
     /*strobedMatrix*/ {0, 0, 0, {0}, 0, 0},
     /*lampMatrix*/ {0, 0, {0}, {0}},
+    /*inputsActiveHigh*/ true,
+    /*resetsStatefulInputs*/ false,
 };
 
 // IO_16x8_matrix: 16 inputs and 8 signal outputs, for the switch matrix of an
@@ -232,6 +249,11 @@ constexpr Profile kIo16x8Matrix = {
     /*strobedMatrix*/
     {8, 19, 9, {27, 26, 24, 23, 22, 21, 20, 19}, 3, 16},
     /*lampMatrix*/ {0, 0, {0}, {0}},
+    /*inputsActiveHigh*/ false,
+    // Inherited from IO_16_8_1 when this board was added, and kept so its
+    // behaviour does not change unasked. Whether its inputs need it has not
+    // been checked against the schematic.
+    /*resetsStatefulInputs*/ true,
 };
 
 // Out_8x10: 8 high-side by 10 low-side switches, for the lamp matrix of an
@@ -260,6 +282,8 @@ constexpr Profile kOut8x10 = {
      10,
      {24, 23, 22, 21, 20, 19, 18, 17},
      {12, 11, 10, 9, 8, 7, 6, 5, 4, 3}},
+    /*inputsActiveHigh*/ false,
+    /*resetsStatefulInputs*/ false,
 };
 
 // The profile for a board type. Unknown types get an empty profile that allows

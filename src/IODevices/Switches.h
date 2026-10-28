@@ -30,9 +30,14 @@ struct PendingSwitchEvent {
 
 class Switches : public EventListener {
  public:
-  Switches(byte bId, EventDispatcher* eD) {
+  // inputsActiveHigh and resetsStatefulInputs come from the board profile,
+  // see PPUCBoardTypes.h.
+  Switches(byte bId, EventDispatcher* eD, bool inputsActiveHigh,
+           bool resetsStatefulInputs) {
     boardId = bId;
     _eventDispatcher = eD;
+    activeHigh = inputsActiveHigh;
+    resetStatefulInputs = resetsStatefulInputs;
     _eventDispatcher->addListener(this, EVENT_POLL_EVENTS);
     _eventDispatcher->addListener(this, EVENT_READ_SWITCHES);
     _eventDispatcher->addListener(this, EVENT_REFRESH_SWITCHES);
@@ -72,7 +77,8 @@ class Switches : public EventListener {
 
     // Get 32 bit from FIFO
     uint32_t raw = pio_sm_get(instance->pio, instance->sm);
-    instance->handleSwitchChanges((~raw) & instance->validSwitchMask);
+    instance->handleSwitchChanges(instance->closedFromRaw(raw) &
+                                  instance->validSwitchMask);
   }
 
  private:
@@ -86,6 +92,11 @@ class Switches : public EventListener {
   void enqueuePendingSwitchEvent(uint8_t switchNumber, uint8_t state);
   void flushPendingDebounce(uint32_t nowUs);
   uint32_t debounceWindowUs(uint8_t index) const;
+  // Pin levels to closed-switch bits, and back.
+  uint32_t closedFromRaw(uint32_t raw) const { return activeHigh ? raw : ~raw; }
+  uint32_t rawFromClosed(uint32_t closed) const {
+    return activeHigh ? closed : ~closed;
+  }
   int findRegisteredSwitch(byte p, byte n) const {
     for (int i = 0; i <= last; i++) {
       if (port[i] == p || number[i] == n) {
@@ -96,6 +107,8 @@ class Switches : public EventListener {
   }
 
   byte boardId;
+  bool activeHigh = false;
+  bool resetStatefulInputs = true;
 
   bool running = false;
   bool active = false;

@@ -107,6 +107,20 @@ void opto_16_has_inputs_and_an_led_string_only(void) {
   TEST_ASSERT_EQUAL_HEX32(0, p.safeOffPins);
 }
 
+// Opto_16's inputs are LM339 outputs, high while the beam is broken. Read as
+// active-low they report every opto backwards, and the IO_16_8_1 reader would
+// drive GPIO 15-18 against the comparators.
+void opto_16_inputs_are_active_high_comparator_outputs(void) {
+  TEST_ASSERT_TRUE(kOpto16.inputsActiveHigh);
+  TEST_ASSERT_FALSE(kOpto16.resetsStatefulInputs);
+}
+
+// The switch reader on IO_16_8_1 is validated in machines. Keep it as it is.
+void io_16_8_1_inputs_are_active_low_and_reset(void) {
+  TEST_ASSERT_FALSE(kIo16_8_1.inputsActiveHigh);
+  TEST_ASSERT_TRUE(kIo16_8_1.resetsStatefulInputs);
+}
+
 // Out_1 is GPIO 27 descending to Out_8 on GPIO 19, skipping the LED on 25. The
 // opposite order to IO_16_8_1.
 void io_16x8_matrix_strobes_run_downwards_around_the_led(void) {
@@ -199,6 +213,8 @@ int main(int, char**) {
   RUN_TEST(io_16_8_1_has_sixteen_inputs_and_eight_outputs);
   RUN_TEST(the_watchdog_covers_all_eight_high_power_outputs);
   RUN_TEST(opto_16_has_inputs_and_an_led_string_only);
+  RUN_TEST(opto_16_inputs_are_active_high_comparator_outputs);
+  RUN_TEST(io_16_8_1_inputs_are_active_low_and_reset);
   RUN_TEST(io_16x8_matrix_strobes_run_downwards_around_the_led);
   RUN_TEST(out_8x10_is_lamp_drivers_only);
   RUN_TEST(gpios_sixteen_apart_share_a_pwm_channel);

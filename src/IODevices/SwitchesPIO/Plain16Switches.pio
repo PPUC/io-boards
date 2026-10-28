@@ -1,0 +1,32 @@
+; 16 switches read without touching the pins, for boards whose inputs are
+; driven by something else (Opto_16's comparators). Same as
+; active_low_8_switches_pio otherwise. Like the other switch programs it only
+; reports raw levels; polarity is the CPU's business.
+.program plain_16_switches_pio
+    set x, 0         ; X = 0x0
+    mov osr, ~x
+
+loop:
+    mov isr, null    ; ISR is 0x0
+    in pins, 16      ; read 16 switches to ISR
+    mov y, isr       ; copy ISR to Y for comparison
+    jmp x!=y changed ; jump to "changed" if X (old state) != Y (new state)
+
+    ; two consecutive identical reads required for first level of debouncing
+    mov y, osr       ; copy OSR to Y for comparison
+    jmp x!=y new_stable_state
+
+    jmp loop
+
+changed:
+    mov x, y         ; update X to the new state
+
+    jmp loop
+
+new_stable_state:
+    push             ; push ISR to RX FIFO
+    irq 1            ; trigger interrupt 1 to notify the main CPU that switches changed
+    pull             ; pull debounced state from TX FIFO to OSR
+    mov x, osr       ; update X to the new state from OSR
+
+    jmp loop

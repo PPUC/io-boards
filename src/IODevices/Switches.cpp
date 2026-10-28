@@ -3,6 +3,7 @@
 #include "SwitchesPIO/ActiveLow16Switches.pio.h"
 #include "SwitchesPIO/ActiveLow4Switches.pio.h"
 #include "SwitchesPIO/ActiveLow8Switches.pio.h"
+#include "SwitchesPIO/Plain16Switches.pio.h"
 
 Switches* Switches::instance = nullptr;
 
@@ -11,7 +12,8 @@ namespace {
 // The PIO program for a given switch count. Having one place answer this
 // keeps the load and the unload from ever disagreeing about which program is
 // on the block - they used to be two independent switch statements.
-const pio_program_t* switchesProgramFor(uint8_t numSwitches) {
+const pio_program_t* switchesProgramFor(uint8_t numSwitches,
+                                        bool resetStatefulInputs) {
   switch (numSwitches) {
     case 4:
       return &active_low_4_switches_pio_program;
@@ -19,7 +21,8 @@ const pio_program_t* switchesProgramFor(uint8_t numSwitches) {
       return &active_low_8_switches_pio_program;
     case MAX_SWITCHES:
     default:
-      return &active_low_16_switches_pio_program;
+      return resetStatefulInputs ? &active_low_16_switches_pio_program
+                                 : &plain_16_switches_pio_program;
   }
 }
 
@@ -49,7 +52,7 @@ void Switches::resetConfig() {
 
   if (programLoaded) {
     PioSlot slot;
-    slot.program = switchesProgramFor(loadedNumSwitches);
+    slot.program = switchesProgramFor(loadedNumSwitches, resetStatefulInputs);
     slot.pio = pio;
     slot.sm = sm;
     slot.offset = programOffset;
@@ -95,7 +98,7 @@ bool Switches::startReader() {
 
   if (!programLoaded) {
     PioSlot slot;
-    slot.program = switchesProgramFor(numSwitches);
+    slot.program = switchesProgramFor(numSwitches, resetStatefulInputs);
     if (!pioClaimSlots(&slot, 1)) {
       // No state machine or program space left anywhere. Say so where it can
       // be seen: EVENT_ERROR fast-blinks the on-board LED for as long as the
@@ -127,18 +130,18 @@ bool Switches::startReader() {
 
     case MAX_SWITCHES:
     default:
-      c = active_low_16_switches_pio_program_get_default_config(offset);
+      c = resetStatefulInputs
+              ? active_low_16_switches_pio_program_get_default_config(offset)
+              : plain_16_switches_pio_program_get_default_config(offset);
       break;
   }
 
   sm_config_set_in_pins(&c, SWITCHES_BASE_PIN);
-  if (MAX_SWITCHES == numSwitches) {
+  if (MAX_SWITCHES == numSwitches && resetStatefulInputs) {
     // Using GPIO 15-18 as switch inputs on IO_16_8_1 board requires
-    // resetting the sateful input after reading.
+    // resetting the stateful inputs before every read.
     // Set begins at GPIO 15 for 4 pins.
     sm_config_set_set_pins(&c, 15, 4);
-    // Side-set begins at GPIO 15.
-    sm_config_set_sideset_pins(&c, 15);
   }
   // Connect GPIOs to this PIO block
   for (uint i = 0; i < numSwitches; i++) {
@@ -169,7 +172,7 @@ bool Switches::refreshDedicatedSwitchStates() {
     }
 
     const uint32_t mask = 1u << (port[i] - SWITCHES_BASE_PIN);
-    const bool switchState = digitalRead(port[i]) == LOW;
+    const bool switchState = digitalRead(port[i]) == (activeHigh ? HIGH : LOW);
     if (switchState) {
       sampledStable |= mask;
     } else {
@@ -371,7 +374,10 @@ void Switches::handleSwitchChanges(uint32_t raw) {
   // tracked separately so a temporarily suppressed edge can be committed later
   // without causing repeated PIO IRQs while the input is physically steady.
   pioBaseline = static_cast<uint16_t>(raw);
-  pio_sm_put(pio, sm, ~pioBaseline);
+  // The reader compares this with a read of its own pins only, so the bits
+  // above them must be clear. If they are not, no read ever matches: the
+  // reader reports again at once, and keeps interrupting the CPU forever.
+  pio_sm_put(pio, sm, rawFromClosed(pioBaseline) & validSwitchMask);
 }
 
 void Switches::handleEvent(Event* event) {

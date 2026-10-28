@@ -66,6 +66,12 @@ they are not symmetric and look like mistakes if you assume they are:
   outputs go through the lamp matrix stage instead.
 * `Opto_16`'s 16 transmitter LEDs are wired to the supply rather than to the
   RP2040, so there is nothing for the firmware to drive.
+* `Opto_16`'s inputs are active-high: each is a comparator output that goes
+  high when the beam is broken, which is when the switch counts as closed.
+  Its switch reader also leaves GPIO 15-18 alone, which `IO_16_8_1`'s drives
+  after every change. On the board itself, inputs 9-16 default to photodiodes:
+  close `JP2` and jumper `J18`-`J25` for the channels in use to read
+  phototransistors.
 
 Adding a board should mean editing `src/PPUCBoardTypes.h` and adding a
 PlatformIO environment, and nothing else in the firmware.
@@ -306,6 +312,17 @@ so it runs on a laptop and in CI without an RP2040:
 ```
 pio test -e native
 ```
+
+The PIO switch readers are checked separately, on the instruction words pioasm
+generated, so it needs a firmware build first:
+
+```
+pio run -e IO_16_8_1
+python3 tools/simulate-switch-readers.py
+```
+
+It models the pins and the CPU, not the board, so it cannot replace a test on
+real hardware.
 
 ## Troubleshooting
 

@@ -139,6 +139,14 @@ jobs:
           echo "build id ${BUILD_ID}"
           PLATFORMIO_BUILD_FLAGS="-DPPUC_BUILD_ID=${BUILD_ID}UL" pio run -e ${{ matrix.controller }}
 
+      - name: Simulate the switch readers
+        # Runs the PIO switch readers as pioasm assembled them, which is why it
+        # is here and not in the test job: the .pio.h headers only exist after
+        # a firmware build. Every build generates all of them, so one board is
+        # enough.
+        if: matrix.controller == 'IO_16_8_1'
+        run: python3 tools/simulate-switch-readers.py
+
       - name: Create UF2 file (using elf2uf2)
         run: |
           ELF_FILE=$(find .pio/build/${{ matrix.controller }} -name "*.elf" | head -n 1)

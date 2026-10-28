@@ -121,7 +121,9 @@ void IOBoardController::begin() {
       _pwmDevices = new PwmDevices(_eventDispatcher);
     }
     if (kProfile.has(ppuc::board::kCapDedicatedSwitches)) {
-      _switches = new Switches(boardId, _eventDispatcher);
+      _switches =
+          new Switches(boardId, _eventDispatcher, kProfile.inputsActiveHigh,
+                       kProfile.resetsStatefulInputs);
     }
     if (kProfile.has(ppuc::board::kCapSwitchMatrix)) {
       _switchMatrix =
