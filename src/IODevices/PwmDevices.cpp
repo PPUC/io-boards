@@ -22,6 +22,16 @@ void PwmDevices::registerSolenoid(byte p, byte n, byte pow, uint16_t minPT,
     index = last++;
   }
 
+  if (outputType == PWM_TYPE_SOLENOID && (sS1 > 0 || sS2 > 0) && maxPT == 0) {
+    // A coil a switch has to stop must never be left unbounded. A motor is not
+    // covered: whatever drives it decides how long a run is.
+    maxPT = STOP_SWITCHED_MAX_PULSE_MS;
+    CrossLinkDebugger::debug(
+        "PWM device on port %d has a stop switch but no max pulse time, using "
+        "%dms",
+        p, maxPT);
+  }
+
   port[index] = p;
   number[index] = n;
   power[index] = pow;
@@ -43,6 +53,7 @@ void PwmDevices::registerSolenoid(byte p, byte n, byte pow, uint16_t minPT,
     stopSwitchClosed[index][s] = false;
   }
   stopEngaged[index] = false;
+  stopRedrives[index] = 0;
 
   pinMode(p, OUTPUT);
   analogWrite(p, 0);
@@ -132,6 +143,7 @@ void PwmDevices::reset() {
     fastSwitchClosed[i] = false;
     fastSwitchManagedActive[i] = false;
     fastSwitchWaitForRelease[i] = false;
+    stopRedrives[i] = 0;
   }
 
   last = 0;
@@ -244,6 +256,7 @@ void PwmDevices::update() {
           _eventDispatcher->getSwitchState(static_cast<uint16_t>(fastSwitch[i]));
       if (!fastSwitchClosed[i]) {
         fastSwitchWaitForRelease[i] = false;
+        stopRedrives[i] = 0;
       }
     } else if (!fastSwitchAllowed && fastSwitch[i] > 0) {
       // High power is off, or the machine is tilted. Forget that the switch was
@@ -263,6 +276,17 @@ void PwmDevices::update() {
       // again. Only for a switch-driven output: one the host commands waits for
       // the host to ask again, because a motor that stopped at the end of its
       // travel has arrived, not failed.
+      if (stopRedrives[i] >= MAX_STOP_REDRIVES_PER_PRESS) {
+        // A contact that keeps opening is chattering or misadjusted, not a
+        // ball. Wait for the button, as after a timeout.
+        fastSwitchWaitForRelease[i] = true;
+        CrossLinkDebugger::debug(
+            "PWM device on port %d fired again %d times in one press, waiting "
+            "for release",
+            port[i], stopRedrives[i]);
+        continue;
+      }
+      stopRedrives[i]++;
       analogWrite(port[i], power[i]);
       activated[i] = _ms;
       currentPower[i] = power[i];
@@ -370,6 +394,7 @@ void PwmDevices::handleFastSwitchEvent(bool switchClosed, byte i) {
   if (!switchClosed) {
     // Re-arm after the stuck/held switch has been released.
     fastSwitchWaitForRelease[i] = false;
+    stopRedrives[i] = 0;
 
     if (activated[i] == 0 || !fastSwitchManagedActive[i]) {
       return;

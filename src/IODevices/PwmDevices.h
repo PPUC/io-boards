@@ -24,6 +24,31 @@
 #define MAX_STOP_SWITCHES_PER_OUTPUT 2
 #endif
 
+// The maximum pulse time a coil with a stop switch gets when it was configured
+// with none.
+//
+// A coil that a switch has to stop is a flipper power winding, driven at full
+// power by a button a player can hold for minutes. Its end-of-stroke contact
+// can be unplugged or misadjusted, and then nothing else ends it. WPC never let
+// that winding run longer than 40 ms whatever the contact did, so neither does
+// the board, whatever the host sent.
+#ifndef STOP_SWITCHED_MAX_PULSE_MS
+#define STOP_SWITCHED_MAX_PULSE_MS 40
+#endif
+
+// How often a switch-driven output fires again by itself during one press.
+//
+// When a stop switch opens while the button is still held - a ball has pushed
+// the flipper finger down - the board fires the power winding again. Each of
+// those is bounded by the maximum pulse time, but their number was not: a
+// chattering or misadjusted end-of-stroke contact would keep a full-power
+// winding going for as long as the button is held. After this many, the
+// output waits for the button to be released, and the hold winding keeps
+// doing its job meanwhile.
+#ifndef MAX_STOP_REDRIVES_PER_PRESS
+#define MAX_STOP_REDRIVES_PER_PRESS 5
+#endif
+
 class PwmDevices : public HighPowerOffAware {
  public:
   // Constructor
@@ -79,6 +104,8 @@ class PwmDevices : public HighPowerOffAware {
   // A stop switch closed while this output was on, and it stays off until every
   // stop switch is open again.
   bool stopEngaged[MAX_PWM_OUTPUTS] = {0};
+  // How often the output fired again by itself since the button was pressed.
+  byte stopRedrives[MAX_PWM_OUTPUTS] = {0};
   byte last = 0;
   EventDispatcher* _eventDispatcher = nullptr;
 

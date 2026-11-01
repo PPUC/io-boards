@@ -283,6 +283,16 @@ Three details that are easy to get wrong, all covered by `test/test_stop_switch`
   has to be released before it fires again. A timeout means something is wrong;
   a stop switch means something worked.
 
+Two bounds the host cannot switch off, because a flipper power winding is
+driven at full power by a button a player can hold for minutes:
+
+- A `PWM_TYPE_SOLENOID` with a stop switch and `maxPulseTime` 0 gets
+  `STOP_SWITCHED_MAX_PULSE_MS` (40, what WPC used). A motor does not: whatever
+  drives it decides how long a run is.
+- Firing again by itself is limited to `MAX_STOP_REDRIVES_PER_PRESS` (5) per
+  press. Past that the output waits for the driving switch to be released, so a
+  chattering or misadjusted end-of-stroke contact cannot keep the winding going.
+
 `PWM_TYPE_MOTOR` is registered like a solenoid, under its own type so its stop
 switches apply. It was an unimplemented `@todo` before this.
 

@@ -32,10 +32,10 @@
 namespace {
 
 constexpr byte kPort = 19;
-constexpr byte kCoilNumber = 29;   // a flipper power winding
+constexpr byte kCoilNumber = 45;   // a flipper power winding
 constexpr byte kPower = 255;
 constexpr byte kButton = 112;      // the flipper button, a fast-flip switch
-constexpr byte kEos = 200;         // the end-of-stroke contact
+constexpr byte kEos = 111;         // the end-of-stroke contact
 constexpr byte kMotorPort = 20;
 constexpr byte kMotorNumber = 20;
 constexpr byte kEndA = 76;
@@ -75,10 +75,19 @@ void RegisterFlipperPower(uint16_t maxPulse = 40) {
 }
 
 // A gun motor: driven by the host, stopped at either end of its travel.
-void RegisterMotor() {
-  g_pwm->registerSolenoid(kMotorPort, kMotorNumber, 64, /*minPT*/ 0,
-                          /*maxPT*/ 2000, /*hP*/ 0, /*hPAT*/ 0, /*fS*/ 0,
-                          kEndA, kEndB, PWM_TYPE_MOTOR);
+void RegisterMotor(uint16_t maxPulse = 2000) {
+  g_pwm->registerSolenoid(kMotorPort, kMotorNumber, 64, /*minPT*/ 0, maxPulse,
+                          /*hP*/ 0, /*hPAT*/ 0, /*fS*/ 0, kEndA, kEndB,
+                          PWM_TYPE_MOTOR);
+}
+
+// The ball pushes the finger down and the EOS opens; the board fires again.
+// Returns whether it did.
+bool KnockDown() {
+  SendSwitch(kEos, 1);
+  SendSwitch(kEos, 0);
+  Tick(1);
+  return IsOn(kPort);
 }
 
 }  // namespace
@@ -191,6 +200,80 @@ void test_a_timed_out_winding_waits_for_the_button_before_firing_again(void) {
   SendSwitch(kButton, 0);
   SendSwitch(kButton, 1);
   TEST_ASSERT_TRUE_MESSAGE(IsOn(kPort), "a fresh press must fire it");
+}
+
+// --- protection the host cannot switch off ---------------------------------
+
+void test_a_power_winding_configured_without_a_timeout_gets_one(void) {
+  // A coil that a switch has to stop is a flipper power winding, and its EOS
+  // can be unplugged. Whatever the host sent, it must not run unbounded.
+  RegisterFlipperPower(/*maxPulse*/ 0);
+  PowerOn();
+
+  SendSwitch(kButton, 1);
+  Tick(30);
+  TEST_ASSERT_TRUE_MESSAGE(IsOn(kPort), "30 ms is inside the stroke");
+
+  Tick(20);
+  TEST_ASSERT_FALSE_MESSAGE(IsOn(kPort),
+                            "a stop-switched coil must get the 40 ms timeout");
+}
+
+void test_a_configured_timeout_is_kept(void) {
+  RegisterFlipperPower(/*maxPulse*/ 30);
+  PowerOn();
+
+  SendSwitch(kButton, 1);
+  Tick(35);
+  TEST_ASSERT_FALSE_MESSAGE(IsOn(kPort),
+                            "the host's own timeout must not be replaced");
+}
+
+void test_a_motor_with_end_switches_is_not_given_a_timeout(void) {
+  // Whatever drives a motor decides how long a run is; a gun search can take
+  // twenty seconds.
+  RegisterMotor(/*maxPulse*/ 0);
+  PowerOn();
+
+  SendSolenoid(kMotorNumber, 1);
+  Tick(5000);
+  TEST_ASSERT_TRUE_MESSAGE(
+      IsOn(kMotorPort), "a motor must keep running until it is told to stop");
+}
+
+void test_a_chattering_eos_stops_firing_the_winding_again(void) {
+  // Each refire is bounded by the timeout, but their number was not: an EOS
+  // that keeps opening would keep a full-power winding going for as long as
+  // the button is held.
+  RegisterFlipperPower();
+  PowerOn();
+
+  SendSwitch(kButton, 1);
+  for (int n = 0; n < MAX_STOP_REDRIVES_PER_PRESS; n++) {
+    TEST_ASSERT_TRUE_MESSAGE(KnockDown(),
+                             "a knocked-down finger must come back up");
+  }
+  TEST_ASSERT_FALSE_MESSAGE(
+      KnockDown(), "past the limit the winding must wait for the button");
+  Tick(100);
+  TEST_ASSERT_FALSE(IsOn(kPort));
+}
+
+void test_each_press_starts_with_a_full_set_of_refires(void) {
+  RegisterFlipperPower();
+  PowerOn();
+
+  SendSwitch(kButton, 1);
+  for (int n = 0; n <= MAX_STOP_REDRIVES_PER_PRESS; n++) {
+    KnockDown();
+  }
+  TEST_ASSERT_FALSE(IsOn(kPort));
+
+  SendSwitch(kButton, 0);
+  SendSwitch(kButton, 1);
+  TEST_ASSERT_TRUE_MESSAGE(IsOn(kPort), "a fresh press must fire it");
+  TEST_ASSERT_TRUE_MESSAGE(KnockDown(),
+                           "and it must be able to come back up again");
 }
 
 // --- the motor --------------------------------------------------------------
@@ -338,6 +421,11 @@ int main(int, char**) {
   RUN_TEST(test_the_winding_does_not_fire_again_once_the_button_is_released);
   RUN_TEST(test_the_max_pulse_time_still_cuts_a_failed_eos);
   RUN_TEST(test_a_timed_out_winding_waits_for_the_button_before_firing_again);
+  RUN_TEST(test_a_power_winding_configured_without_a_timeout_gets_one);
+  RUN_TEST(test_a_configured_timeout_is_kept);
+  RUN_TEST(test_a_motor_with_end_switches_is_not_given_a_timeout);
+  RUN_TEST(test_a_chattering_eos_stops_firing_the_winding_again);
+  RUN_TEST(test_each_press_starts_with_a_full_set_of_refires);
   RUN_TEST(test_an_end_switch_stops_the_motor);
   RUN_TEST(test_either_end_switch_stops_the_motor);
   RUN_TEST(test_a_motor_starting_on_an_end_switch_can_still_move);
