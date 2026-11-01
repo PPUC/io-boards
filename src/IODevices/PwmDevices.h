@@ -49,13 +49,6 @@
 #define MAX_STOP_REDRIVES_PER_PRESS 5
 #endif
 
-// A motor with a scaled power still starts at its full configured power for this
-// long. The ROM's own low speeds are short kicks at full voltage, which get past
-// friction where the same average as a steady voltage may not.
-#ifndef MOTOR_START_KICK_MS
-#define MOTOR_START_KICK_MS 50
-#endif
-
 class PwmDevices : public HighPowerOffAware {
  public:
   // Constructor
@@ -122,7 +115,7 @@ class PwmDevices : public HighPowerOffAware {
   // How often the output fired again by itself since the button was pressed.
   byte stopRedrives[MAX_PWM_OUTPUTS] = {0};
   byte last = 0;
-  EventDispatcher* _eventDispatcher = nullptr;
+  EventDispatcher *_eventDispatcher = nullptr;
 
   void updateSolenoidOrFlasher(bool targetState, byte i);
   void handleFastSwitchEvent(bool switchClosed, byte i);

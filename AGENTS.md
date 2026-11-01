@@ -303,9 +303,12 @@ on/off coil state, so the host measures the duty and sends it as
 `EVENT_SOURCE_POWER_SCALE` in a `kFrameTrigger`, only when it changes and again
 about once a second. The coil bit still starts and stops the motor.
 
-The board then drives `power * scale / 255`, after `MOTOR_START_KICK_MS` at full
-`power` on each activation. Scale is 255 until a value arrives and after a
-reset, which is plain `power`. It applies to `PWM_TYPE_MOTOR` only, not while a
+The board then drives `power * scale / 255`, from the moment the motor starts.
+Scale is 255 until a value arrives and after a reset, which is plain `power`.
+A scale of 0 holds the motor off until the next value: the host sends it once
+at startup for a motor whose speed it measures, so the first run waits for its
+measurement instead of starting at full `power`. Later runs start at the last
+measured value. It applies to `PWM_TYPE_MOTOR` only, not while a
 hold power is configured, and it arrives regardless of the high-power gates
 because it does not drive anything by itself. Covered by `test/test_motor_scale`.
 

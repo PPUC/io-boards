@@ -70,25 +70,22 @@ void tearDown(void) {
 
 void test_without_a_scale_a_motor_runs_at_its_power(void) {
   Solenoid(kMotorNumber, true);
-  Tick(MOTOR_START_KICK_MS + 10);
+  Tick(60);
   TEST_ASSERT_EQUAL(kPower, MotorPower());
 }
 
-void test_scale_applies_after_the_start_kick(void) {
+void test_a_motor_starts_at_its_scaled_power(void) {
   Scale(kMotorNumber, 128);
   Solenoid(kMotorNumber, true);
-  TEST_ASSERT_EQUAL(kPower, MotorPower());
+  TEST_ASSERT_EQUAL(32, MotorPower());
 
-  Tick(MOTOR_START_KICK_MS - 1);
-  TEST_ASSERT_EQUAL(kPower, MotorPower());
-
-  Tick(1);
+  Tick(60);
   TEST_ASSERT_EQUAL(32, MotorPower());
 }
 
 void test_a_scale_changes_a_running_motor(void) {
   Solenoid(kMotorNumber, true);
-  Tick(MOTOR_START_KICK_MS);
+  Tick(60);
   Scale(kMotorNumber, 128);
   Tick(1);
   TEST_ASSERT_EQUAL(32, MotorPower());
@@ -100,63 +97,66 @@ void test_a_scale_changes_a_running_motor(void) {
 
 void test_a_scale_does_not_start_a_stopped_motor(void) {
   Scale(kMotorNumber, 128);
-  Tick(MOTOR_START_KICK_MS);
+  Tick(60);
   TEST_ASSERT_EQUAL(0, MotorPower());
 }
 
 void test_the_coil_bit_still_stops_it(void) {
   Scale(kMotorNumber, 128);
   Solenoid(kMotorNumber, true);
-  Tick(MOTOR_START_KICK_MS);
+  Tick(60);
   Solenoid(kMotorNumber, false);
   TEST_ASSERT_EQUAL(0, MotorPower());
   Tick(1);
   TEST_ASSERT_EQUAL(0, MotorPower());
 }
 
-void test_each_activation_kicks_again(void) {
+void test_a_hold_power_is_not_scaled(void) {
+  g_pwm->registerSolenoid(kMotorPort, kMotorNumber, kPower, 0, 0, 10, 100, 0, 0,
+                          0, PWM_TYPE_MOTOR);
   Scale(kMotorNumber, 128);
   Solenoid(kMotorNumber, true);
-  Tick(MOTOR_START_KICK_MS);
-  Solenoid(kMotorNumber, false);
-  Tick(1);
-  Solenoid(kMotorNumber, true);
   TEST_ASSERT_EQUAL(kPower, MotorPower());
+  Tick(101);
+  TEST_ASSERT_EQUAL(10, MotorPower());
 }
 
 void test_a_tiny_scale_does_not_round_to_nothing(void) {
   Scale(kMotorNumber, 1);
   Solenoid(kMotorNumber, true);
-  Tick(MOTOR_START_KICK_MS);
+  Tick(60);
   TEST_ASSERT_EQUAL(1, MotorPower());
 }
 
-void test_zero_means_no_measurement(void) {
-  Scale(kMotorNumber, 128);
+void test_zero_holds_a_motor_until_its_speed_arrives(void) {
   Scale(kMotorNumber, 0);
   Solenoid(kMotorNumber, true);
-  Tick(MOTOR_START_KICK_MS);
-  TEST_ASSERT_EQUAL(kPower, MotorPower());
+  Tick(60);
+  TEST_ASSERT_EQUAL(0, MotorPower());
+
+  Scale(kMotorNumber, 128);
+  Tick(1);
+  TEST_ASSERT_EQUAL(32, MotorPower());
 }
 
 void test_a_coil_is_never_scaled(void) {
   g_pwm->registerSolenoid(kCoilPort, kCoilNumber, 255, 0, 150, 0, 0, 0);
   Scale(kCoilNumber, 128);
   Solenoid(kCoilNumber, true);
-  Tick(MOTOR_START_KICK_MS);
+  Tick(60);
   TEST_ASSERT_EQUAL(255, stubs::AnalogValue(kCoilPort));
 }
 
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_without_a_scale_a_motor_runs_at_its_power);
-  RUN_TEST(test_scale_applies_after_the_start_kick);
+  RUN_TEST(test_a_motor_starts_at_its_scaled_power);
   RUN_TEST(test_a_scale_changes_a_running_motor);
   RUN_TEST(test_a_scale_does_not_start_a_stopped_motor);
   RUN_TEST(test_the_coil_bit_still_stops_it);
-  RUN_TEST(test_each_activation_kicks_again);
+  RUN_TEST(test_a_hold_power_is_not_scaled);
   RUN_TEST(test_a_tiny_scale_does_not_round_to_nothing);
-  RUN_TEST(test_zero_means_no_measurement);
+  RUN_TEST(test_zero_holds_a_motor_until_its_speed_arrives);
   RUN_TEST(test_a_coil_is_never_scaled);
   return UNITY_END();
 }
