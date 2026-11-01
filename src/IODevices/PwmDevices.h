@@ -49,19 +49,28 @@
 #define MAX_STOP_REDRIVES_PER_PRESS 5
 #endif
 
+// A motor with a scaled power still starts at its full configured power for this
+// long. The ROM's own low speeds are short kicks at full voltage, which get past
+// friction where the same average as a steady voltage may not.
+#ifndef MOTOR_START_KICK_MS
+#define MOTOR_START_KICK_MS 50
+#endif
+
 class PwmDevices : public HighPowerOffAware {
  public:
   // Constructor
   PwmDevices(EventDispatcher *eventDispatcher)
       : HighPowerOffAware(eventDispatcher), _eventDispatcher(eventDispatcher) {
     eventDispatcher->addListener(this, EVENT_SOURCE_LIGHT);
+    eventDispatcher->addListener(this, EVENT_SOURCE_POWER_SCALE);
     // Listening to solenoids and switches is added in HighPowerOffAware().
   }
 
   void registerSolenoid(byte p, byte n, byte pow, uint16_t minPT,
                         uint16_t maxPT, byte hP, uint16_t hPAT, byte fS,
                         byte sS1 = 0, byte sS2 = 0,
-                        byte outputType = PWM_TYPE_SOLENOID);
+                        byte outputType = PWM_TYPE_SOLENOID,
+                        bool ignoreGO = false);
   void registerFlasher(byte p, byte n, byte pow);
   void registerLamp(byte p, byte n, byte pow);
 
@@ -78,6 +87,8 @@ class PwmDevices : public HighPowerOffAware {
 
  private:
   int findRegisteredOutput(byte outputType, byte p, byte n) const;
+  byte scaledPower(byte i) const;
+  void handlePowerScaleEvent(uint16_t motorNumber, byte scale);
 
   uint32_t _ms;
 
@@ -93,6 +104,10 @@ class PwmDevices : public HighPowerOffAware {
   // the switch at the end of a motor's travel. 0 means unused.
   byte stopSwitch[MAX_PWM_OUTPUTS][MAX_STOP_SWITCHES_PER_OUTPUT] = {{0}};
   byte type[MAX_PWM_OUTPUTS] = {0};
+  // Driven whether or not the game-on solenoid is asserted.
+  bool ignoreGameOn[MAX_PWM_OUTPUTS] = {0};
+  // How much of its power a motor runs at, set by the host. 255 is all of it.
+  byte powerScale[MAX_PWM_OUTPUTS] = {0};
   uint32_t activated[MAX_PWM_OUTPUTS] = {0};
   byte currentPower[MAX_PWM_OUTPUTS] = {0};
   bool scheduled[MAX_PWM_OUTPUTS] = {0};

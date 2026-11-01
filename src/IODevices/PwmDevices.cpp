@@ -15,7 +15,7 @@ int PwmDevices::findRegisteredOutput(byte outputType, byte p, byte n) const {
 void PwmDevices::registerSolenoid(byte p, byte n, byte pow, uint16_t minPT,
                                   uint16_t maxPT, byte hP, uint16_t hPAT,
                                   byte fS, byte sS1, byte sS2,
-                                  byte outputType) {
+                                  byte outputType, bool ignoreGO) {
   int index = findRegisteredOutput(outputType, p, n);
   if (index < 0) {
     if (last >= MAX_PWM_OUTPUTS) return;
@@ -43,6 +43,8 @@ void PwmDevices::registerSolenoid(byte p, byte n, byte pow, uint16_t minPT,
   stopSwitch[index][0] = sS1;
   stopSwitch[index][1] = sS2;
   type[index] = outputType;
+  ignoreGameOn[index] = ignoreGO;
+  powerScale[index] = 255;
   activated[index] = 0;
   currentPower[index] = 0;
   scheduled[index] = false;
@@ -73,6 +75,8 @@ void PwmDevices::registerFlasher(byte p, byte n, byte pow) {
   maxPulseTime[index] = 0;
   holdPower[index] = 0;
   holdPowerActivationTime[index] = 0;
+  ignoreGameOn[index] = false;
+  powerScale[index] = 255;
   fastSwitch[index] = 0;
   type[index] = PWM_TYPE_FLASHER;
   activated[index] = 0;
@@ -100,6 +104,8 @@ void PwmDevices::registerLamp(byte p, byte n, byte pow) {
   maxPulseTime[index] = 0;
   holdPower[index] = 0;
   holdPowerActivationTime[index] = 0;
+  ignoreGameOn[index] = false;
+  powerScale[index] = 255;
   fastSwitch[index] = 0;
   type[index] = PWM_TYPE_LAMP;
   activated[index] = 0;
@@ -135,6 +141,8 @@ void PwmDevices::reset() {
     maxPulseTime[i] = 0;
     holdPower[i] = 0;
     holdPowerActivationTime[i] = 0;
+    ignoreGameOn[i] = false;
+    powerScale[i] = 255;
     fastSwitch[i] = 0;
     type[i] = 0;
     activated[i] = 0;
@@ -331,6 +339,11 @@ void PwmDevices::update() {
             "Performed min pulse guarded deactivation of PWM device on port %d "
             "after %dms",
             port[i], timePassed);
+      } else if (type[i] == PWM_TYPE_MOTOR && holdPowerActivationTime[i] == 0 &&
+                 currentPower[i] != scaledPower(i) &&
+                 timePassed >= MOTOR_START_KICK_MS) {
+        analogWrite(port[i], scaledPower(i));
+        currentPower[i] = scaledPower(i);
       } else if ((holdPowerActivationTime[i] > 0) &&
                  (currentPower[i] > holdPower[i]) &&
                  (timePassed > holdPowerActivationTime[i])) {
@@ -343,6 +356,26 @@ void PwmDevices::update() {
             port[i], holdPower[i], timePassed);
       }
     }
+  }
+}
+
+byte PwmDevices::scaledPower(byte i) const {
+  if (powerScale[i] == 255) {
+    return power[i];
+  }
+  // Never to 0 by rounding: the coil bit says whether a motor runs, not this.
+  const byte scaled = (uint16_t)power[i] * powerScale[i] / 255;
+  return scaled > 0 ? scaled : 1;
+}
+
+void PwmDevices::handlePowerScaleEvent(uint16_t motorNumber, byte scale) {
+  for (byte i = 0; i < last; i++) {
+    if (type[i] != PWM_TYPE_MOTOR || number[i] != (byte)motorNumber) {
+      continue;
+    }
+    // A value of 0 is not a speed, so it means nothing was measured.
+    powerScale[i] = scale > 0 ? scale : 255;
+    // update() applies it, so that it also waits for the start kick.
   }
 }
 
@@ -441,6 +474,11 @@ void PwmDevices::handleFastSwitchEvent(bool switchClosed, byte i) {
 }
 
 void PwmDevices::handleEvent(Event *event) {
+  if (event->sourceId == EVENT_SOURCE_POWER_SCALE) {
+    handlePowerScaleEvent(event->eventId, event->value);
+    return;
+  }
+
   HighPowerOffAware::handleEvent(event);
   publishGateBits();
 
@@ -508,16 +546,32 @@ void PwmDevices::handleEvent(Event *event) {
         }
         break;
     }
-  } else if (powerToggled) {
-    for (byte i = 0; i < last; i++) {
-      // Deactivate the output.
-      analogWrite(port[i], 0);
-      // Mark the output as deactivated.
-      deactivateOutput(i);
-      fastSwitchWaitForRelease[i] = false;
-      fastSwitchClosed[i] = false;
+  } else {
+    const bool exemptAvailable = gameOnExemptAvailable();
+
+    if (exemptAvailable && event->sourceId == EVENT_SOURCE_SOLENOID) {
+      for (byte i = 0; i < last; i++) {
+        if (ignoreGameOn[i] && number[i] == (byte)event->eventId) {
+          updateSolenoidOrFlasher((bool)event->value, i);
+        }
+      }
+    }
+
+    if (powerToggled) {
       powerOn = false;
-      CrossLinkDebugger::debug("Deactivated PWM device on port %d", port[i]);
+      for (byte i = 0; i < last; i++) {
+        // A game ending must not stop what the ROM is still running.
+        if (ignoreGameOn[i] && exemptAvailable) {
+          continue;
+        }
+        // Deactivate the output.
+        analogWrite(port[i], 0);
+        // Mark the output as deactivated.
+        deactivateOutput(i);
+        fastSwitchWaitForRelease[i] = false;
+        fastSwitchClosed[i] = false;
+        CrossLinkDebugger::debug("Deactivated PWM device on port %d", port[i]);
+      }
     }
   }
 }

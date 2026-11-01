@@ -13,6 +13,10 @@
 #define RS485_MODE_SWITCH_DELAY 50
 
 #define EVENT_SOURCE_ANY 42     // "*"
+// Scales a running motor's power, 0-255 of what it is configured with. The host
+// measures it from the ROM: a ROM sets a motor's speed by pulsing its driver,
+// which the on/off coil state cannot carry.
+#define EVENT_SOURCE_POWER_SCALE 65  // "A"
 #define EVENT_SOURCE_DEBUG 66   // "B" Debug
 #define EVENT_CONFIGURATION 67  // "C" Configure I/O
 #define EVENT_SOURCE_DMD 68     // "D" VPX/DOF/PUP
@@ -112,6 +116,10 @@
 #define CONFIG_TOPIC_OPTIONS 94                     //
 #define CONFIG_TOPIC_COLOR_2 95                     //
 #define CONFIG_TOPIC_COLOR_3 96                     //
+// A ROM-driven output that has to work with no game running: the game-on
+// solenoid does not gate it. The coin door still does. Dirty Harry searches for
+// its gun at boot and waits for the result, long before any game starts.
+#define CONFIG_TOPIC_IGNORE_GAME_ON 97              //
 #define CONFIG_TOPIC_NULL 99                        // NULL
 
 #define PWM_TYPE_SOLENOID 1  // Coil

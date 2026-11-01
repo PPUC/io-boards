@@ -296,6 +296,31 @@ driven at full power by a button a player can hold for minutes:
 `PWM_TYPE_MOTOR` is registered like a solenoid, under its own type so its stop
 switches apply. It was an unimplemented `@todo` before this.
 
+### Motor speed
+
+A ROM sets a motor's speed by pulsing its driver. That does not survive the
+on/off coil state, so the host measures the duty and sends it as
+`EVENT_SOURCE_POWER_SCALE` in a `kFrameTrigger`, only when it changes and again
+about once a second. The coil bit still starts and stops the motor.
+
+The board then drives `power * scale / 255`, after `MOTOR_START_KICK_MS` at full
+`power` on each activation. Scale is 255 until a value arrives and after a
+reset, which is plain `power`. It applies to `PWM_TYPE_MOTOR` only, not while a
+hold power is configured, and it arrives regardless of the high-power gates
+because it does not drive anything by itself. Covered by `test/test_motor_scale`.
+
+### Game-on
+
+While the game-on solenoid is off, the board discards every coil command. On a
+WPC Fliptronic machine that solenoid is PinMAME's fast-flip flag, which only
+says flippers are enabled; the ROM still drives other outputs with no game
+running. Dirty Harry searches for its gun at boot and waits for the result.
+
+`CONFIG_TOPIC_IGNORE_GAME_ON`, sent before `CONFIG_TOPIC_TYPE`, exempts one coil
+or motor from that gate. Such an output keeps running when game-on drops. The
+coin door and stopping the board still cut it, and its fast-flip switch, if any,
+stays gated. Covered by `test/test_game_on`.
+
 ## Switch Debounce Modes
 
 Configured per switch as `debounce` (ms) plus `debounceMode`, exported by

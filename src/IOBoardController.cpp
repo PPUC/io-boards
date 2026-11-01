@@ -202,6 +202,7 @@ void IOBoardController::clearConfiguredState() {
   fastSwitch = 0;
   stopSwitch1 = 0;
   stopSwitch2 = 0;
+  ignoreGameOn = false;
   type = 0;
   resetTimer = 0;
 
@@ -336,7 +337,8 @@ void IOBoardController::registerPwmOutput(byte pwmType) {
       _pwmDevices->registerSolenoid((byte)port, number, power, minPulseTime,
                                     maxPulseTime, holdPower,
                                     holdPowerActivationTime, fastSwitch,
-                                    stopSwitch1, stopSwitch2);
+                                    stopSwitch1, stopSwitch2, PWM_TYPE_SOLENOID,
+                                    ignoreGameOn);
       activePwmDevices = true;
       break;
     case PWM_TYPE_FLASHER:  // Flasher
@@ -354,7 +356,8 @@ void IOBoardController::registerPwmOutput(byte pwmType) {
       _pwmDevices->registerSolenoid((byte)port, number, power, minPulseTime,
                                     maxPulseTime, holdPower,
                                     holdPowerActivationTime, fastSwitch,
-                                    stopSwitch1, stopSwitch2, PWM_TYPE_MOTOR);
+                                    stopSwitch1, stopSwitch2, PWM_TYPE_MOTOR,
+                                    ignoreGameOn);
       activePwmDevices = true;
       break;
     case PWM_TYPE_SHAKER:  // Shaker
@@ -468,6 +471,7 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
             fastSwitch = 0;
             stopSwitch1 = 0;
             stopSwitch2 = 0;
+            ignoreGameOn = false;
             break;
           case CONFIG_TOPIC_NUMBER:
             number = event->value;
@@ -507,6 +511,9 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
             if (_switches) {
               _switches->markLocalFastSwitch(stopSwitch2);
             }
+            break;
+          case CONFIG_TOPIC_IGNORE_GAME_ON:
+            ignoreGameOn = event->value != 0;
             break;
           case CONFIG_TOPIC_TYPE:
             registerPwmOutput((byte)event->value);

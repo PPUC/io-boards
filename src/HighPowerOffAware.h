@@ -61,7 +61,8 @@ class HighPowerOffAware : public EventListener {
     if (event->sourceId == EVENT_RUN) {
       // Fake coin door switch and gome on solenoid if not present in the
       // current game.
-      if ((bool)event->value) {
+      running = (bool)event->value;
+      if (running) {
         if (0 == coinDoorSwitch) coinDoorClosed = true;
         if (0 == gameOnSolenoid) powerOn = true;
       } else {
@@ -116,6 +117,7 @@ class HighPowerOffAware : public EventListener {
     tiltSwitch = 0;
     coinDoorClosed = false;
     powerOn = false;
+    running = false;
     powerToggled = false;
     tiltActive = false;
     tiltToggled = false;
@@ -123,6 +125,10 @@ class HighPowerOffAware : public EventListener {
 
   // High power in general: coils, flashers, lamps.
   bool highPowerAvailable() const { return powerOn && coinDoorClosed; }
+
+  // Outputs configured to ignore the game-on solenoid. Only that one gate is
+  // lifted: opening the coin door or stopping the board still cuts them.
+  bool gameOnExemptAvailable() const { return running && coinDoorClosed; }
 
   // Published by PwmDevices only. Several classes derive from this one, and a
   // single global would otherwise report whichever instance ran last rather
@@ -145,6 +151,7 @@ class HighPowerOffAware : public EventListener {
   byte tiltSwitch = 0;
   bool coinDoorClosed = false;
   bool powerOn = false;
+  bool running = false;
   bool powerToggled = false;
   bool tiltActive = false;
   bool tiltToggled = false;
