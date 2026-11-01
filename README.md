@@ -48,10 +48,10 @@ Every board carries the special output, a WS2812 data line on GPIO 29, whatever
 else it has or has not got. That matters when placing boards: an addressable
 string does not need a board with drivers on it.
 
-**Only `IO_16_8_1` has been validated on real hardware.** The firmware says so
-itself, in `BoardTypeValidatedOnHardware()`, and the host reads it to decide
-whether a board may be flashed unattended. For the other three the pin maps are
-transcribed from the KiCad schematics but unverified, and the output stages for
+**Only `IO_16_8_1` and `Opto_16` have been validated on real hardware.** The
+firmware says so itself, in `BoardTypeValidatedOnHardware()`, and the host reads
+it to decide whether a board may be flashed unattended. For the other two the
+pin maps are transcribed from the KiCad schematics but unverified, and the output stages for
 `IO_16x8_matrix` and `Out_8x10` are not implemented yet. Treat them as declared,
 not delivered.
 

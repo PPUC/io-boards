@@ -350,8 +350,8 @@ activation switch. See `README.md` for per-switch-type value recommendations.
   inputs (GPIO 15-18, see `src/IODevices/SwitchesPIO/ActiveLow16Switches.pio`).
   Regressions there are easy to miss because the other 12 inputs still look
   healthy. The per-read reset in 0.3.4 has not been run on a board yet.
-- Only `IO_16_8_1` has run on hardware. The other three board types build and
-  pass the host tests, and that is all: see "Board Types" below.
+- Only `IO_16_8_1` and `Opto_16` have run on hardware. The other two board types
+  build and pass the host tests, and that is all: see "Board Types" below.
 
 ## Board Types
 
@@ -402,9 +402,9 @@ Every board also drives a WS2812 string on GPIO 29.
 - `Out_8x10`: that both groups of switches are on with the GPIO high, column
   brightness and ghosting at the 252 us on / 14 us off slot, and that lamps come
   back after the watchdog has held the outputs off.
-- `Opto_16`: that a broken beam reads as closed (the inputs are taken as
-  active-high, from the schematic), and that the plain 16-input reader, which
-  does not pulse GPIO 15-18, sees inputs 13-16.
+
+`Opto_16` has been checked: in a machine it reads its optos and drives a WS2812
+string, and it took 0.3.4 over RS485 from 0.3.3.
 
 ## Next Bring-Up Focus
 

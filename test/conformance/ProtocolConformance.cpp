@@ -982,11 +982,13 @@ Result CheckOnlyValidatedBoardTypesClaimToBe() {
   if (!BoardTypeValidatedOnHardware(kBoardTypeIo16_8_1)) {
     return Fail("IO_16_8_1 is the board this firmware runs on today");
   }
+  if (!BoardTypeValidatedOnHardware(kBoardTypeOpto16)) {
+    return Fail("Opto_16 has run in a machine and been updated over RS485");
+  }
   // Update this list - deliberately, with hardware in front of you - when a
   // board type has been exercised. Until then the host must keep its hands
   // off it.
-  const uint8_t kNotYet[] = {kBoardTypeIo16x8Matrix, kBoardTypeOut8x10,
-                             kBoardTypeOpto16};
+  const uint8_t kNotYet[] = {kBoardTypeIo16x8Matrix, kBoardTypeOut8x10};
   for (const uint8_t type : kNotYet) {
     if (BoardTypeValidatedOnHardware(type)) {
       return Fail(std::string(BoardTypeName(type)) +
