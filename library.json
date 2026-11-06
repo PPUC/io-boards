@@ -7,7 +7,7 @@
     "url": "https://github.com/PPUC"
   },
   "version": "0.3.6",
-  "downloadUrl": "https://github.com/mkalkbrenner/PPUC/archive/main.zip",
+  "downloadUrl": "https://github.com/PPUC/io-boards/archive/main.zip",
   "frameworks": "arduino",
   "platforms": ["atmelavr", "teensy"],
   "repository": {
@@ -49,20 +49,6 @@
       "version": "^2.70",
       "frameworks": ["arduino"],
       "platforms": ["atmelavr", "teensy"]
-    },
-    {
-      "owner": "PaulStoffregen",
-      "name": "TimerOne",
-      "version": "https://github.com/PaulStoffregen/TimerOne",
-      "frameworks": ["arduino"],
-      "platforms": ["atmelavr", "teensy"]
-    },
-    {
-      "owner": "mkalkbrenner",
-      "name": "WS2812Serial",
-      "version": "^0.1.0",
-      "frameworks": ["arduino"],
-      "platforms": ["teensy"]
     }
   ]
 }

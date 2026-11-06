@@ -165,11 +165,15 @@ jobs:
           cp ${ELF_FILE%.elf}.uf2 "${NAME}"
           echo "UF2_NAME=${NAME}" >> $GITHUB_ENV
       - name: Upload UF2 artifact
+        # The image is distributed with the licence and the third-party
+        # notices, which the licences of the libraries in it require.
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.controller }}-firmware
           path: |
             ${{ env.UF2_NAME }}
+            LICENSE
+            THIRD-PARTY-NOTICES.md
 
   post-build:
     runs-on: ubuntu-latest
@@ -182,5 +186,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         with:
           draft: true
+          # Every firmware artefact carries the same two text files; one copy
+          # of each goes into the release.
           files: |
             */*.uf2
+            IO_16_8_1-firmware/LICENSE
+            IO_16_8_1-firmware/THIRD-PARTY-NOTICES.md

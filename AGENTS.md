@@ -59,8 +59,9 @@ Main files:
   auto-detection fails, use `pio device list` and `pio run --target upload
   --device <port>`.
 - Library dependencies come from `platformio.ini`: `mkalkbrenner/WavePWM`,
-  `PPUC/Adafruit_NeoPixel` (pinned), `PPUC/WS2812FX` (pinned), `Bounce2`,
-  `RPI_PICO_TimerInterrupt`.
+  `PPUC/Adafruit_NeoPixel` (pinned), `PPUC/WS2812FX` (pinned), `Bounce2`.
+  `THIRD-PARTY-NOTICES.md` lists them with their licences: update it whenever
+  a dependency or its pin changes.
 - One PlatformIO env per board type: `IO_16_8_1`, `IO_16x8_matrix`,
   `Out_8x10`, `Opto_16`. `pio run -e <env>` builds one, CI builds all four.
 - CI (`.github/workflows/io-boards.yml`) runs nightly and fails a `vX.Y.Z` tag

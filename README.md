@@ -277,6 +277,11 @@ of their authors:
 * [bitfieldlabs/afterglow](https://github.com/bitfieldlabs/afterglow)
 * [bitfieldlabs/aggi](https://github.com/bitfieldlabs/aggi)
 
+The libraries and the Arduino core a firmware image is built from, with their
+licences and the attribution they require, are listed in
+[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md). CI ships that file and
+`LICENSE` next to the `.uf2` images.
+
 Contributions are welcome.
 
 ## Setup Development Environment
