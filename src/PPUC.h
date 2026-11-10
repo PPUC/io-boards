@@ -7,8 +7,8 @@
 #define PPUC_h
 
 #define FIRMWARE_VERSION_MAJOR 0  // X Digits
-#define FIRMWARE_VERSION_MINOR 3  // Max 2 Digits
-#define FIRMWARE_VERSION_PATCH 6  // Max 2 Digits
+#define FIRMWARE_VERSION_MINOR 4  // Max 2 Digits
+#define FIRMWARE_VERSION_PATCH 0  // Max 2 Digits
 
 #include <Arduino.h>
 

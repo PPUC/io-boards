@@ -6,7 +6,14 @@
 namespace ppuc {
 namespace v2 {
 
-constexpr uint32_t kBaudRate = 115200;
+// The ADM3483's rated maximum. Its slew-rate limiting is what keeps the bus
+// clean next to coils, and it also caps the rate: there is no headroom above
+// this without changing the transceiver. 250000 divides exactly from both the
+// RP2040's 125 MHz peripheral clock and the Pi's 48 MHz UART clock, so neither
+// side carries a baud-rate error. Boards on firmware before 0.4.0 run at 115200
+// and cannot be reached at this rate, not even to update them over the bus:
+// they are flashed over USB once.
+constexpr uint32_t kBaudRate = 250000;
 
 constexpr uint8_t kSyncByte = 0xA5;
 constexpr uint8_t kNoBoard = 0xFF;

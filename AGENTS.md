@@ -103,8 +103,10 @@ Main files:
 
 - RS485 UART on `Serial1`, TX `GPIO0`, RX `GPIO1`, DE `GPIO2` (explicit mux
   setup in `main.cpp` — keep it).
-- Baud: `115200` (`ppuc::v2::kBaudRate`). Planned follow-up: `250000` once
-  restart/reset behavior is trustworthy.
+- Baud: `250000` (`ppuc::v2::kBaudRate`) since firmware 0.4.0, the ADM3483's
+  rated maximum. Earlier firmware ran at `115200`; such a board cannot be
+  reached by a 0.4.0 host, not even to update it over the bus, and is flashed
+  over USB once.
 - Sync byte `0xA5`, 5-byte header, 16-bit CCITT CRC over header + payload.
 
 Header layout: `sync`, `typeAndFlags`, `nextBoard`, `sequence`, `epoch`.
