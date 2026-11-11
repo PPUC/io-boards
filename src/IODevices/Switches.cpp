@@ -1,5 +1,6 @@
 #include "Switches.h"
 
+#include "SwitchDebounce.h"
 #include "SwitchesPIO/ActiveLow16Switches.pio.h"
 #include "SwitchesPIO/ActiveLow4Switches.pio.h"
 #include "SwitchesPIO/ActiveLow8Switches.pio.h"
@@ -304,16 +305,10 @@ void Switches::flushPendingDebounce(uint32_t nowUs) {
       continue;
     }
 
-    const uint32_t debounceUs = debounceWindowUs(static_cast<uint8_t>(i));
-    const uint32_t lastAcceptedUs = debounceTimeUs[i][switchState ? 1 : 0];
-    const uint32_t sinceUs = pendingDebounceSinceUs[i];
-    const bool stableLongEnough =
-        debounceMode[i] == SWITCH_DEBOUNCE_STANDARD;
-    if (stableLongEnough && sinceUs != 0 && (nowUs - sinceUs) < debounceUs) {
-      continue;
-    }
-    if (!stableLongEnough && lastAcceptedUs != 0 &&
-        (nowUs - lastAcceptedUs) < debounceUs) {
+    if (!SwitchEdgeDue(debounceMode[i], switchState, nowUs,
+                       pendingDebounceSinceUs[i],
+                       debounceTimeUs[i][switchState ? 1 : 0],
+                       debounceWindowUs(static_cast<uint8_t>(i)))) {
       continue;
     }
 
