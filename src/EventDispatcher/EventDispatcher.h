@@ -120,7 +120,11 @@ class EventDispatcher {
   // Receives firmware images and hands them to the OTA bootloader. Owned here
   // because the admin frames that drive it arrive here.
   FirmwareUpdater firmwareUpdater;
-  void forwardSwitchTokenIfSelected(uint8_t selectedBoard);
+  // afterHostFrame: the token came in the host's own frame, so this reply
+  // follows the host on the wire rather than another board.
+  void forwardSwitchTokenIfSelected(uint8_t selectedBoard, bool afterHostFrame);
+  // The pre-reply delay this reply needs. See switchReplyDelayUs.
+  uint32_t replyDelayUs() const;
   void applyOutputStates(const byte* coils, size_t coilBytes, const byte* lamps,
                          size_t lampBytes, const byte* giLevels);
   void applySwitchStates(const byte* switches, size_t switchBytes);
@@ -205,7 +209,15 @@ class EventDispatcher {
   uint8_t rs485Pin = 0;
   byte board = 255;
   byte nextSwitchBoard = ppuc::v2::kNoBoard;
+  // Waited before answering the token, but only when the token came in the
+  // host's frame. That reply is the one that can run into a host still driving
+  // the bus: a Pi releases its transceiver in software, after its UART's
+  // transmit-done interrupt, and the first board in the chain answers the
+  // moment the frame ends. Every later reply follows a board, which releases
+  // the bus in firmware the instant its last bit is out, so delaying those only
+  // slowed the chain by the delay times the number of boards.
   uint32_t switchReplyDelayUs = 0;
+  bool replyFollowsHost = false;
   uint8_t switchIdleRefreshReplies = kDefaultSwitchIdleRefreshReplies;
   uint32_t lastPoll;
   bool running = false;

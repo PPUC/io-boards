@@ -567,7 +567,7 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
     if (!runtimeConfigValid || incomingEpoch != currentEpoch) {
       return true;
     }
-    forwardSwitchTokenIfSelected(frame[2]);
+    forwardSwitchTokenIfSelected(frame[2], /*afterHostFrame*/ true);
     const size_t coilBytes = ppuc::v2::BitsToBytes(runtimeConfig.coilBits);
     const size_t lampBytes = ppuc::v2::BitsToBytes(runtimeConfig.lampBits);
     applyOutputStates(&frame[payloadOffset], coilBytes,
@@ -581,7 +581,7 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
       return true;
     }
     forceNextSwitchStateReply = true;
-    forwardSwitchTokenIfSelected(frame[2]);
+    forwardSwitchTokenIfSelected(frame[2], /*afterHostFrame*/ true);
     return true;
   }
 
@@ -589,7 +589,7 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
     if (!runtimeConfigValid || incomingEpoch != currentEpoch) {
       return true;
     }
-    forwardSwitchTokenIfSelected(frame[2]);
+    forwardSwitchTokenIfSelected(frame[2], /*afterHostFrame*/ false);
     const size_t switchBytes = ppuc::v2::BitsToBytes(runtimeConfig.switchBits);
     applySwitchStates(&frame[payloadOffset + ppuc::v2::kSwitchStatusBytes],
                       switchBytes);
@@ -598,7 +598,7 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
 
   if (frameType == ppuc::v2::kFrameSwitchNoChange) {
     if (runtimeConfigValid && incomingEpoch == currentEpoch) {
-      forwardSwitchTokenIfSelected(frame[2]);
+      forwardSwitchTokenIfSelected(frame[2], /*afterHostFrame*/ false);
     }
     return true;
   }
@@ -958,10 +958,16 @@ void EventDispatcher::applySwitchStates(const byte* switches,
   }
 }
 
-void EventDispatcher::forwardSwitchTokenIfSelected(uint8_t selectedBoard) {
+uint32_t EventDispatcher::replyDelayUs() const {
+  return replyFollowsHost ? switchReplyDelayUs : 0;
+}
+
+void EventDispatcher::forwardSwitchTokenIfSelected(uint8_t selectedBoard,
+                                                   bool afterHostFrame) {
   if (selectedBoard != board) {
     return;
   }
+  replyFollowsHost = afterHostFrame;
   // Counted the moment this board learns the token names it, before anything
   // that could stop it replying. Against v2TxFrames this separates "never saw
   // the frame selecting me" from "saw it and did not answer" - the two faults
@@ -1024,8 +1030,8 @@ void EventDispatcher::sendSwitchStateFrame(byte nextBoard) {
   // after every reply.
   const uint32_t postTxSettleUs =
       derivedPostTxSettleUs > 2000u ? 2000u : derivedPostTxSettleUs;
-  if (switchReplyDelayUs > 0) {
-    delayMicroseconds(switchReplyDelayUs);
+  if (replyDelayUs() > 0) {
+    delayMicroseconds(replyDelayUs());
   }
 
   digitalWrite(rs485Pin, HIGH);  // Write.
@@ -1129,8 +1135,8 @@ void EventDispatcher::sendSwitchNoChangeFrame(byte nextBoard) {
   // after every reply.
   const uint32_t postTxSettleUs =
       derivedPostTxSettleUs > 2000u ? 2000u : derivedPostTxSettleUs;
-  if (switchReplyDelayUs > 0) {
-    delayMicroseconds(switchReplyDelayUs);
+  if (replyDelayUs() > 0) {
+    delayMicroseconds(replyDelayUs());
   }
 
   digitalWrite(rs485Pin, HIGH);  // Write.
