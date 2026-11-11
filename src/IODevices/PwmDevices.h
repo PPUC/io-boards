@@ -49,6 +49,22 @@
 #define MAX_STOP_REDRIVES_PER_PRESS 5
 #endif
 
+// How late the ROM's own copy of a fast-flip pulse may arrive and still be
+// taken for one.
+//
+// A fast-flip output fires the moment its switch closes. The ROM sees the same
+// switch a little later -- over the bus, through the host, through an emulated
+// frame -- and fires the same coil itself. That copy is not a second request:
+// obeyed, it fires a sling or a jet a second time, and its "off" drops a
+// flipper the player is still holding. Within this long after the switch
+// closed, a ROM "on" for the output is taken for that copy and ignored. It is
+// an upper bound for the copy's delay, not a timing anything relies on: a ROM
+// that fires the coil on its own -- a ball search, the coil test -- does so
+// with no switch closing in front of it.
+#ifndef FAST_SWITCH_ROM_COPY_WINDOW_MS
+#define FAST_SWITCH_ROM_COPY_WINDOW_MS 300
+#endif
+
 class PwmDevices : public HighPowerOffAware {
  public:
   // Constructor
@@ -107,6 +123,9 @@ class PwmDevices : public HighPowerOffAware {
   bool fastSwitchClosed[MAX_PWM_OUTPUTS] = {0};
   bool fastSwitchManagedActive[MAX_PWM_OUTPUTS] = {0};
   bool fastSwitchWaitForRelease[MAX_PWM_OUTPUTS] = {0};
+  // When the fast-flip switch last closed, for telling the ROM's copy of a
+  // pulse from a request of its own. 0 means not since registration.
+  uint32_t fastSwitchClosedAt[MAX_PWM_OUTPUTS] = {0};
   // Last seen state of each stop switch, for spotting the moment it closes.
   bool stopSwitchClosed[MAX_PWM_OUTPUTS][MAX_STOP_SWITCHES_PER_OUTPUT] = {{0}};
   // A stop switch closed while this output was on, and it stays off until every
@@ -118,6 +137,8 @@ class PwmDevices : public HighPowerOffAware {
   EventDispatcher *_eventDispatcher = nullptr;
 
   void updateSolenoidOrFlasher(bool targetState, byte i);
+  bool isRomCopyOfFastSwitchPulse(bool targetState, byte i) const;
+  void noteFastSwitchState(bool switchClosed, byte i);
   void handleFastSwitchEvent(bool switchClosed, byte i);
   void handleStopSwitchEvent(byte switchNumber, bool switchClosed, byte i);
   void refreshStopSwitches(byte i);

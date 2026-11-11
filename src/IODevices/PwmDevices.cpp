@@ -51,6 +51,7 @@ void PwmDevices::registerSolenoid(byte p, byte n, byte pow, uint16_t minPT,
   fastSwitchClosed[index] = false;
   fastSwitchManagedActive[index] = false;
   fastSwitchWaitForRelease[index] = false;
+  fastSwitchClosedAt[index] = 0;
   for (byte s = 0; s < MAX_STOP_SWITCHES_PER_OUTPUT; s++) {
     stopSwitchClosed[index][s] = false;
   }
@@ -85,6 +86,7 @@ void PwmDevices::registerFlasher(byte p, byte n, byte pow) {
   fastSwitchClosed[index] = false;
   fastSwitchManagedActive[index] = false;
   fastSwitchWaitForRelease[index] = false;
+  fastSwitchClosedAt[index] = 0;
 
   pinMode(p, OUTPUT);
   analogWrite(p, 0);
@@ -114,6 +116,7 @@ void PwmDevices::registerLamp(byte p, byte n, byte pow) {
   fastSwitchClosed[index] = false;
   fastSwitchManagedActive[index] = false;
   fastSwitchWaitForRelease[index] = false;
+  fastSwitchClosedAt[index] = 0;
 
   pinMode(p, OUTPUT);
   analogWrite(p, 0);
@@ -151,6 +154,7 @@ void PwmDevices::reset() {
     fastSwitchClosed[i] = false;
     fastSwitchManagedActive[i] = false;
     fastSwitchWaitForRelease[i] = false;
+    fastSwitchClosedAt[i] = 0;
     stopRedrives[i] = 0;
   }
 
@@ -259,8 +263,9 @@ void PwmDevices::update() {
       // Reconcile against the current board/global switch bitmap each update so
       // a missed release event cannot leave a hold-style flipper powered until
       // the next manual switch cycle.
-      fastSwitchClosed[i] = _eventDispatcher->getSwitchState(
-          static_cast<uint16_t>(fastSwitch[i]));
+      noteFastSwitchState(_eventDispatcher->getSwitchState(
+                              static_cast<uint16_t>(fastSwitch[i])),
+                          i);
       if (!fastSwitchClosed[i]) {
         fastSwitchWaitForRelease[i] = false;
         stopRedrives[i] = 0;
@@ -383,6 +388,14 @@ void PwmDevices::handlePowerScaleEvent(uint16_t motorNumber, byte scale) {
 void PwmDevices::updateSolenoidOrFlasher(bool targetState, byte i) {
   _ms = millis();
 
+  if (isRomCopyOfFastSwitchPulse(targetState, i)) {
+    CrossLinkDebugger::debug(
+        "Ignored ROM %s of fast-switch PWM device on port %d: the board drives "
+        "it from its switch",
+        targetState ? "activation" : "deactivation", port[i]);
+    return;
+  }
+
   if (targetState && stopEngaged[i]) {
     // A stop switch is holding this output off. Ignoring the request rather
     // than queueing it: the assembly is sitting at the end of its travel, and
@@ -422,8 +435,47 @@ void PwmDevices::updateSolenoidOrFlasher(bool targetState, byte i) {
   }
 }
 
-void PwmDevices::handleFastSwitchEvent(bool switchClosed, byte i) {
+void PwmDevices::noteFastSwitchState(bool switchClosed, byte i) {
+  if (switchClosed && !fastSwitchClosed[i]) {
+    // 0 means "never", and millis() can be 0 right after boot.
+    fastSwitchClosedAt[i] = _ms != 0 ? _ms : 1;
+  }
   fastSwitchClosed[i] = switchClosed;
+}
+
+// Whether a ROM request for a fast-flip output is the ROM's own copy of what
+// the board already did for the switch, rather than a request of its own.
+//
+// "off": while the board drives the output from its switch, that pulse is the
+// switch's, and ends when the switch opens, the stop switch closes or the
+// maximum pulse time runs out. A ROM "off" there is the end of the ROM's copy,
+// and it dropped a flipper the player was still holding. Nothing about this is
+// timed.
+//
+// "on": while the switch is closed, the board is already doing it, unless it
+// has given up waiting for a release -- a ball resting on a sling switch -- in
+// which case the ROM's ball search is exactly what should get through. Shortly
+// after the switch closed, it is the ROM's copy arriving late, and obeying it
+// fired a sling or a jet a second time.
+//
+// Everything else is the ROM's own: the coil test, a ball search, a ROM that
+// fires the coil with no switch in front of it.
+bool PwmDevices::isRomCopyOfFastSwitchPulse(bool targetState, byte i) const {
+  if (fastSwitch[i] == 0) {
+    return false;
+  }
+  if (!targetState) {
+    return activated[i] > 0 && fastSwitchManagedActive[i];
+  }
+  if (fastSwitchClosed[i] && !fastSwitchWaitForRelease[i]) {
+    return true;
+  }
+  return fastSwitchClosedAt[i] != 0 &&
+         (_ms - fastSwitchClosedAt[i]) < FAST_SWITCH_ROM_COPY_WINDOW_MS;
+}
+
+void PwmDevices::handleFastSwitchEvent(bool switchClosed, byte i) {
+  noteFastSwitchState(switchClosed, i);
 
   if (!switchClosed) {
     // Re-arm after the stuck/held switch has been released.
