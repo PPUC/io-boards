@@ -431,6 +431,9 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
           _eventDispatcher->setNextSwitchBoard((byte)event->value);
         } else if (event->key == CONFIG_TOPIC_SWITCH_REPLY_DELAY_US) {
           _eventDispatcher->setSwitchReplyDelayUs(event->value);
+        } else if (event->key == CONFIG_TOPIC_SWITCH_IDLE_REFRESH) {
+          _eventDispatcher->setSwitchIdleRefreshReplies(
+              event->value > 255 ? 255 : static_cast<uint8_t>(event->value));
         }
         break;
 

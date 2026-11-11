@@ -120,6 +120,10 @@
 // solenoid does not gate it. The coin door still does. Dirty Harry searches for
 // its gun at boot and waits for the result, long before any game starts.
 #define CONFIG_TOPIC_IGNORE_GAME_ON 97              //
+// Under CONFIG_TOPIC_SWITCH_CHAIN: how many polls in a row a board answers
+// "no change" before it re-reads its switches and volunteers its full state.
+// 0 turns that off. A board that never receives it keeps 100.
+#define CONFIG_TOPIC_SWITCH_IDLE_REFRESH 98         //
 #define CONFIG_TOPIC_NULL 99                        // NULL
 
 #define PWM_TYPE_SOLENOID 1  // Coil

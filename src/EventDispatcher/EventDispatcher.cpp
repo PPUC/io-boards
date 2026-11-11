@@ -136,6 +136,11 @@ void EventDispatcher::setSwitchReplyDelayUs(uint32_t delayUs) {
   switchReplyDelayUs = delayUs;
 }
 
+void EventDispatcher::setSwitchIdleRefreshReplies(uint8_t replies) {
+  switchIdleRefreshReplies = replies;
+  consecutiveSwitchNoChangeReplies = 0;
+}
+
 void EventDispatcher::addListener(EventListener *eventListener) {
   addListener(eventListener, EVENT_SOURCE_ANY);
 }
@@ -966,15 +971,15 @@ void EventDispatcher::forwardSwitchTokenIfSelected(uint8_t selectedBoard) {
   forceNextSwitchStateReply = false;
   const bool haveQueuedLocalSnapshots =
       localSwitchReportHead != localSwitchReportTail;
-  const bool shouldForceSwitchState =
-      shouldRefreshSwitches ||
-      consecutiveSwitchNoChangeReplies >= kMaxConsecutiveSwitchNoChangeReplies;
+  const bool idleRefreshDue =
+      switchIdleRefreshReplies > 0 &&
+      consecutiveSwitchNoChangeReplies >= switchIdleRefreshReplies;
+  const bool shouldForceSwitchState = shouldRefreshSwitches || idleRefreshDue;
 
   // Forward the token before running the heavier output/switch fanout logic on
   // core 0. Config ACKs are already fast; runtime replies need the same low
   // latency so switch polling does not depend on lamp/effect processing time.
-  if (shouldRefreshSwitches ||
-      consecutiveSwitchNoChangeReplies >= kMaxConsecutiveSwitchNoChangeReplies) {
+  if (shouldForceSwitchState) {
     dispatch(new Event(EVENT_REFRESH_SWITCHES, 1, 1, true));
   }
 
@@ -982,7 +987,10 @@ void EventDispatcher::forwardSwitchTokenIfSelected(uint8_t selectedBoard) {
     sendSwitchStateFrame(nextSwitchBoard);
   } else {
     sendSwitchNoChangeFrame(nextSwitchBoard);
-    ++consecutiveSwitchNoChangeReplies;
+    // Saturating: with the idle refresh off nothing resets it.
+    if (consecutiveSwitchNoChangeReplies < 255) {
+      ++consecutiveSwitchNoChangeReplies;
+    }
   }
 }
 

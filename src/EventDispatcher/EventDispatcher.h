@@ -49,7 +49,25 @@
 // Losses the host *can* see - a failed CRC, a chain that did not complete - no
 // longer wait for this at all. libppuc asks for a refresh the moment it detects
 // one, which is what makes a slower blind interval safe.
-static constexpr uint8_t kMaxConsecutiveSwitchNoChangeReplies = 100;
+//
+// The host can change it, or turn it off with 0, through
+// CONFIG_TOPIC_SWITCH_IDLE_REFRESH.
+// What it triggers is not only a report: the board re-reads every dedicated
+// input raw, without debounce, and restarts its switch reader, dropping any
+// debounce in progress and any switch event not yet dispatched. A host that
+// polls fast - a Pi on its own UART reaches 100 quiet polls in under a second -
+// does that to a flipper button the player is holding, and that is suspected of
+// releasing flippers that were not released. The host's own explicit refresh
+// (SwitchRefreshFrame) is unaffected.
+//
+// SWITCH_IDLE_REFRESH_DEFAULT overrides the default for a test build, e.g.
+// PLATFORMIO_BUILD_FLAGS=-DSWITCH_IDLE_REFRESH_DEFAULT=0 to flash one board
+// with it off before any host knows the setting.
+#ifndef SWITCH_IDLE_REFRESH_DEFAULT
+#define SWITCH_IDLE_REFRESH_DEFAULT 100
+#endif
+static constexpr uint8_t kDefaultSwitchIdleRefreshReplies =
+    SWITCH_IDLE_REFRESH_DEFAULT;
 
 class EventDispatcher {
  public:
@@ -67,6 +85,8 @@ class EventDispatcher {
   void setDebug(bool enabled);
   void setNextSwitchBoard(byte boardId);
   void setSwitchReplyDelayUs(uint32_t delayUs);
+  // Quiet replies before an idle refresh; 0 turns it off.
+  void setSwitchIdleRefreshReplies(uint8_t replies);
 
   void addListener(EventListener* eventListener, char sourceId);
 
@@ -186,6 +206,7 @@ class EventDispatcher {
   byte board = 255;
   byte nextSwitchBoard = ppuc::v2::kNoBoard;
   uint32_t switchReplyDelayUs = 0;
+  uint8_t switchIdleRefreshReplies = kDefaultSwitchIdleRefreshReplies;
   uint32_t lastPoll;
   bool running = false;
 
