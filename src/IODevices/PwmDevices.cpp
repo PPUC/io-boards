@@ -52,6 +52,7 @@ void PwmDevices::registerSolenoid(byte p, byte n, byte pow, uint16_t minPT,
   fastSwitchManagedActive[index] = false;
   fastSwitchWaitForRelease[index] = false;
   fastSwitchClosedAt[index] = 0;
+  fastSwitchPulseEndedAt[index] = 0;
   for (byte s = 0; s < MAX_STOP_SWITCHES_PER_OUTPUT; s++) {
     stopSwitchClosed[index][s] = false;
   }
@@ -87,6 +88,7 @@ void PwmDevices::registerFlasher(byte p, byte n, byte pow) {
   fastSwitchManagedActive[index] = false;
   fastSwitchWaitForRelease[index] = false;
   fastSwitchClosedAt[index] = 0;
+  fastSwitchPulseEndedAt[index] = 0;
 
   pinMode(p, OUTPUT);
   analogWrite(p, 0);
@@ -117,6 +119,7 @@ void PwmDevices::registerLamp(byte p, byte n, byte pow) {
   fastSwitchManagedActive[index] = false;
   fastSwitchWaitForRelease[index] = false;
   fastSwitchClosedAt[index] = 0;
+  fastSwitchPulseEndedAt[index] = 0;
 
   pinMode(p, OUTPUT);
   analogWrite(p, 0);
@@ -155,6 +158,7 @@ void PwmDevices::reset() {
     fastSwitchManagedActive[i] = false;
     fastSwitchWaitForRelease[i] = false;
     fastSwitchClosedAt[i] = 0;
+    fastSwitchPulseEndedAt[i] = 0;
     stopRedrives[i] = 0;
   }
 
@@ -162,6 +166,10 @@ void PwmDevices::reset() {
 }
 
 void PwmDevices::deactivateOutput(byte i) {
+  if (activated[i] > 0 && fastSwitchManagedActive[i]) {
+    // 0 means "never", and millis() can be 0 right after boot.
+    fastSwitchPulseEndedAt[i] = _ms != 0 ? _ms : 1;
+  }
   analogWrite(port[i], 0);
   activated[i] = 0;
   currentPower[i] = 0;
@@ -296,6 +304,9 @@ void PwmDevices::update() {
             "PWM device on port %d fired again %d times in one press, waiting "
             "for release",
             port[i], stopRedrives[i]);
+        continue;
+      }
+      if (inRefireLockout(i)) {
         continue;
       }
       stopRedrives[i]++;
@@ -460,12 +471,8 @@ void PwmDevices::noteFastSwitchState(bool switchClosed, byte i) {
 //
 // Everything else is the ROM's own: the coil test, a ball search, a ROM that
 // fires the coil with no switch in front of it.
-//
-// Only for a flipper button. A sling or a jet takes the ROM's requests as it
-// did before: its "off" is what ends a kick its chattering leaf would
-// otherwise keep going to the maximum pulse time.
 bool PwmDevices::isRomCopyOfFastSwitchPulse(bool targetState, byte i) const {
-  if (fastSwitch[i] == 0 || !fastSwitchHoldsAnOutput(i)) {
+  if (fastSwitch[i] == 0) {
     return false;
   }
   if (!targetState) {
@@ -479,8 +486,8 @@ bool PwmDevices::isRomCopyOfFastSwitchPulse(bool targetState, byte i) const {
 }
 
 // Whether output i's switch holds any output on this board - its own, or the
-// other winding of the same flipper. A power winding with no end-of-stroke
-// switch configured is still a flipper when its hold winding is.
+// other winding of the same flipper. A power winding without an end-of-stroke
+// switch is still a flipper's when its hold winding is on the same button.
 bool PwmDevices::fastSwitchHoldsAnOutput(byte i) const {
   for (byte j = 0; j < last; j++) {
     if (fastSwitch[j] != fastSwitch[i] ||
@@ -493,6 +500,14 @@ bool PwmDevices::fastSwitchHoldsAnOutput(byte i) const {
     }
   }
   return false;
+}
+
+// A sling or a jet whose kick ended moments ago, see
+// FAST_SWITCH_REFIRE_LOCKOUT_MS.
+bool PwmDevices::inRefireLockout(byte i) const {
+  return fastSwitchPulseEndedAt[i] != 0 &&
+         (_ms - fastSwitchPulseEndedAt[i]) < FAST_SWITCH_REFIRE_LOCKOUT_MS &&
+         !fastSwitchHoldsAnOutput(i);
 }
 
 void PwmDevices::handleFastSwitchEvent(bool switchClosed, byte i) {
@@ -531,6 +546,16 @@ void PwmDevices::handleFastSwitchEvent(bool switchClosed, byte i) {
   if (stopEngaged[i]) {
     CrossLinkDebugger::debug(
         "Ignored fast-switch activation on port %d: stopped by a switch",
+        port[i]);
+    return;
+  }
+
+  if (inRefireLockout(i)) {
+    // And wait for a release: the leaf still reading closed once the lockout
+    // is over is the same chatter, and must not be re-driven into a kick.
+    fastSwitchWaitForRelease[i] = true;
+    CrossLinkDebugger::debug(
+        "Ignored fast-switch activation on port %d: its last kick just ended",
         port[i]);
     return;
   }

@@ -559,7 +559,6 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
     mappingComplete = receivedMappingFrames >= expectedMappingFrames;
     if (mappingComplete && !wasComplete) {
       announceLocalSwitchStates();
-      reannounceGameOn();
     }
     return true;
   }
@@ -569,18 +568,6 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
       return true;
     }
     forwardSwitchTokenIfSelected(frame[2], /*afterHostFrame*/ true);
-    // Not until every position has its number. A board that missed a mapping
-    // frame still holds the identity map for that position, and applying the
-    // frame then drives the wrong output - and records the bit in the snapshot
-    // under it. On Dirty Harry the game-on solenoid, 31, sits at position 26:
-    // a board without that one mapping took game-on for coil 26, and once the
-    // resync had put the map right the bit no longer changed, so the board
-    // never saw game-on and kept every coil off. Its lamps, which change all
-    // the time, recovered on their own. The board says it is incomplete in
-    // every reply, and the host resyncs.
-    if (!mappingComplete) {
-      return true;
-    }
     const size_t coilBytes = ppuc::v2::BitsToBytes(runtimeConfig.coilBits);
     const size_t lampBytes = ppuc::v2::BitsToBytes(runtimeConfig.lampBits);
     applyOutputStates(&frame[payloadOffset], coilBytes,
@@ -603,11 +590,6 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
       return true;
     }
     forwardSwitchTokenIfSelected(frame[2], /*afterHostFrame*/ false);
-    // Same as for outputs: another board's switch at an unmapped position is
-    // a different switch to this one, and could fire a fast-flip output.
-    if (!mappingComplete) {
-      return true;
-    }
     const size_t switchBytes = ppuc::v2::BitsToBytes(runtimeConfig.switchBits);
     applySwitchStates(&frame[payloadOffset + ppuc::v2::kSwitchStatusBytes],
                       switchBytes);
@@ -980,27 +962,6 @@ uint32_t EventDispatcher::replyDelayUs() const {
   return replyFollowsHost ? switchReplyDelayUs : 0;
 }
 
-// Says the game-on solenoid's state once the map is complete, whether or not
-// its bit changes.
-//
-// High power follows game-on, and the boards learn it from a change of its
-// bit. A resync that put a wrong map right leaves the bit as it was, so a
-// board that had the bit under the wrong number would wait for the next game
-// to see game-on. Repeating a state the gate already has does nothing.
-void EventDispatcher::reannounceGameOn() {
-  if (gameOnSolenoidNumber == 0) {
-    return;
-  }
-  for (uint16_t n = 0; n < runtimeConfig.coilBits; ++n) {
-    if (coilIndexToNumber[n] == gameOnSolenoidNumber) {
-      callListeners(new Event(EVENT_SOURCE_SOLENOID, gameOnSolenoidNumber,
-                              ppuc::v2::GetBitmapBit(outputCoils, n) ? 1 : 0),
-                    true);
-      return;
-    }
-  }
-}
-
 void EventDispatcher::forwardSwitchTokenIfSelected(uint8_t selectedBoard,
                                                    bool afterHostFrame) {
   if (selectedBoard != board) {
@@ -1012,14 +973,6 @@ void EventDispatcher::forwardSwitchTokenIfSelected(uint8_t selectedBoard,
   // the frame selecting me" from "saw it and did not answer" - the two faults
   // are indistinguishable from the host, which only sees silence either way.
   v2Selected++;
-  // Without the whole map this board's switch bitmap puts switches at the
-  // wrong positions, and the host would take them for others - a flipper
-  // button read as released. Answer without state, which keeps the chain going
-  // and carries the incomplete flag, and leave a pending refresh for later.
-  if (!mappingComplete) {
-    sendSwitchNoChangeFrame(nextSwitchBoard);
-    return;
-  }
   const bool shouldRefreshSwitches = forceNextSwitchStateReply;
   forceNextSwitchStateReply = false;
   const bool haveQueuedLocalSnapshots =

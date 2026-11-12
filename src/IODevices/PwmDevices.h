@@ -61,22 +61,25 @@
 // an upper bound for the copy's delay, not a timing anything relies on: a ROM
 // that fires the coil on its own -- a ball search, the coil test -- does so
 // with no switch closing in front of it.
-//
-// Only for a flipper: an output its switch holds on (see
-// FastSwitchOutputHolds). A sling or a jet obeys the ROM as before 0.4.1. With
-// the ROM's "off" ignored, nothing but its switch opening or the maximum pulse
-// time ended a sling's kick, and a chattering leaf turned one hit into a burst.
 #ifndef FAST_SWITCH_ROM_COPY_WINDOW_MS
 #define FAST_SWITCH_ROM_COPY_WINDOW_MS 300
 #endif
 
-// Whether a fast-flip output stays on for as long as its switch is closed - a
-// flipper - rather than firing a pulse - a sling, a jet.
+// How long a sling or a jet ignores its switch after the board's kick ended.
 //
-// A flipper's power winding is cut by its end-of-stroke switch, a single
-// winding drops to hold power, and a separate hold winding has no maximum
-// pulse time at all. A sling or a jet has a maximum pulse time and nothing
-// else.
+// A sling's leaf chatters through the kick, and the kick itself shakes it
+// closed again. Without a pause each of those closings fired the coil anew,
+// and one hit became a burst of twenty. A ball cannot come back to the same
+// sling this fast. Only for an output its switch fires, never for a flipper,
+// which a player may press again at once.
+#ifndef FAST_SWITCH_REFIRE_LOCKOUT_MS
+#define FAST_SWITCH_REFIRE_LOCKOUT_MS 100
+#endif
+
+// Whether a fast-flip output stays on for as long as its switch is closed - a
+// flipper - rather than firing a pulse - a sling, a jet. A flipper's power
+// winding is cut by its end-of-stroke switch, a single winding drops to hold
+// power, and a separate hold winding has no maximum pulse time.
 inline bool FastSwitchOutputHolds(uint16_t maxPulseTime,
                                   uint16_t holdPowerActivationTime,
                                   byte stopSwitch1, byte stopSwitch2) {
@@ -145,6 +148,9 @@ class PwmDevices : public HighPowerOffAware {
   // When the fast-flip switch last closed, for telling the ROM's copy of a
   // pulse from a request of its own. 0 means not since registration.
   uint32_t fastSwitchClosedAt[MAX_PWM_OUTPUTS] = {0};
+  // When the board's own kick of a sling or a jet last ended, for the re-fire
+  // lockout. 0 means not since registration.
+  uint32_t fastSwitchPulseEndedAt[MAX_PWM_OUTPUTS] = {0};
   // Last seen state of each stop switch, for spotting the moment it closes.
   bool stopSwitchClosed[MAX_PWM_OUTPUTS][MAX_STOP_SWITCHES_PER_OUTPUT] = {{0}};
   // A stop switch closed while this output was on, and it stays off until every
@@ -158,6 +164,7 @@ class PwmDevices : public HighPowerOffAware {
   void updateSolenoidOrFlasher(bool targetState, byte i);
   bool isRomCopyOfFastSwitchPulse(bool targetState, byte i) const;
   bool fastSwitchHoldsAnOutput(byte i) const;
+  bool inRefireLockout(byte i) const;
   void noteFastSwitchState(bool switchClosed, byte i);
   void handleFastSwitchEvent(bool switchClosed, byte i);
   void handleStopSwitchEvent(byte switchNumber, bool switchClosed, byte i);

@@ -86,8 +86,6 @@ void Switches::resetConfig() {
   pendingDebounceMask = 0;
   pendingDebounceState = 0;
   memset(localFastSwitch, 0, sizeof(localFastSwitch));
-  memset(pulsedFastSwitch, 0, sizeof(pulsedFastSwitch));
-  memset(heldFastSwitch, 0, sizeof(heldFastSwitch));
   dedicatedSwitchStateChangedSinceCorrection = false;
 }
 
@@ -244,14 +242,6 @@ void Switches::setDebounceMode(byte n, uint8_t mode) {
 
 void Switches::markLocalFastSwitch(byte n) { localFastSwitch[n] = true; }
 
-void Switches::markFastSwitchOutput(byte n, bool holds) {
-  if (holds) {
-    heldFastSwitch[n] = true;
-  }
-  // One output this switch holds is enough to make it a flipper button.
-  pulsedFastSwitch[n] = !heldFastSwitch[n];
-}
-
 uint32_t Switches::debounceWindowUs(uint8_t index) const {
   uint32_t windowUs = static_cast<uint32_t>(debounceSetting[index]) * 1000u;
   return windowUs;
@@ -315,8 +305,7 @@ void Switches::flushPendingDebounce(uint32_t nowUs) {
       continue;
     }
 
-    if (!SwitchEdgeDue(debounceMode[i], !pulsedFastSwitch[number[i]],
-                       switchState, nowUs,
+    if (!SwitchEdgeDue(debounceMode[i], switchState, nowUs,
                        pendingDebounceSinceUs[i],
                        debounceTimeUs[i][switchState ? 1 : 0],
                        debounceWindowUs(static_cast<uint8_t>(i)))) {

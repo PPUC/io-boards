@@ -2,8 +2,8 @@
 //
 // A fast-flip output fires the moment its switch closes. The ROM sees the same
 // switch later and fires the same coil itself; the host passes that on. Obeyed,
-// the copy's "off" dropped a flipper the player was still holding. Only a
-// flipper ignores it: a sling or a jet needs the ROM's "off" to end its kick. What must still get through is everything
+// the copy's "off" dropped a flipper the player was still holding, and its late
+// "on" fired a sling a second time. What must still get through is everything
 // the ROM does on its own: the coil test, a ball search, a coil fired with no
 // switch in front of it.
 
@@ -122,44 +122,24 @@ void test_a_late_rom_on_after_release_does_not_flip_again(void) {
       IsOn(kHoldPort), "the ROM's late copy must not raise the flipper again");
 }
 
-void test_the_roms_off_ends_a_sling_kick(void) {
-  // The sling's leaf chatters through the kick and reads closed. With the
-  // ROM's "off" ignored, only the 150 ms maximum ended the pulse, and the hit
-  // turned into a burst of kicks. A sling obeys the ROM as before 0.4.1.
+void test_a_sling_hit_fires_once(void) {
   RegisterSling();
   PowerOn();
 
   SendSwitch(kSlingSwitch, 1);
   TEST_ASSERT_TRUE(IsOn(kSlingPort));
-  Tick(20);
+  Tick(8);
+  SendSwitch(kSlingSwitch, 0);
+  Tick(1);
+  TEST_ASSERT_FALSE(IsOn(kSlingPort));
+
+  Tick(40);
   SendRom(kSlingNumber, 1);
+  TEST_ASSERT_FALSE_MESSAGE(
+      IsOn(kSlingPort), "the ROM's copy of the kick must not fire it again");
   Tick(20);
   SendRom(kSlingNumber, 0);
-  TEST_ASSERT_FALSE_MESSAGE(IsOn(kSlingPort),
-                            "the ROM's off must end the sling's kick");
-}
-
-void test_a_flippers_power_winding_follows_its_hold_winding(void) {
-  // A power winding without an end-of-stroke switch, beside a hold winding on
-  // the same button: the button is a flipper's, and the ROM's off is ignored.
-  RegisterHold();
-  g_pwm->registerSolenoid(22, 47, 255, /*minPT*/ 0, /*maxPT*/ 40, 0, 0,
-                          kButton);
-  PowerOn();
-
-  SendSwitch(kButton, 1);
-  Tick(10);
-  SendRom(47, 1);
-  Tick(5);
-  SendRom(47, 0);
-  TEST_ASSERT_TRUE_MESSAGE(IsOn(22), "the ROM's off must not cut the flip");
-}
-
-void test_what_counts_as_a_flipper(void) {
-  TEST_ASSERT_TRUE(FastSwitchOutputHolds(0, 0, 0, 0));    // hold winding
-  TEST_ASSERT_TRUE(FastSwitchOutputHolds(40, 0, 111, 0)); // power, with EOS
-  TEST_ASSERT_TRUE(FastSwitchOutputHolds(40, 30, 0, 0));  // single winding
-  TEST_ASSERT_FALSE(FastSwitchOutputHolds(150, 0, 0, 0)); // sling, jet
+  TEST_ASSERT_FALSE(IsOn(kSlingPort));
 }
 
 void test_the_rom_can_fire_a_sling_on_its_own(void) {
@@ -219,16 +199,76 @@ void test_the_rom_ends_its_own_pulse(void) {
                             "a ROM pulse ends when the ROM ends it");
 }
 
+void test_a_chattering_sling_does_not_kick_again_at_once(void) {
+  // The leaf bounces closed right after the kick. In 0.4.4 every such closing
+  // fired the sling anew, and one hit became a burst of twenty.
+  RegisterSling();
+  PowerOn();
+
+  SendSwitch(kSlingSwitch, 1);
+  TEST_ASSERT_TRUE(IsOn(kSlingPort));
+  Tick(8);
+  SendSwitch(kSlingSwitch, 0);
+  Tick(1);
+  TEST_ASSERT_FALSE(IsOn(kSlingPort));
+
+  for (int n = 0; n < 5; n++) {
+    Tick(10);
+    SendSwitch(kSlingSwitch, 1);
+    Tick(1);
+    TEST_ASSERT_FALSE_MESSAGE(IsOn(kSlingPort),
+                              "a bounce right after the kick must not fire");
+    Tick(5);
+    SendSwitch(kSlingSwitch, 0);
+    Tick(1);
+  }
+
+  // Still closed once the lockout is over: the same chatter, not a new hit.
+  SendSwitch(kSlingSwitch, 1);
+  Tick(FAST_SWITCH_REFIRE_LOCKOUT_MS + 50);
+  TEST_ASSERT_FALSE_MESSAGE(IsOn(kSlingPort),
+                            "the board must not re-drive it into a kick");
+
+  // A real hit afterwards.
+  SendSwitch(kSlingSwitch, 0);
+  Tick(20);
+  SendSwitch(kSlingSwitch, 1);
+  TEST_ASSERT_TRUE_MESSAGE(IsOn(kSlingPort), "the next hit must fire");
+}
+
+void test_a_flipper_can_be_pressed_again_at_once(void) {
+  RegisterHold();
+  PowerOn();
+
+  SendSwitch(kButton, 1);
+  Tick(30);
+  SendSwitch(kButton, 0);
+  Tick(1);
+  TEST_ASSERT_FALSE(IsOn(kHoldPort));
+  Tick(10);
+  SendSwitch(kButton, 1);
+  TEST_ASSERT_TRUE_MESSAGE(IsOn(kHoldPort),
+                           "the lockout is for slings and jets only");
+}
+
+void test_what_counts_as_a_flipper(void) {
+  TEST_ASSERT_TRUE(FastSwitchOutputHolds(0, 0, 0, 0));     // hold winding
+  TEST_ASSERT_TRUE(FastSwitchOutputHolds(40, 0, 111, 0));  // power, with EOS
+  TEST_ASSERT_TRUE(FastSwitchOutputHolds(40, 30, 0, 0));   // single winding
+  TEST_ASSERT_FALSE(FastSwitchOutputHolds(150, 0, 0, 0));  // sling, jet
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_the_roms_off_does_not_drop_a_held_flipper);
   RUN_TEST(test_a_late_rom_on_after_release_does_not_flip_again);
-  RUN_TEST(test_the_roms_off_ends_a_sling_kick);
-  RUN_TEST(test_a_flippers_power_winding_follows_its_hold_winding);
-  RUN_TEST(test_what_counts_as_a_flipper);
+  RUN_TEST(test_a_sling_hit_fires_once);
   RUN_TEST(test_the_rom_can_fire_a_sling_on_its_own);
   RUN_TEST(test_the_rom_can_fire_a_sling_long_after_a_hit);
   RUN_TEST(test_the_rom_can_kick_a_ball_resting_on_a_sling_switch);
   RUN_TEST(test_the_rom_ends_its_own_pulse);
+  RUN_TEST(test_a_chattering_sling_does_not_kick_again_at_once);
+  RUN_TEST(test_a_flipper_can_be_pressed_again_at_once);
+  RUN_TEST(test_what_counts_as_a_flipper);
   return UNITY_END();
 }
