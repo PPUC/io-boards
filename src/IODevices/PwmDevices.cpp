@@ -460,8 +460,12 @@ void PwmDevices::noteFastSwitchState(bool switchClosed, byte i) {
 //
 // Everything else is the ROM's own: the coil test, a ball search, a ROM that
 // fires the coil with no switch in front of it.
+//
+// Only for a flipper button. A sling or a jet takes the ROM's requests as it
+// did before: its "off" is what ends a kick its chattering leaf would
+// otherwise keep going to the maximum pulse time.
 bool PwmDevices::isRomCopyOfFastSwitchPulse(bool targetState, byte i) const {
-  if (fastSwitch[i] == 0) {
+  if (fastSwitch[i] == 0 || !fastSwitchHoldsAnOutput(i)) {
     return false;
   }
   if (!targetState) {
@@ -472,6 +476,23 @@ bool PwmDevices::isRomCopyOfFastSwitchPulse(bool targetState, byte i) const {
   }
   return fastSwitchClosedAt[i] != 0 &&
          (_ms - fastSwitchClosedAt[i]) < FAST_SWITCH_ROM_COPY_WINDOW_MS;
+}
+
+// Whether output i's switch holds any output on this board - its own, or the
+// other winding of the same flipper. A power winding with no end-of-stroke
+// switch configured is still a flipper when its hold winding is.
+bool PwmDevices::fastSwitchHoldsAnOutput(byte i) const {
+  for (byte j = 0; j < last; j++) {
+    if (fastSwitch[j] != fastSwitch[i] ||
+        (type[j] != PWM_TYPE_SOLENOID && type[j] != PWM_TYPE_MOTOR)) {
+      continue;
+    }
+    if (FastSwitchOutputHolds(maxPulseTime[j], holdPowerActivationTime[j],
+                              stopSwitch[j][0], stopSwitch[j][1])) {
+      return true;
+    }
+  }
+  return false;
 }
 
 void PwmDevices::handleFastSwitchEvent(bool switchClosed, byte i) {

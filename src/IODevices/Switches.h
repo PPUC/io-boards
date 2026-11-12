@@ -50,6 +50,10 @@ class Switches : public EventListener {
   void registerSwitch(byte p, byte n, uint8_t debounceTimeMs);
   void setDebounceMode(byte n, uint8_t mode);
   void markLocalFastSwitch(byte n);
+  // What a fast-flip switch drives on this board: an output it holds on for
+  // as long as it is closed (a flipper), or one it only fires (a sling, a
+  // jet). Decides how its opening is debounced, see SwitchDebounce.h.
+  void markFastSwitchOutput(byte n, bool holds);
   void resetConfig();
 
   void handleEvent(Event* event);
@@ -134,6 +138,11 @@ class Switches : public EventListener {
   PendingSwitchEvent pendingEvents[SWITCH_EVENT_QUEUE_SIZE] = {};
   volatile bool dedicatedSwitchStateChangedSinceCorrection = false;
   bool localFastSwitch[MAX_LOCAL_FAST_SWITCH_NUMBER + 1] = {false};
+  // Switches whose local fast-flip outputs only pulse. Everything else,
+  // including a switch whose outputs are on another board, debounces its
+  // opening as a flipper button does: that is the safe side of the two.
+  bool pulsedFastSwitch[MAX_LOCAL_FAST_SWITCH_NUMBER + 1] = {false};
+  bool heldFastSwitch[MAX_LOCAL_FAST_SWITCH_NUMBER + 1] = {false};
 
   EventDispatcher* _eventDispatcher;
 };

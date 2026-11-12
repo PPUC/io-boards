@@ -8,7 +8,7 @@
 
 #define FIRMWARE_VERSION_MAJOR 0  // X Digits
 #define FIRMWARE_VERSION_MINOR 4  // Max 2 Digits
-#define FIRMWARE_VERSION_PATCH 4  // Max 2 Digits
+#define FIRMWARE_VERSION_PATCH 5  // Max 2 Digits
 
 #include <Arduino.h>
 

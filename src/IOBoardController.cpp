@@ -332,6 +332,13 @@ void IOBoardController::registerPwmOutput(byte pwmType) {
   }
   pwmPinsInUse |= ppuc::board::pinBit(port);
 
+  if (_switches && fastSwitch > 0 &&
+      (pwmType == PWM_TYPE_SOLENOID || pwmType == PWM_TYPE_MOTOR)) {
+    _switches->markFastSwitchOutput(
+        fastSwitch, FastSwitchOutputHolds(maxPulseTime, holdPowerActivationTime,
+                                          stopSwitch1, stopSwitch2));
+  }
+
   switch (pwmType) {
     case PWM_TYPE_SOLENOID:  // Coil
       _pwmDevices->registerSolenoid((byte)port, number, power, minPulseTime,

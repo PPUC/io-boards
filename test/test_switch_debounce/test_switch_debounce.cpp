@@ -13,6 +13,8 @@ namespace {
 
 constexpr uint32_t kWindow = 10000;  // 10 ms, the configured default
 constexpr uint32_t kNow = 5000000;
+constexpr bool kFlipper = true;  // the switch holds an output on
+constexpr bool kSling = false;   // the switch only fires its output
 
 }  // namespace
 
@@ -22,38 +24,38 @@ void tearDown(void) {}
 void test_a_fast_flip_bounce_right_after_a_press_is_not_a_release(void) {
   // Pressed 1 ms ago, released for 200 us now; the last accepted release was
   // long ago, which used to be all that was asked.
-  const bool due = SwitchEdgeDue(SWITCH_DEBOUNCE_FAST_FLIP, /*closing*/ false,
+  const bool due = SwitchEdgeDue(SWITCH_DEBOUNCE_FAST_FLIP, kFlipper, /*closing*/ false,
                                  kNow, /*pendingSince*/ kNow - 200,
                                  /*lastAccepted*/ kNow - 2000000, kWindow);
   TEST_ASSERT_FALSE_MESSAGE(due, "a bounce must not release the flipper");
 }
 
 void test_a_fast_flip_release_counts_once_it_has_held(void) {
-  TEST_ASSERT_TRUE(SwitchEdgeDue(SWITCH_DEBOUNCE_FAST_FLIP, false, kNow,
+  TEST_ASSERT_TRUE(SwitchEdgeDue(SWITCH_DEBOUNCE_FAST_FLIP, kFlipper, false, kNow,
                                  kNow - kWindow, kNow - 2000000, kWindow));
-  TEST_ASSERT_FALSE(SwitchEdgeDue(SWITCH_DEBOUNCE_FAST_FLIP, false, kNow,
+  TEST_ASSERT_FALSE(SwitchEdgeDue(SWITCH_DEBOUNCE_FAST_FLIP, kFlipper, false, kNow,
                                   kNow - kWindow + 1, kNow - 2000000, kWindow));
 }
 
 void test_a_fast_flip_release_without_a_previous_one_still_has_to_hold(void) {
-  TEST_ASSERT_FALSE(SwitchEdgeDue(SWITCH_DEBOUNCE_FAST_FLIP, false, kNow,
+  TEST_ASSERT_FALSE(SwitchEdgeDue(SWITCH_DEBOUNCE_FAST_FLIP, kFlipper, false, kNow,
                                   kNow - 100, /*never*/ 0, kWindow));
 }
 
 void test_a_deferred_fast_flip_press_goes_once_the_last_one_is_a_window_old(
     void) {
   // A press that came too soon after the previous accepted press.
-  TEST_ASSERT_FALSE(SwitchEdgeDue(SWITCH_DEBOUNCE_FAST_FLIP, true, kNow,
+  TEST_ASSERT_FALSE(SwitchEdgeDue(SWITCH_DEBOUNCE_FAST_FLIP, kFlipper, true, kNow,
                                   kNow - 100, kNow - 5000, kWindow));
-  TEST_ASSERT_TRUE(SwitchEdgeDue(SWITCH_DEBOUNCE_FAST_FLIP, true, kNow,
+  TEST_ASSERT_TRUE(SwitchEdgeDue(SWITCH_DEBOUNCE_FAST_FLIP, kFlipper, true, kNow,
                                  kNow - 100, kNow - kWindow, kWindow));
 }
 
 void test_a_standard_switch_needs_the_full_window_either_way(void) {
   for (int closing = 0; closing <= 1; ++closing) {
-    TEST_ASSERT_FALSE(SwitchEdgeDue(SWITCH_DEBOUNCE_STANDARD, closing != 0,
+    TEST_ASSERT_FALSE(SwitchEdgeDue(SWITCH_DEBOUNCE_STANDARD, kFlipper, closing != 0,
                                     kNow, kNow - 9999, 0, kWindow));
-    TEST_ASSERT_TRUE(SwitchEdgeDue(SWITCH_DEBOUNCE_STANDARD, closing != 0, kNow,
+    TEST_ASSERT_TRUE(SwitchEdgeDue(SWITCH_DEBOUNCE_STANDARD, kFlipper, closing != 0, kNow,
                                    kNow - kWindow, 0, kWindow));
   }
 }
@@ -63,7 +65,26 @@ void test_the_clock_wrapping_does_not_stall_an_edge(void) {
   const uint32_t since = 0xFFFFFFFFu - 4000;
   const uint32_t now = 6000;  // 10001 us later
   TEST_ASSERT_TRUE(
-      SwitchEdgeDue(SWITCH_DEBOUNCE_FAST_FLIP, false, now, since, 0, kWindow));
+      SwitchEdgeDue(SWITCH_DEBOUNCE_FAST_FLIP, kFlipper, false, now, since, 0, kWindow));
+}
+
+void test_a_sling_opening_goes_a_window_after_the_last_one(void) {
+  // A sling's leaf chatters through the kick. Holding its opening kept it
+  // reading closed, and the board drove the coil to its maximum pulse time.
+  TEST_ASSERT_TRUE_MESSAGE(
+      SwitchEdgeDue(SWITCH_DEBOUNCE_FAST_FLIP, kSling, false, kNow,
+                    /*pendingSince*/ kNow - 200, /*lastAccepted*/ kNow - 2000000,
+                    kWindow),
+      "a sling's opening must not have to hold");
+  TEST_ASSERT_FALSE(SwitchEdgeDue(SWITCH_DEBOUNCE_FAST_FLIP, kSling, false,
+                                  kNow, kNow - 200, kNow - 5000, kWindow));
+}
+
+void test_a_standard_switch_ignores_what_it_drives(void) {
+  TEST_ASSERT_FALSE(SwitchEdgeDue(SWITCH_DEBOUNCE_STANDARD, kSling, false, kNow,
+                                  kNow - 9999, 0, kWindow));
+  TEST_ASSERT_FALSE(SwitchEdgeDue(SWITCH_DEBOUNCE_STANDARD, kSling, true, kNow,
+                                  kNow - 9999, 0, kWindow));
 }
 
 int main(int, char**) {
@@ -75,5 +96,7 @@ int main(int, char**) {
       test_a_deferred_fast_flip_press_goes_once_the_last_one_is_a_window_old);
   RUN_TEST(test_a_standard_switch_needs_the_full_window_either_way);
   RUN_TEST(test_the_clock_wrapping_does_not_stall_an_edge);
+  RUN_TEST(test_a_sling_opening_goes_a_window_after_the_last_one);
+  RUN_TEST(test_a_standard_switch_ignores_what_it_drives);
   return UNITY_END();
 }

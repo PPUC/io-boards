@@ -61,9 +61,28 @@
 // an upper bound for the copy's delay, not a timing anything relies on: a ROM
 // that fires the coil on its own -- a ball search, the coil test -- does so
 // with no switch closing in front of it.
+//
+// Only for a flipper: an output its switch holds on (see
+// FastSwitchOutputHolds). A sling or a jet obeys the ROM as before 0.4.1. With
+// the ROM's "off" ignored, nothing but its switch opening or the maximum pulse
+// time ended a sling's kick, and a chattering leaf turned one hit into a burst.
 #ifndef FAST_SWITCH_ROM_COPY_WINDOW_MS
 #define FAST_SWITCH_ROM_COPY_WINDOW_MS 300
 #endif
+
+// Whether a fast-flip output stays on for as long as its switch is closed - a
+// flipper - rather than firing a pulse - a sling, a jet.
+//
+// A flipper's power winding is cut by its end-of-stroke switch, a single
+// winding drops to hold power, and a separate hold winding has no maximum
+// pulse time at all. A sling or a jet has a maximum pulse time and nothing
+// else.
+inline bool FastSwitchOutputHolds(uint16_t maxPulseTime,
+                                  uint16_t holdPowerActivationTime,
+                                  byte stopSwitch1, byte stopSwitch2) {
+  return maxPulseTime == 0 || holdPowerActivationTime > 0 || stopSwitch1 > 0 ||
+         stopSwitch2 > 0;
+}
 
 class PwmDevices : public HighPowerOffAware {
  public:
@@ -138,6 +157,7 @@ class PwmDevices : public HighPowerOffAware {
 
   void updateSolenoidOrFlasher(bool targetState, byte i);
   bool isRomCopyOfFastSwitchPulse(bool targetState, byte i) const;
+  bool fastSwitchHoldsAnOutput(byte i) const;
   void noteFastSwitchState(bool switchClosed, byte i);
   void handleFastSwitchEvent(bool switchClosed, byte i);
   void handleStopSwitchEvent(byte switchNumber, bool switchClosed, byte i);
