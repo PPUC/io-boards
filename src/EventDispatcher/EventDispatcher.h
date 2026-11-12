@@ -129,6 +129,7 @@ class EventDispatcher {
                          size_t lampBytes, const byte* giLevels);
   void applySwitchStates(const byte* switches, size_t switchBytes);
   void announceLocalSwitchStates();
+  void reannounceGameOn();
   void updateSwitchBitmap(Event* event);
   void clearSessionState();
   void resetSessionState(uint8_t newEpoch, const ppuc::v2::RuntimeConfig& cfg);
