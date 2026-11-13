@@ -17,6 +17,7 @@
 #include "Event.h"
 #include "EventListener.h"
 #include "MultiCoreCrossLink.h"
+#include "SwitchNumberStates.h"
 
 #ifndef MAX_EVENT_LISTENERS
 #define MAX_EVENT_LISTENERS 32
@@ -92,6 +93,7 @@ class EventDispatcher {
 
   void addListener(EventListener* eventListener);
   void removeListener(EventListener* eventListener);
+  // By number, independent of the session's mapping. See SwitchNumberStates.
   bool getSwitchState(uint16_t number) const;
   void refreshDedicatedSwitchState(uint16_t number, bool state);
   void resetSwitchNoChangeReplies();
@@ -157,6 +159,9 @@ class EventDispatcher {
   byte outputLamps[ppuc::v2::kMaxLampBytes] = {0};
   byte outputGi[ppuc::v2::kGiStrings] = {0};
   byte switchStates[ppuc::v2::kMaxSwitchBytes] = {0};
+  // What getSwitchState() answers from. Not tied to the bitmap positions, so
+  // a resync or an incomplete mapping does not change it.
+  SwitchNumberStates switchNumberStates;
   byte localReportSwitchStates[ppuc::v2::kMaxSwitchBytes] = {0};
   byte lastSentLocalReportSwitchStates[ppuc::v2::kMaxSwitchBytes] = {0};
   byte localOwnedSwitchMask[ppuc::v2::kMaxSwitchBytes] = {0};

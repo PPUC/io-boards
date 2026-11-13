@@ -258,6 +258,10 @@ void EventDispatcher::callListeners(ConfigEvent *event, bool sendToOtherCore) {
 }
 
 bool EventDispatcher::getSwitchState(uint16_t number) const {
+  if (SwitchNumberStates::covers(number)) {
+    return switchNumberStates.get(number);
+  }
+
   const int16_t mappedIndex =
       findMappedIndex(switchIndexToNumber, runtimeConfig.switchBits, number);
   if (mappedIndex < 0) {
@@ -334,6 +338,8 @@ size_t EventDispatcher::getV2PayloadBytes(ppuc::v2::FrameType frameType) {
 }
 
 void EventDispatcher::clearSessionState() {
+  // Restart and reset only. A resync keeps it: the switches have not moved.
+  switchNumberStates.clear();
   runtimeConfig = ppuc::v2::RuntimeConfig();
   runtimeConfigValid = false;
   mappingComplete = false;
@@ -792,6 +798,8 @@ void EventDispatcher::announceLocalSwitchStates() {
 
 void EventDispatcher::refreshDedicatedSwitchState(uint16_t number,
                                                   bool state) {
+  switchNumberStates.record(number, state);
+
   const int16_t mappedIndex =
       findMappedIndex(switchIndexToNumber, runtimeConfig.switchBits, number);
   if (mappedIndex < 0) {
@@ -819,6 +827,10 @@ int16_t EventDispatcher::findMappedIndex(const uint16_t* table, uint16_t count,
 }
 
 void EventDispatcher::updateSwitchBitmap(Event *event) {
+  // Whatever the mapping says. This is what the outputs read, and a held
+  // flipper button must not read open just because a resync is under way.
+  switchNumberStates.record(event->eventId, event->value != 0);
+
   // Positions are meaningless until the mapping frames have arrived: the
   // identity map in force until then would file this switch under whatever
   // switch happens to occupy the position matching its number.
