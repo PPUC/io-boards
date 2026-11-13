@@ -164,6 +164,10 @@ struct Event {
   uint16_t eventId;
   uint8_t value;
   bool localFast;
+  // A switch event a board synthesized from another board's switch frame,
+  // rather than read from its own inputs. Board-internal: it never goes on
+  // the wire, and the cross-core link does not carry it.
+  bool fromOtherBoard = false;
   Event(uint8_t sId) {
     sourceId = sId;
     eventId = 1;
@@ -198,6 +202,7 @@ struct Event {
     eventId = other->eventId;
     value = other->value;
     localFast = other->localFast;
+    fromOtherBoard = other->fromOtherBoard;
   }
 
   bool operator==(const Event& other) const {

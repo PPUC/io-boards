@@ -354,7 +354,6 @@ void EventDispatcher::clearSessionState() {
   consecutiveSwitchNoChangeReplies = 0;
   transportErrorLatched = false;
   switchOverflow = false;
-  applyingRemoteSwitchState = false;
   nextSwitchBoard = ppuc::v2::kNoBoard;
   memset(outputCoils, 0, sizeof(outputCoils));
   memset(outputLamps, 0, sizeof(outputLamps));
@@ -852,27 +851,22 @@ void EventDispatcher::updateSwitchBitmap(Event *event) {
   }
 
   const bool newState = event->value != 0;
-  ppuc::v2::SetBitmapBit(switchStates, (uint16_t)mappedIndex, newState);
-  if (!applyingRemoteSwitchState) {
-    const bool oldLocalState = ppuc::v2::GetBitmapBit(localReportSwitchStates,
-                                                      (uint16_t)mappedIndex);
-    ppuc::v2::SetBitmapBit(localReportSwitchStates, (uint16_t)mappedIndex,
-                           newState);
-    ppuc::v2::SetBitmapBit(localOwnedSwitchMask, (uint16_t)mappedIndex, true);
-
-    if (oldLocalState != newState) {
-      const uint8_t nextHead = static_cast<uint8_t>(
-          (localSwitchReportHead + 1) % SWITCH_REPORT_HISTORY_SIZE);
-      if (nextHead == localSwitchReportTail) {
-        switchOverflow = true;
-        localSwitchReportTail = static_cast<uint8_t>(
-            (localSwitchReportTail + 1) % SWITCH_REPORT_HISTORY_SIZE);
-      }
-      memcpy(localSwitchReportHistory[localSwitchReportHead],
-             localReportSwitchStates, sizeof(localReportSwitchStates));
-      localSwitchReportHead = nextHead;
-    }
+  if (!RecordSwitchPosition(switchStates, localReportSwitchStates,
+                            localOwnedSwitchMask, (uint16_t)mappedIndex,
+                            newState, event->fromOtherBoard)) {
+    return;
   }
+
+  const uint8_t nextHead = static_cast<uint8_t>(
+      (localSwitchReportHead + 1) % SWITCH_REPORT_HISTORY_SIZE);
+  if (nextHead == localSwitchReportTail) {
+    switchOverflow = true;
+    localSwitchReportTail = static_cast<uint8_t>(
+        (localSwitchReportTail + 1) % SWITCH_REPORT_HISTORY_SIZE);
+  }
+  memcpy(localSwitchReportHistory[localSwitchReportHead],
+         localReportSwitchStates, sizeof(localReportSwitchStates));
+  localSwitchReportHead = nextHead;
 }
 
 void EventDispatcher::applyOutputStates(const byte *coils, size_t coilBytes,
@@ -950,24 +944,17 @@ void EventDispatcher::applySwitchStates(const byte* switches,
   // Global switch state is board-to-board on the RS485 bus. CPU/libppuc never
   // broadcasts switch states. Every board consumes incoming switch frames and
   // emits local switch events for fast-flip/effect listeners.
-  applyingRemoteSwitchState = true;
-  for (uint16_t n = 0; n < runtimeConfig.switchBits; ++n) {
-    if (ppuc::v2::GetBitmapBit(localOwnedSwitchMask, n)) {
-      continue;
-    }
-    bool oldState = ppuc::v2::GetBitmapBit(switchStates, n);
-    bool newState = ppuc::v2::GetBitmapBit(switches, n);
-    if (oldState != newState) {
-      dispatch(new Event(EVENT_SOURCE_SWITCH, switchIndexToNumber[n],
-                         newState ? 1 : 0, true));
-    }
-  }
-  applyingRemoteSwitchState = false;
-  for (size_t i = 0; i < switchBytes; ++i) {
-    const byte remoteOwnedMask = static_cast<byte>(~localOwnedSwitchMask[i]);
-    switchStates[i] = static_cast<byte>((switchStates[i] & localOwnedSwitchMask[i]) |
-                                        (switches[i] & remoteOwnedMask));
-  }
+  (void)switchBytes;
+  MergeOtherBoardSwitchFrame(
+      switchStates, localOwnedSwitchMask, switches, runtimeConfig.switchBits,
+      [this](uint16_t n, bool closed) {
+        Event* event = new Event(EVENT_SOURCE_SWITCH, switchIndexToNumber[n],
+                                 closed ? 1 : 0, true);
+        // Marked on the event itself: it reaches updateSwitchBitmap() only
+        // once the queue is processed, long after this frame.
+        event->fromOtherBoard = true;
+        dispatch(event);
+      });
 }
 
 uint32_t EventDispatcher::replyDelayUs() const {

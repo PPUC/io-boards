@@ -17,6 +17,7 @@
 #include "Event.h"
 #include "EventListener.h"
 #include "MultiCoreCrossLink.h"
+#include "SwitchBitmapLogic.h"
 #include "SwitchNumberStates.h"
 
 #ifndef MAX_EVENT_LISTENERS
@@ -195,7 +196,6 @@ class EventDispatcher {
   uint32_t v2SwitchNoChangeTx = 0;
   uint32_t crossCoreEventDrops = 0;
   bool switchOverflow = false;
-  bool applyingRemoteSwitchState = false;
   bool v2RuntimeInitialized = false;
   bool runtimeConfigValid = false;
   bool mappingComplete = false;
