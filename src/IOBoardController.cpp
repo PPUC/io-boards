@@ -203,6 +203,7 @@ void IOBoardController::clearConfiguredState() {
   stopSwitch1 = 0;
   stopSwitch2 = 0;
   ignoreGameOn = false;
+  boardFlipper = false;
   type = 0;
   resetTimer = 0;
 
@@ -338,7 +339,7 @@ void IOBoardController::registerPwmOutput(byte pwmType) {
                                     maxPulseTime, holdPower,
                                     holdPowerActivationTime, fastSwitch,
                                     stopSwitch1, stopSwitch2, PWM_TYPE_SOLENOID,
-                                    ignoreGameOn);
+                                    ignoreGameOn, boardFlipper);
       activePwmDevices = true;
       break;
     case PWM_TYPE_FLASHER:  // Flasher
@@ -475,6 +476,7 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
             stopSwitch1 = 0;
             stopSwitch2 = 0;
             ignoreGameOn = false;
+            boardFlipper = false;
             break;
           case CONFIG_TOPIC_NUMBER:
             number = event->value;
@@ -517,6 +519,9 @@ void IOBoardController::handleEvent(ConfigEvent *event) {
             break;
           case CONFIG_TOPIC_IGNORE_GAME_ON:
             ignoreGameOn = event->value != 0;
+            break;
+          case CONFIG_TOPIC_BOARD_FLIPPER:
+            boardFlipper = event->value != 0;
             break;
           case CONFIG_TOPIC_TYPE:
             registerPwmOutput((byte)event->value);

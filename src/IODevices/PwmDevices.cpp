@@ -15,7 +15,7 @@ int PwmDevices::findRegisteredOutput(byte outputType, byte p, byte n) const {
 void PwmDevices::registerSolenoid(byte p, byte n, byte pow, uint16_t minPT,
                                   uint16_t maxPT, byte hP, uint16_t hPAT,
                                   byte fS, byte sS1, byte sS2, byte outputType,
-                                  bool ignoreGO) {
+                                  bool ignoreGO, bool boardFl) {
   int index = findRegisteredOutput(outputType, p, n);
   if (index < 0) {
     if (last >= MAX_PWM_OUTPUTS) return;
@@ -44,6 +44,8 @@ void PwmDevices::registerSolenoid(byte p, byte n, byte pow, uint16_t minPT,
   stopSwitch[index][1] = sS2;
   type[index] = outputType;
   ignoreGameOn[index] = ignoreGO;
+  // Only a coil its switch drives can be the board's alone.
+  boardFlipper[index] = boardFl && fS > 0 && outputType == PWM_TYPE_SOLENOID;
   powerScale[index] = 255;
   activated[index] = 0;
   currentPower[index] = 0;
@@ -78,6 +80,7 @@ void PwmDevices::registerFlasher(byte p, byte n, byte pow) {
   holdPower[index] = 0;
   holdPowerActivationTime[index] = 0;
   ignoreGameOn[index] = false;
+  boardFlipper[index] = false;
   powerScale[index] = 255;
   fastSwitch[index] = 0;
   type[index] = PWM_TYPE_FLASHER;
@@ -109,6 +112,7 @@ void PwmDevices::registerLamp(byte p, byte n, byte pow) {
   holdPower[index] = 0;
   holdPowerActivationTime[index] = 0;
   ignoreGameOn[index] = false;
+  boardFlipper[index] = false;
   powerScale[index] = 255;
   fastSwitch[index] = 0;
   type[index] = PWM_TYPE_LAMP;
@@ -148,6 +152,7 @@ void PwmDevices::reset() {
     holdPower[i] = 0;
     holdPowerActivationTime[i] = 0;
     ignoreGameOn[i] = false;
+    boardFlipper[i] = false;
     powerScale[i] = 255;
     fastSwitch[i] = 0;
     type[i] = 0;
@@ -163,6 +168,7 @@ void PwmDevices::reset() {
   }
 
   last = 0;
+  flippersEnabled = false;
 }
 
 void PwmDevices::deactivateOutput(byte i) {
@@ -263,7 +269,7 @@ void PwmDevices::update() {
   for (byte i = 0; i < last; i++) {
     refreshStopSwitches(i);
 
-    const bool fastSwitchAllowed = fastSwitchOutputsAllowed();
+    const bool fastSwitchAllowed = fastSwitchAllowedFor(i);
 
     if (_eventDispatcher && fastSwitchAllowed && fastSwitch[i] > 0 &&
         (type[i] == PWM_TYPE_SOLENOID || type[i] == PWM_TYPE_MOTOR)) {
@@ -394,6 +400,42 @@ void PwmDevices::handlePowerScaleEvent(uint16_t motorNumber, byte scale) {
     powerScale[i] = scale;
     // update() applies it to a motor that is running.
   }
+}
+
+bool PwmDevices::outputGateOpen(byte i) const {
+  if (boardFlipper[i]) {
+    return flippersEnabled && running && coinDoorClosed;
+  }
+  return highPowerAvailable();
+}
+
+bool PwmDevices::fastSwitchAllowedFor(byte i) const {
+  return outputGateOpen(i) && !tiltActive;
+}
+
+// The host's word that a game is running, or no longer is.
+//
+// Board flippers follow their buttons from here on, and nothing the ROM does -
+// its own flipper pulses, the game-on solenoid dropping between balls or with
+// a resync - reaches them. Turning them off drops them at once, and either way
+// a button already held has to be pressed again, as after a tilt.
+void PwmDevices::handleFlipperEnableEvent(bool enabled) {
+  if (enabled == flippersEnabled) {
+    return;
+  }
+  flippersEnabled = enabled;
+  _ms = millis();
+  for (byte i = 0; i < last; i++) {
+    if (!boardFlipper[i]) {
+      continue;
+    }
+    if (!enabled) {
+      deactivateOutput(i);
+    }
+    fastSwitchClosed[i] = false;
+    fastSwitchWaitForRelease[i] = true;
+  }
+  CrossLinkDebugger::debug("Board flippers %s", enabled ? "on" : "off");
 }
 
 void PwmDevices::updateSolenoidOrFlasher(bool targetState, byte i) {
@@ -577,6 +619,10 @@ void PwmDevices::handleEvent(Event *event) {
     handlePowerScaleEvent(event->eventId, event->value);
     return;
   }
+  if (event->sourceId == EVENT_SOURCE_FLIPPER_ENABLE) {
+    handleFlipperEnableEvent(event->value != 0);
+    return;
+  }
 
   HighPowerOffAware::handleEvent(event);
   publishGateBits();
@@ -603,32 +649,41 @@ void PwmDevices::handleEvent(Event *event) {
     }
   }
 
+  if (event->sourceId == EVENT_SOURCE_SWITCH) {
+    // A switch event was triggered or received. Activate or deactivate any
+    // output configured as "fastSwitch" for that switch, and cut any output
+    // this switch is a stop for. Each output behind its own gate: a board
+    // flipper's is the flipper enable, everything else's high power.
+    for (byte i = 0; i < last; i++) {
+      if (type[i] != PWM_TYPE_SOLENOID && type[i] != PWM_TYPE_MOTOR) {
+        continue;
+      }
+      if (!outputGateOpen(i)) {
+        continue;
+      }
+      // Stops first: if one switch both drives and stops an output, the
+      // stop is the safety and has to win.
+      handleStopSwitchEvent((byte)event->eventId, (bool)event->value, i);
+      // Stops still apply while tilted; firing does not.
+      if (!tiltActive && fastSwitch[i] == (byte)event->eventId) {
+        handleFastSwitchEvent((bool)event->value, i);
+      }
+    }
+  }
+
   if (powerOn && coinDoorClosed) {
     switch (event->sourceId) {
       case EVENT_SOURCE_SOLENOID:
         for (byte i = 0; i < last; i++) {
+          // A board flipper does not take orders from the ROM, not even the
+          // copy of its own pulse.
+          if (boardFlipper[i]) {
+            continue;
+          }
           if ((type[i] == PWM_TYPE_SOLENOID || type[i] == PWM_TYPE_FLASHER ||
                type[i] == PWM_TYPE_MOTOR) &&
               number[i] == (byte)event->eventId) {
             updateSolenoidOrFlasher((bool)event->value, i);
-          }
-        }
-        break;
-
-      case EVENT_SOURCE_SWITCH:
-        // A switch event was triggered or received. Activate or deactivate any
-        // output configured as "fastSwitch" for that switch, and cut any output
-        // this switch is a stop for.
-        for (byte i = 0; i < last; i++) {
-          if (type[i] != PWM_TYPE_SOLENOID && type[i] != PWM_TYPE_MOTOR) {
-            continue;
-          }
-          // Stops first: if one switch both drives and stops an output, the
-          // stop is the safety and has to win.
-          handleStopSwitchEvent((byte)event->eventId, (bool)event->value, i);
-          // Stops still apply while tilted; firing does not.
-          if (!tiltActive && fastSwitch[i] == (byte)event->eventId) {
-            handleFastSwitchEvent((bool)event->value, i);
           }
         }
         break;
@@ -650,7 +705,8 @@ void PwmDevices::handleEvent(Event *event) {
 
     if (exemptAvailable && event->sourceId == EVENT_SOURCE_SOLENOID) {
       for (byte i = 0; i < last; i++) {
-        if (ignoreGameOn[i] && number[i] == (byte)event->eventId) {
+        if (ignoreGameOn[i] && !boardFlipper[i] &&
+            number[i] == (byte)event->eventId) {
           updateSolenoidOrFlasher((bool)event->value, i);
         }
       }
@@ -661,6 +717,10 @@ void PwmDevices::handleEvent(Event *event) {
       for (byte i = 0; i < last; i++) {
         // A game ending must not stop what the ROM is still running.
         if (ignoreGameOn[i] && exemptAvailable) {
+          continue;
+        }
+        // Nor does it end the board's flippers: a drained ball, a resync.
+        if (boardFlipper[i] && outputGateOpen(i)) {
           continue;
         }
         // Deactivate the output.

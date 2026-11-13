@@ -76,16 +76,7 @@
 #define FAST_SWITCH_REFIRE_LOCKOUT_MS 100
 #endif
 
-// Whether a fast-flip output stays on for as long as its switch is closed - a
-// flipper - rather than firing a pulse - a sling, a jet. A flipper's power
-// winding is cut by its end-of-stroke switch, a single winding drops to hold
-// power, and a separate hold winding has no maximum pulse time.
-inline bool FastSwitchOutputHolds(uint16_t maxPulseTime,
-                                  uint16_t holdPowerActivationTime,
-                                  byte stopSwitch1, byte stopSwitch2) {
-  return maxPulseTime == 0 || holdPowerActivationTime > 0 || stopSwitch1 > 0 ||
-         stopSwitch2 > 0;
-}
+// FastSwitchOutputHolds() is in Event.h, shared with the host.
 
 class PwmDevices : public HighPowerOffAware {
  public:
@@ -94,6 +85,7 @@ class PwmDevices : public HighPowerOffAware {
       : HighPowerOffAware(eventDispatcher), _eventDispatcher(eventDispatcher) {
     eventDispatcher->addListener(this, EVENT_SOURCE_LIGHT);
     eventDispatcher->addListener(this, EVENT_SOURCE_POWER_SCALE);
+    eventDispatcher->addListener(this, EVENT_SOURCE_FLIPPER_ENABLE);
     // Listening to solenoids and switches is added in HighPowerOffAware().
   }
 
@@ -101,7 +93,7 @@ class PwmDevices : public HighPowerOffAware {
                         uint16_t maxPT, byte hP, uint16_t hPAT, byte fS,
                         byte sS1 = 0, byte sS2 = 0,
                         byte outputType = PWM_TYPE_SOLENOID,
-                        bool ignoreGO = false);
+                        bool ignoreGO = false, bool boardFl = false);
   void registerFlasher(byte p, byte n, byte pow);
   void registerLamp(byte p, byte n, byte pow);
 
@@ -120,6 +112,11 @@ class PwmDevices : public HighPowerOffAware {
   int findRegisteredOutput(byte outputType, byte p, byte n) const;
   byte scaledPower(byte i) const;
   void handlePowerScaleEvent(uint16_t motorNumber, byte scale);
+  void handleFlipperEnableEvent(bool enabled);
+  // Whether output i may run at all, and whether its switch may fire it.
+  // A board flipper answers to the flipper enable instead of game-on.
+  bool outputGateOpen(byte i) const;
+  bool fastSwitchAllowedFor(byte i) const;
 
   uint32_t _ms;
 
@@ -137,6 +134,10 @@ class PwmDevices : public HighPowerOffAware {
   byte type[MAX_PWM_OUTPUTS] = {0};
   // Driven whether or not the game-on solenoid is asserted.
   bool ignoreGameOn[MAX_PWM_OUTPUTS] = {0};
+  // A flipper winding the board controls alone, see CONFIG_TOPIC_BOARD_FLIPPER.
+  bool boardFlipper[MAX_PWM_OUTPUTS] = {0};
+  // The host turned the board flippers on: a game is running.
+  bool flippersEnabled = false;
   // How much of its power a motor runs at, set by the host. 255 is all of it.
   byte powerScale[MAX_PWM_OUTPUTS] = {0};
   uint32_t activated[MAX_PWM_OUTPUTS] = {0};

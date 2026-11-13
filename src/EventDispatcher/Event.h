@@ -18,6 +18,10 @@
 // which the on/off coil state cannot carry.
 #define EVENT_SOURCE_POWER_SCALE 65  // "A"
 #define EVENT_SOURCE_DEBUG 66   // "B" Debug
+// Turns the board-controlled flippers on (value 1) or off (0). The host sends
+// it as a kFrameTrigger when a game starts and when it ends, and repeats it
+// about once a second. See CONFIG_TOPIC_BOARD_FLIPPER.
+#define EVENT_SOURCE_FLIPPER_ENABLE 75  // "K"
 #define EVENT_CONFIGURATION 67  // "C" Configure I/O
 #define EVENT_SOURCE_DMD 68     // "D" VPX/DOF/PUP
 #define EVENT_SOURCE_EVENT \
@@ -125,6 +129,24 @@
 // 0 turns that off. A board that never receives it keeps 100.
 #define CONFIG_TOPIC_SWITCH_IDLE_REFRESH 98         //
 #define CONFIG_TOPIC_NULL 99                        // NULL
+// Under CONFIG_TOPIC_PWM, sent before CONFIG_TOPIC_TYPE: this flipper winding
+// is the board's alone. It follows its fast-flip switch whenever the host has
+// turned the flippers on with EVENT_SOURCE_FLIPPER_ENABLE, and ignores the
+// ROM and the game-on solenoid entirely. The coin door, tilt and stopping the
+// board still cut it.
+#define CONFIG_TOPIC_BOARD_FLIPPER 100              //
+
+// Whether a fast-flip output stays on for as long as its switch is closed - a
+// flipper - rather than firing a pulse - a sling, a jet. A flipper's power
+// winding is cut by its end-of-stroke switch, a single winding drops to hold
+// power, and a separate hold winding has no maximum pulse time. The host uses
+// the same rule to pick the windings CONFIG_TOPIC_BOARD_FLIPPER applies to.
+inline bool FastSwitchOutputHolds(uint16_t maxPulseTime,
+                                  uint16_t holdPowerActivationTime,
+                                  uint8_t stopSwitch1, uint8_t stopSwitch2) {
+  return maxPulseTime == 0 || holdPowerActivationTime > 0 || stopSwitch1 > 0 ||
+         stopSwitch2 > 0;
+}
 
 #define PWM_TYPE_SOLENOID 1  // Coil
 #define PWM_TYPE_FLASHER 2   // Flasher

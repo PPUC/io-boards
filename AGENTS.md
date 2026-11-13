@@ -327,6 +327,29 @@ or motor from that gate. Such an output keeps running when game-on drops. The
 coin door and stopping the board still cut it, and its fast-flip switch, if any,
 stays gated. Covered by `test/test_game_on`.
 
+### Board flippers
+
+An alternative to letting the ROM drive the flippers, for when the ROM's
+flipper pulses and the game-on solenoid drop a held flipper or raise it late.
+Selected per game in `../config-tool` (`boardFlippers: true` in
+`io-boards.yaml`). `../libppuc` then marks every flipper winding - an output
+with a fast-flip switch that holds while the switch is closed, see
+`FastSwitchOutputHolds()` - with `CONFIG_TOPIC_BOARD_FLIPPER`, sent before
+`CONFIG_TOPIC_TYPE`, and refuses a game whose flipper button, EOS and windings
+are not all on one board. Slings and jets are never included.
+
+Such an output follows its button whenever the host has turned the flippers on
+with `EVENT_SOURCE_FLIPPER_ENABLE` in a `kFrameTrigger`: on when a game starts,
+off when it ends, repeated about once a second and after every resync. It
+ignores every ROM command for its number and the game-on solenoid. The coin
+door, tilt and stopping the board still cut it; the EOS, `maxPulseTime` and the
+re-drive limit still bound the power winding. Turning the flippers off or a cut
+demands a fresh press. Covered by `test/test_board_flippers`.
+
+What is given up: the flippers stay live between balls and through bonus
+count, a flipper coil test in the service menu does not fire them, and any ROM
+mode that turns the flippers off deliberately is lost.
+
 ## Switch Debounce Modes
 
 Configured per switch as `debounce` (ms) plus `debounceMode`, exported by

@@ -79,6 +79,7 @@ class IOBoardController : public EventListener {
   byte stopSwitch1 = 0;
   byte stopSwitch2 = 0;
   bool ignoreGameOn = false;
+  bool boardFlipper = false;
   byte type = 0;
   uint32_t resetTimer = 0;
 
