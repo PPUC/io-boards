@@ -327,6 +327,19 @@ or motor from that gate. Such an output keeps running when game-on drops. The
 coin door and stopping the board still cut it, and its fast-flip switch, if any,
 stays gated. Covered by `test/test_game_on`.
 
+### Coin door
+
+Opening the coin door cuts every output. It does not change what the board
+knows about game-on: before 0.5.1 it did, and since the host sends only
+changes, every coil stayed dead after the door closed until the ROM next
+switched game-on. When the door closes, every output the ROM still wants on -
+a hold coil, a magnet, a motor, a lamp on a PWM output - is driven again
+through the normal request path, so pulse limits apply and a pulse that ended
+while the door was open is not repeated. `PwmDevices` remembers each output's
+last ROM request for that even while a gate discards it. Board flippers are
+not restored; they do not take the ROM's orders. Covered by
+`test/test_coin_door_restore`.
+
 ### Board flippers
 
 An alternative to letting the ROM drive the flippers, for when the ROM's

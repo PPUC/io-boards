@@ -44,6 +44,7 @@ void PwmDevices::registerSolenoid(byte p, byte n, byte pow, uint16_t minPT,
   stopSwitch[index][1] = sS2;
   type[index] = outputType;
   ignoreGameOn[index] = ignoreGO;
+  romOn[index] = false;
   // Only a coil its switch drives can be the board's alone.
   boardFlipper[index] = boardFl && fS > 0 && outputType == PWM_TYPE_SOLENOID;
   powerScale[index] = 255;
@@ -80,6 +81,7 @@ void PwmDevices::registerFlasher(byte p, byte n, byte pow) {
   holdPower[index] = 0;
   holdPowerActivationTime[index] = 0;
   ignoreGameOn[index] = false;
+  romOn[index] = false;
   boardFlipper[index] = false;
   powerScale[index] = 255;
   fastSwitch[index] = 0;
@@ -112,6 +114,7 @@ void PwmDevices::registerLamp(byte p, byte n, byte pow) {
   holdPower[index] = 0;
   holdPowerActivationTime[index] = 0;
   ignoreGameOn[index] = false;
+  romOn[index] = false;
   boardFlipper[index] = false;
   powerScale[index] = 255;
   fastSwitch[index] = 0;
@@ -153,6 +156,7 @@ void PwmDevices::reset() {
     holdPowerActivationTime[i] = 0;
     ignoreGameOn[i] = false;
     boardFlipper[i] = false;
+    romOn[i] = false;
     powerScale[i] = 255;
     fastSwitch[i] = 0;
     type[i] = 0;
@@ -438,6 +442,60 @@ void PwmDevices::handleFlipperEnableEvent(bool enabled) {
   CrossLinkDebugger::debug("Board flippers %s", enabled ? "on" : "off");
 }
 
+// Remembers what the ROM asks of an output even while a gate discards it.
+//
+// The host sends full snapshots, but the board acts only on what changed in
+// them. A request that a closed gate threw away is therefore never sent again:
+// once the gate opened, an output the ROM was holding on stayed off until the
+// ROM happened to switch it off and on again.
+void PwmDevices::noteRomRequest(const Event *event) {
+  if (event->sourceId != EVENT_SOURCE_SOLENOID &&
+      event->sourceId != EVENT_SOURCE_LIGHT) {
+    return;
+  }
+  const bool lamp = event->sourceId == EVENT_SOURCE_LIGHT;
+  for (byte i = 0; i < last; i++) {
+    if ((type[i] == PWM_TYPE_LAMP) != lamp ||
+        number[i] != (byte)event->eventId) {
+      continue;
+    }
+    romOn[i] = event->value != 0;
+  }
+}
+
+// The coin door has just closed: high power is back, and every output the ROM
+// still wants on goes on again.
+//
+// Opening the door cuts everything, and closing it brought nothing back: a trap
+// door hold, a magnet, a motor, the start button lamp stayed off for as long as
+// the ROM kept them on. Only what the ROM wants now is driven, through the same
+// path as a fresh request, so the pulse limits and the ROM-copy filter apply;
+// a pulse that ended while the door was open is not repeated. Board flippers
+// do not take the ROM's orders and are left alone.
+void PwmDevices::restoreRomOutputs() {
+  const bool exemptAvailable = gameOnExemptAvailable();
+  for (byte i = 0; i < last; i++) {
+    if (!romOn[i] || boardFlipper[i]) {
+      continue;
+    }
+    if (type[i] == PWM_TYPE_LAMP) {
+      if (highPowerAvailable()) {
+        analogWrite(port[i], power[i]);
+      }
+      continue;
+    }
+    if (type[i] != PWM_TYPE_SOLENOID && type[i] != PWM_TYPE_FLASHER &&
+        type[i] != PWM_TYPE_MOTOR) {
+      continue;
+    }
+    if (highPowerAvailable() || (ignoreGameOn[i] && exemptAvailable)) {
+      updateSolenoidOrFlasher(true, i);
+      CrossLinkDebugger::debug(
+          "Coin door closed: restored PWM device on port %d", port[i]);
+    }
+  }
+}
+
 void PwmDevices::updateSolenoidOrFlasher(bool targetState, byte i) {
   _ms = millis();
 
@@ -624,10 +682,16 @@ void PwmDevices::handleEvent(Event *event) {
     return;
   }
 
+  const bool doorWasClosed = coinDoorClosed;
   HighPowerOffAware::handleEvent(event);
   publishGateBits();
 
   _ms = millis();
+
+  noteRomRequest(event);
+  if (!doorWasClosed && coinDoorClosed) {
+    restoreRomOutputs();
+  }
 
   // Tilt just latched. Drop only the fast-flip outputs -- flippers, slingshots,
   // pop bumpers. Checked here rather than as an "else" on the power branch
@@ -713,7 +777,11 @@ void PwmDevices::handleEvent(Event *event) {
     }
 
     if (powerToggled) {
-      powerOn = false;
+      // powerOn is the game-on solenoid's state and is left alone here. This
+      // used to clear it, so opening the coin door also forgot that game-on
+      // was set. The host only sends changes, and game-on does not change
+      // when the door closes, so every coil on the board stayed dead until
+      // the ROM next switched game-on - in a game, the next ball.
       for (byte i = 0; i < last; i++) {
         // A game ending must not stop what the ROM is still running.
         if (ignoreGameOn[i] && exemptAvailable) {

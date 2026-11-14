@@ -23,7 +23,9 @@ void WavePWMDevice::handleEvent(Event* event) {
   if (!(powerOn && coinDoorClosed) && powerToggled) {
     // Deactivate the output.
     digitalWrite(pin, 0);
-    powerOn = false;
+    // powerOn is left alone: it is the game-on solenoid's state, and clearing
+    // it here when the coin door opened kept this output off after the door
+    // closed until game-on changed again. See PwmDevices::handleEvent().
     CrossLinkDebugger::debug("Deactivated PWM device on port %d", pin);
   }
 }

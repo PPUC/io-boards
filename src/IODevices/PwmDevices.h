@@ -113,6 +113,8 @@ class PwmDevices : public HighPowerOffAware {
   byte scaledPower(byte i) const;
   void handlePowerScaleEvent(uint16_t motorNumber, byte scale);
   void handleFlipperEnableEvent(bool enabled);
+  void noteRomRequest(const Event *event);
+  void restoreRomOutputs();
   // Whether output i may run at all, and whether its switch may fire it.
   // A board flipper answers to the flipper enable instead of game-on.
   bool outputGateOpen(byte i) const;
@@ -138,6 +140,9 @@ class PwmDevices : public HighPowerOffAware {
   bool boardFlipper[MAX_PWM_OUTPUTS] = {0};
   // The host turned the board flippers on: a game is running.
   bool flippersEnabled = false;
+  // What the ROM last asked of each output, whether or not a gate let it
+  // through. See restoreRomOutputs().
+  bool romOn[MAX_PWM_OUTPUTS] = {0};
   // How much of its power a motor runs at, set by the host. 255 is all of it.
   byte powerScale[MAX_PWM_OUTPUTS] = {0};
   uint32_t activated[MAX_PWM_OUTPUTS] = {0};
