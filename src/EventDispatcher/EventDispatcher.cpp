@@ -2,6 +2,7 @@
 
 #include "../HighPowerOffAware.h"
 #include "../ResetCause.h"
+#include "SessionGate.h"
 
 #include <string.h>
 
@@ -530,12 +531,19 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
     return true;
   }
 
-  if (hostOriginated && incomingEpoch != currentEpoch) {
-    sequenceGapDetected = true;
-    if (frameType == ppuc::v2::kFrameConfig) {
-      // Board-local config is session-independent and may arrive before setup.
-    } else {
-      return true;
+  if (hostOriginated) {
+    // See HostFrameEpochGate(): administration is never gated, board-local
+    // config is used whatever its epoch, everything else belongs to the
+    // session.
+    switch (HostFrameEpochGate(frameType, incomingEpoch, currentEpoch)) {
+      case EpochGate::kProcess:
+        break;
+      case EpochGate::kProcessWithGap:
+        sequenceGapDetected = true;
+        break;
+      case EpochGate::kDrop:
+        sequenceGapDetected = true;
+        return true;
     }
   }
 

@@ -231,6 +231,12 @@ and logs every board's stats with `lastStart=`, so a hung main loop and a
 supply dropping out can be told apart from the log. The decision logic is in
 `ResetCause.h`, covered by `test/test_reset_cause`.
 
+Admin frames (version, stats, firmware update) are not gated on the session
+epoch, since 0.5.3 (`HostFrameEpochGate()` in `SessionGate.h`, covered by
+`test/test_session_gate`). Before, a board at epoch 0 dropped the host's
+epoch-1 queries until the first setup frame, and a board out of step after a
+restart dropped the stats query asking it why.
+
 ## Effect Stack Notes
 
 - `EffectsController` arbitrates running, suspended, and duplicate effects by
