@@ -1,6 +1,7 @@
 #include "EventDispatcher.h"
 
 #include "../HighPowerOffAware.h"
+#include "../ResetCause.h"
 
 #include <string.h>
 
@@ -511,6 +512,9 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
       frameType == ppuc::v2::kFrameRestart) {
     clearSessionState();
     noteHostSequence();
+    if (frameType == ppuc::v2::kFrameReset) {
+      NoteRebootCause(ppuc::v2::kResetCauseResetFrame);
+    }
     dispatch(new Event(frameType == ppuc::v2::kFrameReset ? EVENT_RESET
                                                           : EVENT_RESTART));
     // Process reset/restart teardown immediately before consuming any
@@ -681,6 +685,7 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
           // reboot directly: it gives the effects controller its shutdown
           // window and leaves the reply time to reach the host, and it is the
           // sequence already exercised on every reset.
+          NoteRebootCause(ppuc::v2::kResetCauseFirmwareUpdate);
           dispatch(new Event(EVENT_RESET));
         }
         break;
@@ -1079,7 +1084,10 @@ void EventDispatcher::sendStatsReportFrame() {
       frame, board, txSequence++, currentEpoch, v2RxFrames, v2RxCrcFail,
       v2RawBytes, v2TxFrames, v2Selected, v2VersionQueries,
       v2VersionReplies,
-      g_highPowerGateBits);
+      // The gate in the low three bytes, why the board last started above.
+      (g_highPowerGateBits & 0x00FFFFFFu) |
+          (static_cast<uint32_t>(g_resetCause)
+           << ppuc::v2::kStatsResetCauseShift));
 
   delayMicroseconds(kAdminReplyDelayUs);
 

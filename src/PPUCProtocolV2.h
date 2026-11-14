@@ -783,6 +783,50 @@ constexpr size_t kStatsQueryFrameBytes =
 constexpr size_t kStatsReportFrameBytes =
     kHeaderBytes + kAdminPrefixBytes + kStatsBodyBytes + kCrcBytes;
 
+// Why the board last started, in bits 24-31 of the stats report's gate word.
+//
+// A board that restarts in a game loses its configuration, and the host ends
+// the game. Whether that was the board's own watchdog - its main loop hung - or
+// its supply dropping out is the first thing to know, and nothing else on the
+// bus can tell the two apart. Firmware before 0.5.2 leaves the bits at 0.
+enum ResetCause : uint8_t {
+  kResetCauseNotReported = 0,
+  kResetCausePowerOn = 1,       // power-on or brown-out
+  kResetCauseRunPin = 2,        // the RUN pin was pulled
+  kResetCauseMainLoopStalled = 3,  // the board's watchdog: main loop hung
+  kResetCauseResetFrame = 4,    // the host's kFrameReset
+  kResetCauseFirmwareUpdate = 5,   // into a new image
+  kResetCauseWatchdogOther = 6,    // the watchdog, with no reason recorded
+  kResetCauseDebugger = 7,      // a debugger restarted the chip
+};
+
+constexpr uint32_t kStatsResetCauseShift = 24;
+
+inline uint8_t StatsResetCause(uint32_t gateBits) {
+  return static_cast<uint8_t>(gateBits >> kStatsResetCauseShift);
+}
+
+inline const char* ResetCauseName(uint8_t cause) {
+  switch (cause) {
+    case kResetCausePowerOn:
+      return "power-on or brown-out";
+    case kResetCauseRunPin:
+      return "reset pin";
+    case kResetCauseMainLoopStalled:
+      return "watchdog, main loop stalled";
+    case kResetCauseResetFrame:
+      return "reset by the host";
+    case kResetCauseFirmwareUpdate:
+      return "firmware update";
+    case kResetCauseWatchdogOther:
+      return "watchdog, no reason recorded";
+    case kResetCauseDebugger:
+      return "debugger";
+    default:
+      return "not reported";
+  }
+}
+
 inline size_t BuildStatsQueryFrame(uint8_t* frame, uint8_t boardId,
                                    uint8_t sequence, uint8_t epoch) {
   WriteHeader(frame, kFrameAdmin, kFlagNone, kNoBoard, sequence, epoch);

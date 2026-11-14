@@ -10,6 +10,7 @@
 #include "hardware/watchdog.h"
 #include "PPUC.h"
 #include "PPUCProtocolV2.h"
+#include "ResetCause.h"
 #include "SafeOff.h"
 #include "hardware/gpio.h"
 #include "hardware/uart.h"
@@ -95,6 +96,9 @@ bool watchdog(struct repeating_timer *t) {
   }
 
   if (sinceLoop > WATCHDOG_REBOOT_MS) {
+    // So that the host can tell, after the board is back, that it was this
+    // and not the supply.
+    NoteRebootCause(ppuc::v2::kResetCauseMainLoopStalled);
     // Outputs are already off by the branch above. The board comes back
     // unconfigured, which the host sees as kStatusNeedsSetup and must treat as
     // "this board lost its configuration", not as a transient.
@@ -137,6 +141,9 @@ void delayWithBootPattern(uint32_t delayMs) {
 // both cores.
 
 void setup() {
+  // First, before anything else can reboot the board and overwrite the marker.
+  DetermineResetCause();
+
   // Overclock according to Raspberry Pi Pico SDK recommendations.
   set_sys_clock_khz(SYS_CLK_KHZ, true);
 

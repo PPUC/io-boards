@@ -216,6 +216,21 @@ V2DBG board= rx= rx_crc_fail= raw= raw_a5= raw_ff= tx= tx_nochange= xcore_drop=
 These are the fastest way to tell whether a problem is framing, CRC, token flow,
 or cross-core event loss.
 
+### Reset Cause
+
+Since 0.5.2 a board reports why it last started, in bits 24-31 of the stats
+report's gate word (`ppuc::v2::ResetCause`, decoded by `StatsResetCause()`):
+power-on or brown-out, the RUN pin, its own watchdog because the main loop
+stalled, a `kFrameReset`, a firmware update, a watchdog reboot with no reason
+recorded, or a debugger. A deliberate reboot writes the reason to watchdog
+scratch register 3 first (`NoteRebootCause()`); `DetermineResetCause()` reads
+and clears it at the top of `setup()` and trusts it only when the watchdog
+caused the reboot, since the chip reset bits keep the last power-on through
+any number of watchdog reboots. When a board restarts in a game, ppuc names it
+and logs every board's stats with `lastStart=`, so a hung main loop and a
+supply dropping out can be told apart from the log. The decision logic is in
+`ResetCause.h`, covered by `test/test_reset_cause`.
+
 ## Effect Stack Notes
 
 - `EffectsController` arbitrates running, suspended, and duplicate effects by
