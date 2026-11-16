@@ -43,6 +43,7 @@ inline uint8_t ResetCauseFrom(bool watchdogCaused, uint32_t marker,
         case ppuc::v2::kResetCauseMainLoopStalled:
         case ppuc::v2::kResetCauseResetFrame:
         case ppuc::v2::kResetCauseFirmwareUpdate:
+        case ppuc::v2::kResetCauseHardwareWatchdog:
           return cause;
         default:
           break;

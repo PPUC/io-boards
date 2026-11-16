@@ -34,13 +34,24 @@ void test_a_debugger_restart_is_named(void) {
 
 void test_a_marked_watchdog_reboot_says_why(void) {
   for (uint8_t cause : {kResetCauseMainLoopStalled, kResetCauseResetFrame,
-                        kResetCauseFirmwareUpdate}) {
+                        kResetCauseFirmwareUpdate,
+                        kResetCauseHardwareWatchdog}) {
     // The chip reset bits still hold the power-on from long before: a
     // watchdog reboot is not a chip-level reset and does not clear them.
     TEST_ASSERT_EQUAL(cause,
                       ResetCauseFrom(true, RebootMarker(cause), true, false,
                                      false));
   }
+}
+
+// Written at boot when the chip's watchdog is armed. Only a reset by that
+// watchdog leaves it standing: every deliberate reboot writes its own.
+void test_the_hardware_watchdog_is_named(void) {
+  TEST_ASSERT_EQUAL(kResetCauseHardwareWatchdog,
+                    ResetCauseFrom(true, RebootMarker(kResetCauseHardwareWatchdog),
+                                   true, false, false));
+  TEST_ASSERT_EQUAL_STRING("hardware watchdog, the board had stopped",
+                           ResetCauseName(kResetCauseHardwareWatchdog));
 }
 
 void test_an_unmarked_watchdog_reboot_is_not_taken_for_a_power_on(void) {
@@ -90,6 +101,7 @@ int main(int, char**) {
   RUN_TEST(test_the_reset_pin_is_the_reset_pin);
   RUN_TEST(test_a_debugger_restart_is_named);
   RUN_TEST(test_a_marked_watchdog_reboot_says_why);
+  RUN_TEST(test_the_hardware_watchdog_is_named);
   RUN_TEST(test_an_unmarked_watchdog_reboot_is_not_taken_for_a_power_on);
   RUN_TEST(test_a_foreign_or_garbled_marker_is_not_trusted);
   RUN_TEST(test_a_marker_left_from_before_a_power_cut_is_ignored);

@@ -63,6 +63,21 @@ bool ready_led_state = true;
 // before a reset is considered.
 constexpr uint32_t WATCHDOG_REBOOT_MS = 5000;
 
+// The chip's own watchdog, behind the one above.
+//
+// That one runs on a timer interrupt, so it can do nothing when interrupts do
+// not run at all: a hard fault, or a hang with interrupts disabled. The PWM
+// hardware then kept driving whatever it was driving - a flipper power winding,
+// a coil mid-pulse - with nothing to turn it off and no reboot, until someone
+// switched the machine off. The interrupt feeds this one every second for as
+// long as it has not decided to reboot itself, so it only ever fires when the
+// interrupt has stopped. A reset puts every pin back to an input, which is
+// what turns the outputs off.
+//
+// Feeding happens every 1000 ms, so this leaves a missed tick of margin. Flash
+// writes stop interrupts for a sector erase at a time, well under it.
+constexpr uint32_t HARDWARE_WATCHDOG_MS = 2500;
+
 // Takes one output away from whatever is driving it - PWM slice or PIO block -
 // and holds it low.
 static void forceOutputLow(uint8_t pin) {
@@ -93,6 +108,10 @@ bool watchdog(struct repeating_timer *t) {
     }
   } else {
     g_outputsForcedOff = false;
+  }
+
+  if (sinceLoop <= WATCHDOG_REBOOT_MS) {
+    watchdog_update();
   }
 
   if (sinceLoop > WATCHDOG_REBOOT_MS) {
@@ -221,8 +240,12 @@ void setup() {
     // if USB debugging is not active.
     // Negative period: measured from the start of the previous callback, so a
     // slow one does not push the next tick out.
-    if (!add_repeating_timer_us(-1000000, watchdog, nullptr, &watchdogTimer)) {
-      // @todo
+    if (add_repeating_timer_us(-1000000, watchdog, nullptr, &watchdogTimer)) {
+      // What a reset by the hardware watchdog will report. Every deliberate
+      // reboot writes its own reason over it first.
+      NoteRebootCause(ppuc::v2::kResetCauseHardwareWatchdog);
+      // Paused while a debugger halts the chip.
+      watchdog_enable(HARDWARE_WATCHDOG_MS, true);
     }
   }
 

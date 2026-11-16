@@ -80,6 +80,14 @@ Main files:
   then targeted inspection of the `V2DBG` counters over USB debug mode.
 - Careful with watchdog behavior: when USB debug is disabled, high-power outputs
   are shut off if polling stalls.
+- Two watchdogs, both off in USB debug mode. The board's own runs on a 1 s
+  timer interrupt: outputs forced low after 1 s without a main loop pass or
+  3 s without a poll, reboot after 5 s without a loop pass. Since 0.5.6 the
+  chip's hardware watchdog (`HARDWARE_WATCHDOG_MS`, 2.5 s) backs it up: that
+  interrupt feeds it until it decides to reboot, so it only fires when the
+  interrupt itself has stopped - a hard fault, or interrupts left disabled -
+  and reports `kResetCauseHardwareWatchdog`. Anything that keeps interrupts off
+  longer than about 1.5 s now reboots the board.
 - USB debug mode changes timing enough to mask hardware and reset problems. A
   healthy debug-mode run is not proof that non-debug startup is healthy.
 
@@ -230,7 +238,7 @@ Since 0.5.2 a board reports why it last started, in bits 24-31 of the stats
 report's gate word (`ppuc::v2::ResetCause`, decoded by `StatsResetCause()`):
 power-on or brown-out, the RUN pin, its own watchdog because the main loop
 stalled, a `kFrameReset`, a firmware update, a watchdog reboot with no reason
-recorded, or a debugger. A deliberate reboot writes the reason to watchdog
+recorded, a debugger, or since 0.5.6 the hardware watchdog. A deliberate reboot writes the reason to watchdog
 scratch register 3 first (`NoteRebootCause()`); `DetermineResetCause()` reads
 and clears it at the top of `setup()` and trusts it only when the watchdog
 caused the reboot, since the chip reset bits keep the last power-on through

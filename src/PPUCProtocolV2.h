@@ -798,6 +798,10 @@ enum ResetCause : uint8_t {
   kResetCauseFirmwareUpdate = 5,   // into a new image
   kResetCauseWatchdogOther = 6,    // the watchdog, with no reason recorded
   kResetCauseDebugger = 7,      // a debugger restarted the chip
+  // The chip's own watchdog: nothing fed it, so the timer interrupt that runs
+  // the board's watchdog had stopped too - a hard fault, or interrupts left
+  // off. Or a reboot that recorded no reason of its own. Since 0.5.6.
+  kResetCauseHardwareWatchdog = 8,
 };
 
 constexpr uint32_t kStatsResetCauseShift = 24;
@@ -822,6 +826,8 @@ inline const char* ResetCauseName(uint8_t cause) {
       return "watchdog, no reason recorded";
     case kResetCauseDebugger:
       return "debugger";
+    case kResetCauseHardwareWatchdog:
+      return "hardware watchdog, the board had stopped";
     default:
       return "not reported";
   }
