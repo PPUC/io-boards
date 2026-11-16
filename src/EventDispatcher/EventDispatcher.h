@@ -16,6 +16,7 @@
 #include "../PPUCProtocolV2.h"
 #include "Event.h"
 #include "EventListener.h"
+#include "MappingProgress.h"
 #include "MultiCoreCrossLink.h"
 #include "SwitchBitmapLogic.h"
 #include "SwitchNumberStates.h"
@@ -135,6 +136,7 @@ class EventDispatcher {
   void updateSwitchBitmap(Event* event);
   void clearSessionState();
   void resetSessionState(uint8_t newEpoch, const ppuc::v2::RuntimeConfig& cfg);
+  void releaseCoilsForNewSession();
   uint8_t currentStatusFlags() const;
   void clearReportedStatusFlags();
   int16_t findMappedIndex(const uint16_t* table, uint16_t count,
@@ -199,8 +201,7 @@ class EventDispatcher {
   bool v2RuntimeInitialized = false;
   bool runtimeConfigValid = false;
   bool mappingComplete = false;
-  uint16_t expectedMappingFrames = 0;
-  uint16_t receivedMappingFrames = 0;
+  MappingProgress mappingProgress;
   uint8_t currentEpoch = 0;
   uint8_t lastHostSequenceSeen = 0;
   uint8_t lastHostFrameSequenceSeen = 0;

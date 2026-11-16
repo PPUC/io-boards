@@ -345,8 +345,7 @@ void EventDispatcher::clearSessionState() {
   runtimeConfig = ppuc::v2::RuntimeConfig();
   runtimeConfigValid = false;
   mappingComplete = false;
-  expectedMappingFrames = 0;
-  receivedMappingFrames = 0;
+  mappingProgress.reset(0, 0, 0);
   v2RuntimeInitialized = false;
   lastHostSequenceSeen = 0;
   lastHostFrameSequenceSeen = 0;
@@ -379,15 +378,57 @@ void EventDispatcher::clearSessionState() {
   }
 }
 
+// A new session is starting, from a setup frame: a resync, or the first setup
+// after a restart.
+//
+// Its mapping frames follow, and until they are all in the board ignores
+// output frames. Whatever the old session left on would stay on for that time,
+// and for as long as the mapping stays incomplete - a lost mapping frame and a
+// loose wire can make that many seconds. A held coil, a magnet or a motor
+// running into its stop is worse than a coil dropping for a resync, so every
+// coil that is on is switched off here, through the normal path: PwmDevices
+// also forgets the ROM wanted it, so a coin door closing in the meantime does
+// not bring it back. The game-on solenoid goes last.
+//
+// Lamps and GI are left as they are. A lamp in the wrong state for a second is
+// harmless, and switching them all off would make every resync flash.
+// Board flippers do not take orders from these bits and are not affected.
+void EventDispatcher::releaseCoilsForNewSession() {
+  if (!runtimeConfigValid) {
+    return;
+  }
+  int16_t gameOnIndex = -1;
+  for (uint16_t n = 0; n < runtimeConfig.coilBits; ++n) {
+    if (!ppuc::v2::GetBitmapBit(outputCoils, n)) {
+      continue;
+    }
+    if (gameOnSolenoidNumber > 0 &&
+        coilIndexToNumber[n] == gameOnSolenoidNumber) {
+      gameOnIndex = static_cast<int16_t>(n);
+      continue;
+    }
+    callListeners(new Event(EVENT_SOURCE_SOLENOID, coilIndexToNumber[n], 0),
+                  true);
+  }
+  if (gameOnIndex >= 0) {
+    callListeners(
+        new Event(EVENT_SOURCE_SOLENOID,
+                  coilIndexToNumber[static_cast<uint16_t>(gameOnIndex)], 0),
+        true);
+  }
+  memset(outputCoils, 0, sizeof(outputCoils));
+}
+
 void EventDispatcher::resetSessionState(
     uint8_t newEpoch, const ppuc::v2::RuntimeConfig& cfg) {
+  // While the old mapping is still known: from here on the bits mean nothing
+  // until the new one is in.
+  releaseCoilsForNewSession();
   currentEpoch = newEpoch;
   runtimeConfig = cfg;
   runtimeConfigValid = true;
-  expectedMappingFrames = static_cast<uint16_t>(cfg.coilBits + cfg.lampBits +
-                                                cfg.switchBits);
-  receivedMappingFrames = 0;
-  mappingComplete = expectedMappingFrames == 0;
+  mappingProgress.reset(cfg.coilBits, cfg.lampBits, cfg.switchBits);
+  mappingComplete = mappingProgress.complete();
   lastHostSequenceSeen = 0;
   lastHostFrameSequenceSeen = 0;
   lastHostFrameSequenceValid = false;
@@ -560,20 +601,19 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
     uint16_t number;
     ppuc::v2::ReadMappingPayload(&frame[payloadOffset], domain, index, number);
 
-    if (domain == ppuc::v2::kDomainCoil && index < runtimeConfig.coilBits) {
-      coilIndexToNumber[index] = number;
-    } else if (domain == ppuc::v2::kDomainLamp &&
-               index < runtimeConfig.lampBits) {
-      lampIndexToNumber[index] = number;
-    } else if (domain == ppuc::v2::kDomainSwitch &&
-               index < runtimeConfig.switchBits) {
-      switchIndexToNumber[index] = number;
-    }
-    if (receivedMappingFrames < expectedMappingFrames) {
-      receivedMappingFrames++;
+    // See MappingProgress: complete means every position is named, however
+    // many frames that took.
+    if (mappingProgress.note(domain, index)) {
+      if (domain == ppuc::v2::kDomainCoil) {
+        coilIndexToNumber[index] = number;
+      } else if (domain == ppuc::v2::kDomainLamp) {
+        lampIndexToNumber[index] = number;
+      } else {
+        switchIndexToNumber[index] = number;
+      }
     }
     const bool wasComplete = mappingComplete;
-    mappingComplete = receivedMappingFrames >= expectedMappingFrames;
+    mappingComplete = mappingProgress.complete();
     if (mappingComplete && !wasComplete) {
       announceLocalSwitchStates();
     }
@@ -585,6 +625,15 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
       return true;
     }
     forwardSwitchTokenIfSelected(frame[2], /*afterHostFrame*/ true);
+    // Until every position is named, a bit may mean a different coil than the
+    // host meant. Nothing is driven: releaseCoilsForNewSession() switched the
+    // coils off when the session began, the reply above carries
+    // kStatusMappingIncomplete, and the host resyncs. The first frame after
+    // the mapping is complete puts everything back, because outputCoils is
+    // empty and every coil that is on is a change.
+    if (!mappingComplete) {
+      return true;
+    }
     const size_t coilBytes = ppuc::v2::BitsToBytes(runtimeConfig.coilBits);
     const size_t lampBytes = ppuc::v2::BitsToBytes(runtimeConfig.lampBits);
     applyOutputStates(&frame[payloadOffset], coilBytes,
@@ -607,6 +656,11 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
       return true;
     }
     forwardSwitchTokenIfSelected(frame[2], /*afterHostFrame*/ false);
+    // Positions resolve to the wrong switch numbers until the mapping is in,
+    // and a wrong number can fire another board's fast-flip coil.
+    if (!mappingComplete) {
+      return true;
+    }
     const size_t switchBytes = ppuc::v2::BitsToBytes(runtimeConfig.switchBits);
     applySwitchStates(&frame[payloadOffset + ppuc::v2::kSwitchStatusBytes],
                       switchBytes);
@@ -968,6 +1022,22 @@ void EventDispatcher::applySwitchStates(const byte* switches,
         event->fromOtherBoard = true;
         dispatch(event);
       });
+
+  // The events above are raised only for positions whose bitmap state
+  // changed. The bitmap is forgotten when a session's mapping completes, the
+  // state by number is not, so a switch of another board that opened while
+  // frames were lost read closed by number for as long as it stayed open: the
+  // frame said open, the forgotten bitmap said open, nothing changed. A held
+  // flipper button then held its winding, a stop switch kept its output
+  // stopped. Every frame carries the whole bitmap, so every position this board
+  // does not read itself is put right by number here.
+  for (uint16_t n = 0; n < runtimeConfig.switchBits; ++n) {
+    if (ppuc::v2::GetBitmapBit(localOwnedSwitchMask, n)) {
+      continue;
+    }
+    switchNumberStates.record(switchIndexToNumber[n],
+                              ppuc::v2::GetBitmapBit(switches, n));
+  }
 }
 
 uint32_t EventDispatcher::replyDelayUs() const {
