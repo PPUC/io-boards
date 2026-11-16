@@ -1,5 +1,7 @@
 #include "PwmDevices.h"
 
+#include "../BoardDiagnostics.h"
+
 #include "EventDispatcher/CrossLinkDebugger.h"
 
 int PwmDevices::findRegisteredOutput(byte outputType, byte p, byte n) const {
@@ -228,6 +230,7 @@ void PwmDevices::handleStopSwitchEvent(byte switchNumber, bool switchClosed,
   if (closingEdge && activated[i] > 0) {
     stopEngaged[i] = true;
     deactivateOutput(i);
+    CountDiagnostic(ppuc::v2::kDiagStopSwitchCuts);
     CrossLinkDebugger::debug("Stopped PWM device on port %d: switch %d closed",
                              port[i], switchNumber);
     return;
@@ -254,6 +257,7 @@ void PwmDevices::refreshStopSwitches(byte i) {
     if (closed && !stopSwitchClosed[i][s] && activated[i] > 0) {
       stopEngaged[i] = true;
       deactivateOutput(i);
+      CountDiagnostic(ppuc::v2::kDiagStopSwitchCuts);
       CrossLinkDebugger::debug(
           "Stopped PWM device on port %d: switch %d found closed", port[i],
           stopSwitch[i][s]);
@@ -277,6 +281,7 @@ void PwmDevices::update() {
     CrossLinkDebugger::debug(
         "Board flippers: no enable from the host for %dms, turning them off",
         FLIPPER_ENABLE_TIMEOUT_MS);
+    CountDiagnostic(ppuc::v2::kDiagFlipperEnableTimeouts);
     handleFlipperEnableEvent(false);
   }
 
@@ -713,6 +718,9 @@ void PwmDevices::handleFastSwitchEvent(bool switchClosed, byte i) {
     activated[i] = _ms;
     scheduled[i] = false;
     fastSwitchManagedActive[i] = true;
+    if (isKickOutput(i)) {
+      CountDiagnostic(ppuc::v2::kDiagKicks);
+    }
     CrossLinkDebugger::debug(
         "Activated fast-switch PWM device on port %d with power %d", port[i],
         currentPower[i]);

@@ -1,5 +1,7 @@
 #include "EventDispatcher.h"
 
+#include "../BoardDiagnostics.h"
+
 #include "../HighPowerOffAware.h"
 #include "../ResetCause.h"
 #include "SessionGate.h"
@@ -424,6 +426,7 @@ void EventDispatcher::resetSessionState(
   // While the old mapping is still known: from here on the bits mean nothing
   // until the new one is in.
   releaseCoilsForNewSession();
+  CountDiagnostic(ppuc::v2::kDiagSessionsStarted);
   currentEpoch = newEpoch;
   runtimeConfig = cfg;
   runtimeConfigValid = true;
@@ -632,6 +635,7 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
     // the mapping is complete puts everything back, because outputCoils is
     // empty and every coil that is on is a change.
     if (!mappingComplete) {
+      CountDiagnostic(ppuc::v2::kDiagOutputFramesIgnored);
       return true;
     }
     const size_t coilBytes = ppuc::v2::BitsToBytes(runtimeConfig.coilBits);
@@ -702,6 +706,10 @@ bool EventDispatcher::processV2Frame(const byte* frame, size_t payloadBytes) {
 
       case ppuc::v2::kAdminStatsQuery:
         sendStatsReportFrame();
+        break;
+
+      case ppuc::v2::kAdminDiagnosticsQuery:
+        sendDiagnosticsReportFrame();
         break;
 
       case ppuc::v2::kAdminUpdateBegin: {
@@ -928,6 +936,7 @@ void EventDispatcher::updateSwitchBitmap(Event *event) {
       (localSwitchReportHead + 1) % SWITCH_REPORT_HISTORY_SIZE);
   if (nextHead == localSwitchReportTail) {
     switchOverflow = true;
+    CountDiagnostic(ppuc::v2::kDiagSwitchReportOverflows);
     localSwitchReportTail = static_cast<uint8_t>(
         (localSwitchReportTail + 1) % SWITCH_REPORT_HISTORY_SIZE);
   }
@@ -1156,6 +1165,29 @@ void EventDispatcher::sendUpdateAckFrame(uint8_t command, uint8_t status,
   v2TxFrames++;
 }
 
+// The board's own counters, see ppuc::v2::DiagnosticsField. The longest loop
+// pass is since the last report, so it starts again from 0 here.
+void EventDispatcher::sendDiagnosticsReportFrame() {
+  uint32_t values[ppuc::v2::kDiagnosticsFieldCount];
+  for (size_t i = 0; i < ppuc::v2::kDiagnosticsFieldCount; ++i) {
+    values[i] = g_diagnostics[i];
+  }
+  values[ppuc::v2::kDiagCrossCoreEventDrops] = crossCoreEventDrops;
+  g_diagnostics[ppuc::v2::kDiagLoopMaxUs] = 0;
+
+  byte* frame = v2TxBuffer;
+  const size_t frameBytes = ppuc::v2::BuildDiagnosticsReportFrame(
+      frame, board, txSequence++, currentEpoch, values);
+
+  delayMicroseconds(kAdminReplyDelayUs);
+
+  digitalWrite(rs485Pin, HIGH);  // Write.
+  delayMicroseconds(RS485_MODE_SWITCH_DELAY);
+  hwSerial->write(frame, frameBytes);
+  ReleaseBusAfterTx(rs485Pin, frameBytes);
+  delayMicroseconds(RS485_MODE_SWITCH_DELAY);
+}
+
 void EventDispatcher::sendStatsReportFrame() {
   byte* frame = v2TxBuffer;
   const size_t frameBytes = ppuc::v2::BuildStatsReportFrame(
@@ -1264,10 +1296,14 @@ bool EventDispatcher::handleV2AdminFrame() {
       break;
     case ppuc::v2::kAdminUpdateCommit:
     case ppuc::v2::kAdminStatsQuery:
+    case ppuc::v2::kAdminDiagnosticsQuery:
       bodyBytes = 0;
       break;
     case ppuc::v2::kAdminStatsReport:
       bodyBytes = ppuc::v2::kStatsBodyBytes;
+      break;
+    case ppuc::v2::kAdminDiagnosticsReport:
+      bodyBytes = ppuc::v2::kDiagnosticsBodyBytes;
       break;
     case ppuc::v2::kAdminUpdateChunk: {
       // Two stage: the head carries the length of the data that follows it.
@@ -1410,6 +1446,7 @@ void EventDispatcher::update() {
     }
   }
 
+#ifdef PPUC_USB_DEBUG
   if (debugEnabled && Serial && (millis() - debugLastPrintMs) >= 1000) {
     debugLastPrintMs = millis();
     rp2040.idleOtherCore();
@@ -1433,6 +1470,7 @@ void EventDispatcher::update() {
     Serial.println(crossCoreEventDrops);
     rp2040.resumeOtherCore();
   }
+#endif
 }
 
 uint32_t EventDispatcher::getLastPoll() {

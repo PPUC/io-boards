@@ -57,6 +57,7 @@ void CrossLinkDebugger::handleEvent(ConfigEvent *event) {
   rp2040.resumeOtherCore();
 }
 
+#ifdef PPUC_USB_DEBUG
 void CrossLinkDebugger::debug(const char *format, ...) {
   if (CrossLinkDebugger::active) {
     char buffer[1024];
@@ -75,3 +76,4 @@ void CrossLinkDebugger::debug(const char *format, ...) {
     rp2040.resumeOtherCore();
   }
 }
+#endif

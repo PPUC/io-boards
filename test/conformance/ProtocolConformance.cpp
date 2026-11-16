@@ -888,7 +888,8 @@ Result CheckUpdateCommandsAreDistinct() {
   const uint8_t commands[] = {
       kAdminVersionQuery,   kAdminVersionReport,  kAdminUpdateBegin,
       kAdminUpdateBeginAck, kAdminUpdateChunk,    kAdminUpdateChunkAck,
-      kAdminUpdateCommit,   kAdminUpdateResult};
+      kAdminUpdateCommit,   kAdminUpdateResult,   kAdminStatsQuery,
+      kAdminStatsReport,    kAdminDiagnosticsQuery, kAdminDiagnosticsReport};
   for (size_t i = 0; i < sizeof(commands); ++i) {
     if (commands[i] == 0) return Fail("0 is reserved as 'no command'");
     for (size_t j = i + 1; j < sizeof(commands); ++j) {
@@ -896,6 +897,47 @@ Result CheckUpdateCommandsAreDistinct() {
         return Fail("two admin commands share a value: " + Num(commands[i]));
       }
     }
+  }
+  return Pass();
+}
+
+// The diagnostics report: one big-endian word per DiagnosticsField, in field
+// order, behind the admin prefix. Both sides index it by the enum, so a field
+// inserted rather than appended would shift every later one silently.
+Result CheckDiagnosticsReportLayout() {
+  uint32_t values[kDiagnosticsFieldCount];
+  for (size_t i = 0; i < kDiagnosticsFieldCount; ++i) {
+    values[i] = 0x01020300u + static_cast<uint32_t>(i);
+  }
+  uint8_t frame[kDiagnosticsReportFrameBytes];
+  const size_t len = BuildDiagnosticsReportFrame(frame, /*boardId*/ 4,
+                                                 /*sequence*/ 9, /*epoch*/ 2,
+                                                 values);
+  if (len != kDiagnosticsReportFrameBytes) {
+    return Fail("diagnostics report length wrong");
+  }
+  if (!VerifyCrc(frame, len)) return Fail("diagnostics report CRC wrong");
+  if (frame[5] != kAdminDiagnosticsReport) return Fail("wrong admin command");
+  if (frame[6] != 4) return Fail("diagnostics report must name its board");
+  if (ReadU32(&frame[kHeaderBytes + kAdminPrefixBytes]) != values[0] ||
+      frame[kHeaderBytes + kAdminPrefixBytes] != 0x01) {
+    return Fail("first field is not big-endian at the start of the body");
+  }
+  uint32_t read[kDiagnosticsFieldCount] = {0};
+  ReadDiagnosticsReport(frame + kHeaderBytes, read);
+  for (size_t i = 0; i < kDiagnosticsFieldCount; ++i) {
+    if (read[i] != values[i]) return Fail("field " + Num(i) + " does not round trip");
+    if (std::string(DiagnosticsFieldName(static_cast<uint8_t>(i))) == "unknown") {
+      return Fail("field " + Num(i) + " has no name");
+    }
+  }
+  if (kDiagnosticsReportFrameBytes > kMaxFrameBytes) {
+    return Fail("kMaxFrameBytes does not cover the diagnostics report");
+  }
+  uint8_t query[kDiagnosticsQueryFrameBytes];
+  if (BuildDiagnosticsQueryFrame(query, 4, 1, 1) != kDiagnosticsQueryFrameBytes ||
+      query[5] != kAdminDiagnosticsQuery || query[6] != 4) {
+    return Fail("diagnostics query layout wrong");
   }
   return Pass();
 }
@@ -1050,6 +1092,7 @@ const Case kCases[] = {
     {"UpdateChunk byte layout", CheckUpdateChunkLayout},
     {"UpdateAck byte layout", CheckUpdateAckLayout},
     {"admin commands are distinct", CheckUpdateCommandsAreDistinct},
+    {"diagnostics report layout", CheckDiagnosticsReportLayout},
     {"kMaxFrameBytes covers every frame", CheckMaxFrameBytesCoversEverything},
     {"switch reply layout", CheckSwitchReplyLayout},
     {"OutputState layout", CheckOutputStateLayout},

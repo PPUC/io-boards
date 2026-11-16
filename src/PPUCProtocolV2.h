@@ -81,6 +81,8 @@ enum AdminCommand : uint8_t {
   kAdminUpdateResult = 0x08,   // board -> host: outcome
   kAdminStatsQuery = 0x09,     // host -> board: ask for transport counters
   kAdminStatsReport = 0x0A,    // board -> host: transport counters
+  kAdminDiagnosticsQuery = 0x0B,   // host -> board: ask for the board's diagnostics
+  kAdminDiagnosticsReport = 0x0C,  // board -> host: kDiagnosticsFieldCount counters
 };
 
 // Why a board refused, or how an update ended. Reported rather than inferred
@@ -830,6 +832,82 @@ inline const char* ResetCauseName(uint8_t cause) {
       return "hardware watchdog, the board had stopped";
     default:
       return "not reported";
+  }
+}
+
+// --- board diagnostics -------------------------------------------------------
+//
+// What the board saw of itself, read over the bus. This replaces the USB debug
+// mode, which changed the timing it was meant to show: everything here is a
+// counter in RAM, and the host reads it only after a run or a board problem,
+// outside the switch chain. Since firmware 0.5.7; older firmware does not
+// answer the query.
+//
+// Counted since the board started, except kDiagLoopMaxUs, which is since the
+// last report. The order is the wire order; append, never reorder.
+enum DiagnosticsField : uint8_t {
+  kDiagLoopMaxUs = 0,           // longest main loop pass since the last report
+  kDiagSafeOffs,                // times the watchdog forced the outputs low
+  kDiagSessionsStarted,         // setup frames: startup and every resync
+  kDiagOutputFramesIgnored,     // output frames dropped while the mapping was incomplete
+  kDiagSwitchEventDrops,        // switch transitions lost to a full queue
+  kDiagSwitchReportOverflows,   // switch report snapshots lost before a token
+  kDiagCrossCoreEventDrops,     // events core 0 could not hand to core 1
+  kDiagStopSwitchCuts,          // outputs a stop switch (an EOS) cut
+  kDiagKicks,                   // slings and jets fired by their switch
+  kDiagFlipperEnableTimeouts,   // board flippers turned off for host silence
+  kDiagnosticsFieldCount
+};
+
+constexpr size_t kDiagnosticsBodyBytes = kDiagnosticsFieldCount * 4;
+constexpr size_t kDiagnosticsQueryFrameBytes =
+    kHeaderBytes + kAdminPrefixBytes + kCrcBytes;
+constexpr size_t kDiagnosticsReportFrameBytes =
+    kHeaderBytes + kAdminPrefixBytes + kDiagnosticsBodyBytes + kCrcBytes;
+
+inline const char* DiagnosticsFieldName(uint8_t field) {
+  switch (field) {
+    case kDiagLoopMaxUs: return "loopMaxUs";
+    case kDiagSafeOffs: return "safeOffs";
+    case kDiagSessionsStarted: return "sessions";
+    case kDiagOutputFramesIgnored: return "outputFramesIgnored";
+    case kDiagSwitchEventDrops: return "switchEventDrops";
+    case kDiagSwitchReportOverflows: return "switchReportOverflows";
+    case kDiagCrossCoreEventDrops: return "crossCoreDrops";
+    case kDiagStopSwitchCuts: return "stopSwitchCuts";
+    case kDiagKicks: return "kicks";
+    case kDiagFlipperEnableTimeouts: return "flipperEnableTimeouts";
+    default: return "unknown";
+  }
+}
+
+inline size_t BuildDiagnosticsQueryFrame(uint8_t* frame, uint8_t boardId,
+                                         uint8_t sequence, uint8_t epoch) {
+  WriteHeader(frame, kFrameAdmin, kFlagNone, kNoBoard, sequence, epoch);
+  uint8_t* p = frame + kHeaderBytes;
+  p[0] = kAdminDiagnosticsQuery;
+  p[1] = boardId;
+  return AppendCrc(frame, kHeaderBytes + kAdminPrefixBytes);
+}
+
+inline size_t BuildDiagnosticsReportFrame(
+    uint8_t* frame, uint8_t boardId, uint8_t sequence, uint8_t epoch,
+    const uint32_t (&values)[kDiagnosticsFieldCount]) {
+  WriteHeader(frame, kFrameAdmin, kFlagNone, kNoBoard, sequence, epoch);
+  uint8_t* p = frame + kHeaderBytes;
+  p[0] = kAdminDiagnosticsReport;
+  p[1] = boardId;
+  for (size_t i = 0; i < kDiagnosticsFieldCount; ++i) {
+    WriteU32(&p[kAdminPrefixBytes + i * 4], values[i]);
+  }
+  return AppendCrc(frame,
+                   kHeaderBytes + kAdminPrefixBytes + kDiagnosticsBodyBytes);
+}
+
+inline void ReadDiagnosticsReport(const uint8_t* payload,
+                                  uint32_t (&values)[kDiagnosticsFieldCount]) {
+  for (size_t i = 0; i < kDiagnosticsFieldCount; ++i) {
+    values[i] = ReadU32(&payload[kAdminPrefixBytes + i * 4]);
   }
 }
 

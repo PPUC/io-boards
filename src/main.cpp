@@ -11,6 +11,7 @@
 #include "PPUC.h"
 #include "PPUCProtocolV2.h"
 #include "ResetCause.h"
+#include "BoardDiagnostics.h"
 #include "SafeOff.h"
 #include "hardware/gpio.h"
 #include "hardware/uart.h"
@@ -100,6 +101,9 @@ bool watchdog(struct repeating_timer *t) {
   const uint32_t sinceLoop = ms - watchdog_ms;
   constexpr uint32_t kSafeOffPins = ppuc::board::self().safeOffPins;
   if (sinceLoop > 1000 || (ms - lastPoll_ms) > 3000) {
+    if (!g_outputsForcedOff) {
+      CountDiagnostic(ppuc::v2::kDiagSafeOffs);
+    }
     g_outputsForcedOff = true;
     for (uint8_t pin = 0; pin < 32; pin++) {
       if ((kSafeOffPins >> pin) & 1u) {
@@ -280,7 +284,9 @@ void loop() {
   if (!ioBoardController.isRunning()) {
     updateBuiltinLedReadyPattern();
   }
+  const uint32_t passStartUs = micros();
   ioBoardController.update();
+  RaiseDiagnostic(ppuc::v2::kDiagLoopMaxUs, micros() - passStartUs);
   lastPoll_ms = ioBoardController.eventDispatcher()->getLastPoll();
 }
 

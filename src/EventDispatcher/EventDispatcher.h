@@ -119,6 +119,7 @@ class EventDispatcher {
   void sendSwitchNoChangeFrame(byte nextBoard);
   void sendVersionReportFrame();
   void sendStatsReportFrame();
+  void sendDiagnosticsReportFrame();
   void sendUpdateAckFrame(uint8_t command, uint8_t status, uint32_t offset);
 
   // Receives firmware images and hands them to the OTA bootloader. Owned here

@@ -31,8 +31,9 @@ The firmware runs on a dual-core RP2040.
 - The two cores exchange events through `MultiCoreCrossLink`.
 - The board address is read from the analog DIP/resistor ladder on GPIO 28 in
   `IOBoardController`.
-- `main.cpp` sets `SYS_CLK_MHZ 200`, maps the UART explicitly, starts core 1,
-  and enables USB serial only when the debug DIP bit is set.
+- `main.cpp` sets `SYS_CLK_MHZ 200`, maps the UART explicitly and starts core
+  1. USB serial exists only in a bench build with `PPUC_USB_DEBUG` (see
+  Diagnostics below); bit 3 of the address ladder no longer does anything.
 
 Main files:
 
@@ -77,10 +78,10 @@ Main files:
   Adding a host-side protocol conformance test against `PPUCProtocolV2.h` is a
   stabilization goal.
 - When validating protocol work, prefer firmware-level checks first: `pio run`,
-  then targeted inspection of the `V2DBG` counters over USB debug mode.
+  then the stats and diagnostics reports over the bus.
 - Careful with watchdog behavior: when USB debug is disabled, high-power outputs
   are shut off if polling stalls.
-- Two watchdogs, both off in USB debug mode. The board's own runs on a 1 s
+- Two watchdogs, both off in a `PPUC_USB_DEBUG` bench build. The board's own runs on a 1 s
   timer interrupt: outputs forced low after 1 s without a main loop pass or
   3 s without a poll, reboot after 5 s without a loop pass. Since 0.5.6 the
   chip's hardware watchdog (`HARDWARE_WATCHDOG_MS`, 2.5 s) backs it up: that
@@ -88,8 +89,9 @@ Main files:
   interrupt itself has stopped - a hard fault, or interrupts left disabled -
   and reports `kResetCauseHardwareWatchdog`. Anything that keeps interrupts off
   longer than about 1.5 s now reboots the board.
-- USB debug mode changes timing enough to mask hardware and reset problems. A
-  healthy debug-mode run is not proof that non-debug startup is healthy.
+- A `PPUC_USB_DEBUG` build changes timing enough to mask hardware and reset
+  problems, which is why it is no longer a runtime mode. Never put one in a
+  machine.
 
 ## Working Rules
 
@@ -221,16 +223,32 @@ Important implementation details:
   missing (virtual) boards. Firmware must treat those exactly like frames from
   a real board.
 
-### Debug Counters
+### Diagnostics
 
-With USB debug enabled, `EventDispatcher` prints a `V2DBG` line once per second:
+The board counts what it sees of itself in RAM (`BoardDiagnostics.h`,
+`g_diagnostics`) and reports it for a `kAdminDiagnosticsQuery`, since 0.5.7. The
+fields are `ppuc::v2::DiagnosticsField`, named by `DiagnosticsFieldName()`: the
+longest main loop pass since the last report, safe-offs, sessions started,
+output frames ignored with an incomplete mapping, switch events and switch
+report snapshots lost, cross-core drops, stop-switch cuts, kicks, and
+flipper-enable timeouts. ppuc reads them with the bus health at the end of a run
+and after a board restarted. Append fields, never reorder them; the
+conformance suite checks the layout.
 
+This replaced the USB debug mode. Bit 3 of the address ladder used to turn on
+USB serial at runtime, which also turned both watchdogs off, made boot wait for
+a USB host, skipped the reboot a `kFrameReset` asks for, and printed a `V2DBG`
+line from the main loop once a second with core 1 idled. A board in that mode
+behaved differently in exactly the ways worth debugging. For bench work there
+is still a build with it:
+
+```shell
+PLATFORMIO_BUILD_FLAGS=-DPPUC_USB_DEBUG pio run -e IO_16_8_1 --target upload
 ```
-V2DBG board= rx= rx_crc_fail= raw= raw_a5= raw_ff= tx= tx_nochange= xcore_drop=
-```
 
-These are the fastest way to tell whether a problem is framing, CRC, token flow,
-or cross-core event loss.
+It prints the `V2DBG` line and the `CrossLinkDebugger::debug()` calls, which
+otherwise compile to nothing. It is not an environment of its own because ppuc
+packages every environment as a release image.
 
 ### Reset Cause
 
@@ -526,8 +544,8 @@ string, and it took 0.3.4 over RS485 from 0.3.3.
 
 1. Re-test restart/reset recovery first; boards wedging across host restarts is
    the main open issue.
-2. Use USB debug mode on one board and watch the `V2DBG` counters while driving
-   known restart and switch-poll scenarios.
+2. Read the diagnostics and stats reports over the bus after driving known
+   restart and switch-poll scenarios.
 3. If the last four dedicated switch inputs stop reporting, inspect both
    `src/IODevices/Switches.cpp` registration/range checks and the 16-switch PIO
    stateful-pin reset path for GPIO 15-18.

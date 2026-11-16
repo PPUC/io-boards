@@ -92,10 +92,20 @@ void IOBoardController::initializeBoardIdentity() {
   delay(2);
 
   boardId = static_cast<byte>(readBoardSelectorRaw());
-  m_debug = (boardId & 0b1000) != 0;
-  if (m_debug) {
+  // Bit 3 of the selector used to switch on USB debugging at runtime. That mode
+  // turned both watchdogs off, made boot wait for a USB host, skipped the reboot
+  // a kFrameReset asks for and printed from the main loop: a board in it behaved
+  // differently from every other one in exactly the ways worth debugging. It is
+  // a build flag now, PPUC_USB_DEBUG, for the bench. The bit is still stripped,
+  // so a board keeps its address whichever way it is set.
+  if ((boardId & 0b1000) != 0) {
     boardId -= 8;
   }
+#ifdef PPUC_USB_DEBUG
+  m_debug = true;
+#else
+  m_debug = false;
+#endif
 }
 
 void IOBoardController::begin() {

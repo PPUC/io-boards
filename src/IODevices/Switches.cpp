@@ -1,5 +1,7 @@
 #include "Switches.h"
 
+#include "../BoardDiagnostics.h"
+
 #include "SwitchDebounce.h"
 #include "SwitchesPIO/ActiveLow16Switches.pio.h"
 #include "SwitchesPIO/ActiveLow4Switches.pio.h"
@@ -251,6 +253,8 @@ void Switches::enqueuePendingSwitchEvent(uint8_t switchNumber, uint8_t state) {
   const uint8_t nextHead =
       static_cast<uint8_t>((pendingEventHead + 1) % SWITCH_EVENT_QUEUE_SIZE);
   if (nextHead == pendingEventTail) {
+    // The oldest transition is lost.
+    CountDiagnostic(ppuc::v2::kDiagSwitchEventDrops);
     pendingEventTail =
         static_cast<uint8_t>((pendingEventTail + 1) % SWITCH_EVENT_QUEUE_SIZE);
   }

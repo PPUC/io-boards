@@ -115,4 +115,4 @@ bool EventDispatcher::getSwitchState(uint16_t number) const {
 // debug() is a no-op behind that flag. Kept no-op here for the same reason.
 bool CrossLinkDebugger::active = false;
 
-void CrossLinkDebugger::debug(const char*, ...) {}
+// debug() is an empty inline outside a PPUC_USB_DEBUG build.
