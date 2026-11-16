@@ -157,6 +157,14 @@ The `v2` protocol is bitmap-based.
 - `MappingFrame` binds each dense index to the logical number used by the rest
   of the firmware; `EventDispatcher` stores `coilIndexToNumber`,
   `lampIndexToNumber`, `switchIndexToNumber`.
+- The mapping is complete once every position of every domain has been named
+  (`MappingProgress`), not once as many mapping frames as positions have
+  arrived. Until then the board drives nothing from the bitmaps: a setup frame
+  switches every coil the old session left on off, game-on last, and output
+  and other boards' switch frames are ignored. The reply carries
+  `kStatusMappingIncomplete` and the host resyncs. Lamps and GI keep their
+  state; board flippers do not take orders from the bitmap. Covered by
+  `test/test_mapping_progress`.
 - Wire bitmap size does not need to match the highest logical number. Logical
   numbers may be sparse and high; coils specifically are mapped into a dense
   64-slot block.
@@ -378,7 +386,10 @@ off when it ends, repeated about once a second and after every resync. It
 ignores every ROM command for its number and the game-on solenoid. The coin
 door, tilt and stopping the board still cut it; the EOS, `maxPulseTime` and the
 re-drive limit still bound the power winding. Turning the flippers off or a cut
-demands a fresh press. Covered by `test/test_board_flippers`.
+demands a fresh press. The repeat is a keepalive: after
+`FLIPPER_ENABLE_TIMEOUT_MS` (3000) without one the board turns the flippers off
+itself, so a host that crashed or a bus wire that came off does not leave them
+live. Covered by `test/test_board_flippers`.
 
 What is given up: the flippers stay live between balls and through bonus
 count, a flipper coil test in the service menu does not fire them, and any ROM

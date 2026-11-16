@@ -76,6 +76,19 @@
 #define FAST_SWITCH_REFIRE_LOCKOUT_MS 100
 #endif
 
+// How long board flippers stay on without hearing from the host.
+//
+// The host turns them on at game start and repeats that about once a second,
+// and again after every session resync. Without a timeout they stayed live
+// for as long as the board was powered once the host was gone: the Pi browning
+// out or crashing, ppuc ending on a board that lost its configuration, the bus
+// wire coming loose. Nothing the ROM does reaches a board flipper, so nothing
+// else would ever have turned them off. Three repeats missed in a row is
+// longer than any resync takes.
+#ifndef FLIPPER_ENABLE_TIMEOUT_MS
+#define FLIPPER_ENABLE_TIMEOUT_MS 3000
+#endif
+
 // FastSwitchOutputHolds() is in Event.h, shared with the host.
 
 class PwmDevices : public HighPowerOffAware {
@@ -140,6 +153,8 @@ class PwmDevices : public HighPowerOffAware {
   bool boardFlipper[MAX_PWM_OUTPUTS] = {0};
   // The host turned the board flippers on: a game is running.
   bool flippersEnabled = false;
+  // When the host last said so. See FLIPPER_ENABLE_TIMEOUT_MS.
+  uint32_t flippersEnabledAt = 0;
   // What the ROM last asked of each output, whether or not a gate let it
   // through. See restoreRomOutputs().
   bool romOn[MAX_PWM_OUTPUTS] = {0};

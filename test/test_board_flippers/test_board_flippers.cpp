@@ -183,6 +183,43 @@ void test_game_over_drops_a_held_flipper_and_needs_a_new_press(void) {
   TEST_ASSERT_TRUE(HoldOn());
 }
 
+// The host repeats the enable about once a second. A Pi that browned out or
+// crashed, or a wire that came off, must not leave the flippers live.
+void test_flippers_turn_off_when_the_host_stops_repeating_the_enable(void) {
+  Machine();
+  Enable(true);
+  Switch(kButton, true);
+  TEST_ASSERT_TRUE(HoldOn());
+  Advance(FLIPPER_ENABLE_TIMEOUT_MS - 10);
+  TEST_ASSERT_TRUE_MESSAGE(HoldOn(), "still within the timeout");
+  Advance(20);
+  TEST_ASSERT_FALSE_MESSAGE(HoldOn(), "the host has been silent too long");
+  TEST_ASSERT_FALSE(PowerOn());
+
+  // A press without the host does nothing.
+  Switch(kButton, false);
+  Switch(kButton, true);
+  TEST_ASSERT_FALSE(HoldOn());
+
+  // The host is back: on again, after a fresh press.
+  Enable(true);
+  TEST_ASSERT_FALSE(HoldOn());
+  Switch(kButton, false);
+  Switch(kButton, true);
+  TEST_ASSERT_TRUE(HoldOn());
+}
+
+void test_every_repeat_of_the_enable_keeps_the_flippers_on(void) {
+  Machine();
+  Enable(true);
+  Switch(kButton, true);
+  for (int i = 0; i < 10; i++) {
+    Advance(1000);
+    Enable(true);
+  }
+  TEST_ASSERT_TRUE(HoldOn());
+}
+
 void test_the_coin_door_cuts_board_flippers(void) {
   Machine();
   Enable(true);
@@ -260,6 +297,8 @@ int main(int, char**) {
   RUN_TEST(test_game_on_dropping_does_not_drop_a_held_flipper);
   RUN_TEST(test_other_coils_keep_the_game_on_gate);
   RUN_TEST(test_game_over_drops_a_held_flipper_and_needs_a_new_press);
+  RUN_TEST(test_flippers_turn_off_when_the_host_stops_repeating_the_enable);
+  RUN_TEST(test_every_repeat_of_the_enable_keeps_the_flippers_on);
   RUN_TEST(test_the_coin_door_cuts_board_flippers);
   RUN_TEST(test_tilt_cuts_board_flippers);
   RUN_TEST(test_stopping_the_board_cuts_board_flippers);

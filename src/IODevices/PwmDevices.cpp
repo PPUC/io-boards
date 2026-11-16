@@ -173,6 +173,7 @@ void PwmDevices::reset() {
 
   last = 0;
   flippersEnabled = false;
+  flippersEnabledAt = 0;
 }
 
 void PwmDevices::deactivateOutput(byte i) {
@@ -268,6 +269,16 @@ void PwmDevices::refreshStopSwitches(byte i) {
 
 void PwmDevices::update() {
   _ms = millis();
+
+  if (flippersEnabled &&
+      _ms - flippersEnabledAt > FLIPPER_ENABLE_TIMEOUT_MS) {
+    // The host is gone. Off, as if it had said so; the next repeat that does
+    // arrive turns them on again and waits for a fresh press.
+    CrossLinkDebugger::debug(
+        "Board flippers: no enable from the host for %dms, turning them off",
+        FLIPPER_ENABLE_TIMEOUT_MS);
+    handleFlipperEnableEvent(false);
+  }
 
   // Iterate over all outputs.
   for (byte i = 0; i < last; i++) {
@@ -424,11 +435,15 @@ bool PwmDevices::fastSwitchAllowedFor(byte i) const {
 // a resync - reaches them. Turning them off drops them at once, and either way
 // a button already held has to be pressed again, as after a tilt.
 void PwmDevices::handleFlipperEnableEvent(bool enabled) {
+  _ms = millis();
+  if (enabled) {
+    // Every repeat counts, not only the first: it is what keeps them on.
+    flippersEnabledAt = _ms;
+  }
   if (enabled == flippersEnabled) {
     return;
   }
   flippersEnabled = enabled;
-  _ms = millis();
   for (byte i = 0; i < last; i++) {
     if (!boardFlipper[i]) {
       continue;
