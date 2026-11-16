@@ -30,7 +30,8 @@ uint32_t FrameWireTimeUs(size_t frameBytes) {
   return wireUs + wireUs / 4u + 200;
 }
 
-// Pre-reply turnaround for admin frames - version reports and update acks.
+// Pre-reply turnaround for admin frames - version reports, update acks, stats
+// and diagnostics - and for config acks.
 //
 // Deliberately its own constant rather than switchReplyDelayUs. Both need the
 // host's transceiver to have fallen back to receive, but they are paid for
@@ -813,6 +814,16 @@ void EventDispatcher::sendConfigAckFrame(uint8_t boardId, uint8_t topic,
   ppuc::v2::BuildConfigAckFrame(frame, ppuc::v2::kNoBoard, txSequence++,
                                 currentEpoch, boardId, topic, index, key,
                                 status);
+
+  // A config ack answers the host directly, so it needs the same turnaround as
+  // the admin replies. It went without one, and on a Pi - whose transceiver is
+  // released by the kernel after an interrupt, not by the UART - the ack could
+  // collide with the end of the host's own frame. Three lost attempts at any
+  // one of the hundreds of config frames fail the whole startup, which is how
+  // a Pi could take several power cycles to come up while a USB adapter,
+  // releasing in hardware, never did. It costs this delay per config frame,
+  // at startup only.
+  delayMicroseconds(kAdminReplyDelayUs);
 
   digitalWrite(rs485Pin, HIGH);  // Write.
   delayMicroseconds(RS485_MODE_SWITCH_DELAY);
