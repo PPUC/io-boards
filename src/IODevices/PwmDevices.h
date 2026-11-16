@@ -89,6 +89,18 @@
 #define FLIPPER_ENABLE_TIMEOUT_MS 3000
 #endif
 
+// How long a sling or a jet kicks when its minimum pulse time is 0.
+//
+// An output its switch only fires - not a flipper winding - kicks for a fixed
+// time from the moment the switch closes: its minimum pulse time, or this,
+// and never longer than its maximum. It used to run for as long as the switch
+// read closed. A leaf that chatters through the kick never stayed open for a
+// whole debounce window, so it kicked for the full maximum pulse time, 150 ms
+// at full power; a glancing hit ended the kick after a few milliseconds.
+#ifndef FAST_SWITCH_KICK_DEFAULT_MS
+#define FAST_SWITCH_KICK_DEFAULT_MS 30
+#endif
+
 // FastSwitchOutputHolds() is in Event.h, shared with the host.
 
 class PwmDevices : public HighPowerOffAware {
@@ -186,6 +198,8 @@ class PwmDevices : public HighPowerOffAware {
   bool isRomCopyOfFastSwitchPulse(bool targetState, byte i) const;
   bool fastSwitchHoldsAnOutput(byte i) const;
   bool inRefireLockout(byte i) const;
+  bool isKickOutput(byte i) const;
+  uint16_t kickLengthMs(byte i) const;
   void noteFastSwitchState(bool switchClosed, byte i);
   void handleFastSwitchEvent(bool switchClosed, byte i);
   void handleStopSwitchEvent(byte switchNumber, bool switchClosed, byte i);

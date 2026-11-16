@@ -233,6 +233,14 @@ use `standard` debounce and configure the associated PWM output with its fast
 activation switch. The debounce mode and the local PWM fast-switch reaction are
 separate settings.
 
+Such an output kicks for a fixed time from the moment its switch closes: its
+`minPulseTime`, or 30 ms when that is 0, and never longer than its
+`maxPulseTime`. Chatter of the leaf neither ends nor extends the kick. A switch
+still closed when the kick ends - a ball resting on it - fires again only after
+it has opened, and a closing within 100 ms of the kick's end is taken for the
+same hit. So `minPulseTime` is the kick length for a sling or a jet, and the
+place to tune its force with `power`.
+
 ### `fastFlip`
 
 Use `fastFlip` for flipper buttons and possibly magna-save buttons.

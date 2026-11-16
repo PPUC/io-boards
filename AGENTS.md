@@ -284,6 +284,15 @@ Semantics in `src/IODevices/PwmDevices.*`:
 - The logic is keyed by logical switch number, so fast switches may live on
   other boards; the safety is not limited to same-board switch/coil pairs.
 
+A sling or a jet - a solenoid with a fast-flip switch that holds no output on
+its button - kicks for a fixed time (`isKickOutput()`, `kickLengthMs()`): its
+`minPulseTime`, or `FAST_SWITCH_KICK_DEFAULT_MS` (30) when that is 0, capped by
+`maxPulseTime`. Its switch opening does not end the kick; a switch still closed
+at the end waits for a release, and `FAST_SWITCH_REFIRE_LOCKOUT_MS` still
+applies after it. Covered by `test/test_fast_flip_rom_copy`. Before 0.5.5 a
+kick lasted as long as the switch read closed, which made a chattering leaf a
+full `maxPulseTime` kick and a glancing hit a few milliseconds.
+
 Preserve these properties unless the replacement is clearly safer and has been
 validated on real hardware.
 

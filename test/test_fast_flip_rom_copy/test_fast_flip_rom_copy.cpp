@@ -131,9 +131,12 @@ void test_a_sling_hit_fires_once(void) {
   Tick(8);
   SendSwitch(kSlingSwitch, 0);
   Tick(1);
+  TEST_ASSERT_TRUE_MESSAGE(IsOn(kSlingPort),
+                           "the kick runs its length, the leaf opening early");
+  Tick(FAST_SWITCH_KICK_DEFAULT_MS);
   TEST_ASSERT_FALSE(IsOn(kSlingPort));
 
-  Tick(40);
+  Tick(10);
   SendRom(kSlingNumber, 1);
   TEST_ASSERT_FALSE_MESSAGE(
       IsOn(kSlingPort), "the ROM's copy of the kick must not fire it again");
@@ -207,10 +210,18 @@ void test_a_chattering_sling_does_not_kick_again_at_once(void) {
 
   SendSwitch(kSlingSwitch, 1);
   TEST_ASSERT_TRUE(IsOn(kSlingPort));
-  Tick(8);
-  SendSwitch(kSlingSwitch, 0);
+  // Chatter through the kick neither ends nor extends it.
+  for (int n = 0; n < 4; n++) {
+    Tick(3);
+    SendSwitch(kSlingSwitch, 0);
+    Tick(2);
+    SendSwitch(kSlingSwitch, 1);
+  }
   Tick(1);
-  TEST_ASSERT_FALSE(IsOn(kSlingPort));
+  TEST_ASSERT_TRUE(IsOn(kSlingPort));
+  SendSwitch(kSlingSwitch, 0);
+  Tick(FAST_SWITCH_KICK_DEFAULT_MS - 21);
+  TEST_ASSERT_FALSE_MESSAGE(IsOn(kSlingPort), "the kick is over on time");
 
   for (int n = 0; n < 5; n++) {
     Tick(10);
@@ -234,6 +245,49 @@ void test_a_chattering_sling_does_not_kick_again_at_once(void) {
   Tick(20);
   SendSwitch(kSlingSwitch, 1);
   TEST_ASSERT_TRUE_MESSAGE(IsOn(kSlingPort), "the next hit must fire");
+}
+
+// A sling or a jet kicks for its minimum pulse time, and never longer than its
+// maximum. Before, it kicked for as long as the switch read closed: a leaf
+// that chattered through the kick held it for the full 150 ms.
+void test_a_kick_lasts_its_minimum_pulse_time(void) {
+  g_pwm->registerSolenoid(kSlingPort, kSlingNumber, 192, /*minPT*/ 20,
+                          /*maxPT*/ 150, /*hP*/ 0, /*hPAT*/ 0, kSlingSwitch);
+  PowerOn();
+
+  SendSwitch(kSlingSwitch, 1);
+  Tick(19);
+  TEST_ASSERT_TRUE(IsOn(kSlingPort));
+  Tick(1);
+  TEST_ASSERT_FALSE(IsOn(kSlingPort));
+}
+
+void test_a_kick_never_outlasts_the_maximum_pulse_time(void) {
+  g_pwm->registerSolenoid(kSlingPort, kSlingNumber, 192, /*minPT*/ 0,
+                          /*maxPT*/ 15, /*hP*/ 0, /*hPAT*/ 0, kSlingSwitch);
+  PowerOn();
+
+  SendSwitch(kSlingSwitch, 1);
+  Tick(15);
+  TEST_ASSERT_FALSE(IsOn(kSlingPort));
+}
+
+void test_a_ball_resting_on_a_sling_is_kicked_once(void) {
+  RegisterSling();
+  PowerOn();
+
+  SendSwitch(kSlingSwitch, 1);
+  Tick(FAST_SWITCH_KICK_DEFAULT_MS);
+  TEST_ASSERT_FALSE(IsOn(kSlingPort));
+  for (int n = 0; n < 50; n++) {
+    Tick(10);
+    TEST_ASSERT_FALSE_MESSAGE(IsOn(kSlingPort),
+                              "a switch held closed fires only once");
+  }
+  SendSwitch(kSlingSwitch, 0);
+  Tick(5);
+  SendSwitch(kSlingSwitch, 1);
+  TEST_ASSERT_TRUE(IsOn(kSlingPort));
 }
 
 void test_a_flipper_can_be_pressed_again_at_once(void) {
@@ -268,6 +322,9 @@ int main(int, char**) {
   RUN_TEST(test_the_rom_can_kick_a_ball_resting_on_a_sling_switch);
   RUN_TEST(test_the_rom_ends_its_own_pulse);
   RUN_TEST(test_a_chattering_sling_does_not_kick_again_at_once);
+  RUN_TEST(test_a_kick_lasts_its_minimum_pulse_time);
+  RUN_TEST(test_a_kick_never_outlasts_the_maximum_pulse_time);
+  RUN_TEST(test_a_ball_resting_on_a_sling_is_kicked_once);
   RUN_TEST(test_a_flipper_can_be_pressed_again_at_once);
   RUN_TEST(test_what_counts_as_a_flipper);
   return UNITY_END();

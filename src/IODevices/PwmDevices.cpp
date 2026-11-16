@@ -346,7 +346,18 @@ void PwmDevices::update() {
       uint32_t timePassed = _ms - activated[i];
       const bool minPulseElapsed =
           (minPulseTime[i] == 0) || (timePassed > minPulseTime[i]);
-      if ((maxPulseTime[i] > 0) && (timePassed > maxPulseTime[i])) {
+      const bool kick = fastSwitchManagedActive[i] && isKickOutput(i);
+      if (kick && timePassed >= kickLengthMs(i)) {
+        // A sling's or a jet's kick is over, whatever its switch did meanwhile.
+        // A switch still closed is a ball resting on it, or the leaf held shut
+        // by the kick: it fires again only after a release.
+        if (fastSwitchClosed[i]) {
+          fastSwitchWaitForRelease[i] = true;
+        }
+        deactivateOutput(i);
+        CrossLinkDebugger::debug("Ended the kick of PWM device on port %d after %dms",
+                                 port[i], timePassed);
+      } else if ((maxPulseTime[i] > 0) && (timePassed > maxPulseTime[i])) {
         // Enforce the maximum pulse time even if the fast-flip switch remains
         // closed. A new physical release/close cycle is required to fire
         // again.
@@ -366,7 +377,7 @@ void PwmDevices::update() {
             "Performed scheduled deactivation of PWM device on port %d after "
             "%dms",
             port[i], timePassed);
-      } else if (fastSwitchManagedActive[i] && minPulseElapsed &&
+      } else if (fastSwitchManagedActive[i] && !kick && minPulseElapsed &&
                  !fastSwitchClosed[i]) {
         // Ignore fast-switch toggles during the minimum pulse time, then honor
         // the latest open state once the minimum pulse has elapsed.
@@ -617,6 +628,22 @@ bool PwmDevices::fastSwitchHoldsAnOutput(byte i) const {
   return false;
 }
 
+// A sling or a jet: a coil its switch fires rather than holds. See
+// FAST_SWITCH_KICK_DEFAULT_MS.
+bool PwmDevices::isKickOutput(byte i) const {
+  return type[i] == PWM_TYPE_SOLENOID && fastSwitch[i] > 0 &&
+         !fastSwitchHoldsAnOutput(i);
+}
+
+uint16_t PwmDevices::kickLengthMs(byte i) const {
+  uint16_t length =
+      minPulseTime[i] > 0 ? minPulseTime[i] : FAST_SWITCH_KICK_DEFAULT_MS;
+  if (maxPulseTime[i] > 0 && length > maxPulseTime[i]) {
+    length = maxPulseTime[i];
+  }
+  return length;
+}
+
 // A sling or a jet whose kick ended moments ago, see
 // FAST_SWITCH_REFIRE_LOCKOUT_MS.
 bool PwmDevices::inRefireLockout(byte i) const {
@@ -634,6 +661,11 @@ void PwmDevices::handleFastSwitchEvent(bool switchClosed, byte i) {
     stopRedrives[i] = 0;
 
     if (activated[i] == 0 || !fastSwitchManagedActive[i]) {
+      return;
+    }
+
+    if (isKickOutput(i)) {
+      // A kick runs its length. Chatter of the leaf is not the ball leaving.
       return;
     }
 
